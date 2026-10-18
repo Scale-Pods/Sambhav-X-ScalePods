@@ -121,8 +121,8 @@ export async function reviewList(kind?: string, severity?: string) {
     params.push(severity);
     where.push(`e.severity::text = $${params.length}`);
   }
-  const rows = await q<{ kind: string; severity: string; message: string; related_id: string | null; lot_no: string | null; raised_at: string }>(
-    `select e.kind::text, e.severity::text, e.message, e.related_id, l.lot_no, e.raised_at
+  const rows = await q<{ id: string; kind: string; severity: string; message: string; related_id: string | null; lot_no: string | null; raised_at: string }>(
+    `select e.id, e.kind::text, e.severity::text, e.message, e.related_id, l.lot_no, e.raised_at
     from public.exceptions e left join public.lots l on l.id = e.related_id and e.related_table = 'lots'
     where ${where.join(" and ")}
     order by case e.severity::text when 'error' then 0 when 'warning' then 1 else 2 end, e.raised_at, e.message limit 300`,
@@ -132,4 +132,31 @@ export async function reviewList(kind?: string, severity?: string) {
     `select kind::text, severity::text, count(*) n from public.exceptions where status = 'open' group by 1, 2 order by 3 desc`,
   );
   return { rows, kinds };
+}
+
+export type CountSession = { id: string; name: string; status: string; book: string; started_at: string | null; planned_date: string | null; lines: string; kg: string };
+
+export async function countSessions() {
+  return q<CountSession>(
+    `select s.id, s.name, s.status, b.code book, s.started_at, s.planned_date,
+            (select count(*) from public.count_lines c where c.session_id = s.id and c.match_status <> 'rejected') lines,
+            (select coalesce(sum(c.weight_kg), 0) from public.count_lines c where c.session_id = s.id and c.match_status <> 'rejected') kg
+     from public.count_sessions s join public.stock_books b on b.id = s.stock_book_id
+     where s.status in ('counting', 'review') order by s.started_at desc nulls last`,
+  );
+}
+
+export async function countLines(sessionId: string, limit = 60) {
+  return q<{
+    id: string; ident: string; match_status: string; weight_kg: string; pieces: string | null; books_kg: string | null; yard: string | null;
+    counted_at: string; who: string | null; lot_no: string | null; grade: string | null;
+  }>(
+    `select c.id, coalesce(c.plate_no, c.heat_no) ident, c.match_status, c.weight_kg, c.pieces, c.counted_at, y.code yard, st.full_name who, l.lot_no, g.code grade,
+            (select sum(m.weight_kg) from public.stock_movements m where m.lot_id = c.matched_lot_id) books_kg
+     from public.count_lines c
+       left join public.yards y on y.id = c.yard_id left join public.staff st on st.id = c.counted_by
+       left join public.lots l on l.id = c.matched_lot_id left join public.grades g on g.id = c.grade_id
+     where c.session_id = $1 and c.match_status <> 'rejected' order by c.counted_at desc limit ${limit}`,
+    [sessionId],
+  );
 }

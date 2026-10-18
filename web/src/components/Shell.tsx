@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { BarChart3, ClipboardCheck, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
 import { NavLink } from "./NavLink";
+import { UserChip } from "./UserChip";
 
 const icon = "h-[1.15rem] w-[1.15rem] shrink-0";
 
@@ -60,8 +61,10 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-line px-3 py-1 text-[0.8rem] text-muted">
               <BarChart3 className="h-3.5 w-3.5" /> FY 2026-27
             </span>
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-brand text-sm font-semibold text-white">HJ</span>
           </div>
+          <Suspense fallback={<span className="h-9 w-9 rounded-full bg-surface" />}>
+            <UserChip />
+          </Suspense>
         </header>
         <main className="mx-auto w-full max-w-[1320px] flex-1 px-4 py-7 sm:px-8">{children}</main>
       </div>

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { reviewList } from "@/lib/queries";
 import { kg } from "@/lib/format";
+import { canDecide, currentStaff } from "@/lib/auth";
+import { ApproveButton } from "./ApproveButton";
 import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
 
 type SP = Promise<{ kind?: string; severity?: string }>;
@@ -35,7 +37,8 @@ export default function ReviewPage({ searchParams }: { searchParams: SP }) {
 
 async function Body({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const { rows, kinds } = await reviewList(sp.kind, sp.severity);
+  const [{ rows, kinds }, me] = await Promise.all([reviewList(sp.kind, sp.severity), currentStaff()]);
+  const mayDecide = canDecide(me?.role);
   const total = kinds.reduce((s, k) => s + Number(k.n), 0);
   const chip = (on: boolean) => "rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset " + (on ? "bg-brand text-white ring-brand" : "bg-white text-muted ring-line hover:text-ink");
   return (
@@ -63,17 +66,14 @@ async function Body({ searchParams }: { searchParams: SP }) {
                 </td>
                 <td className={td + " whitespace-nowrap"}>{r.lot_no ? <Link href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">Plate #{r.lot_no}</Link> : <span className="text-muted">not loaded</span>}</td>
                 <td className={td + " text-right"}>
-                  <span className="inline-flex gap-2">
-                    <span className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-muted">Fix</span>
-                    <span className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white">Approve</span>
-                  </span>
+                  {mayDecide ? <div className="flex justify-end"><ApproveButton id={r.id} /></div> : <span className="text-sm text-muted">view only</span>}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="border-t border-line px-5 py-3 text-sm text-muted">Showing the first 300. Fix and Approve are not active in this preview.</p>
+      <p className="border-t border-line px-5 py-3 text-sm text-muted">Showing the first 300. Approving records who decided, when, and why.</p>
     </Card>
   );
 }
