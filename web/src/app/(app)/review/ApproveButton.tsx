@@ -17,7 +17,7 @@ export function ApproveButton({ id }: { id: string }) {
       <textarea
         autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={300}
         placeholder="Why is this fine? (kept on record)"
-        className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-brand"
+        className="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm focus:border-brand"
       />
       {error && <p className="text-[0.8rem] text-bad">{error}</p>}
       <div className="flex justify-end gap-2">

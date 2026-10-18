@@ -40,30 +40,30 @@ export function CountScreen({ sessionId, book, lines, canClose, canCount }: { se
   };
 
   const counted = lines.reduce((s, l) => s + Number(l.weight_kg), 0);
-  const field = "w-full rounded-xl border border-line bg-white px-4 py-3.5 text-lg focus:border-brand";
+  const field = "w-full rounded-lg border border-line bg-field px-4 py-3.5 text-lg focus:border-brand";
   const ready = canCount && query.trim().length > 0 && Number(kg) >= 0 && kg !== "";
 
   return (
     <div className="grid gap-6 xl:grid-cols-5">
       <div className="space-y-6 xl:col-span-3">
-        <section className="rounded-xl border border-line bg-card p-6 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
+        <section className="rounded-lg border border-line bg-card p-6 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
           <span className="mb-1.5 block text-sm font-medium text-muted">Yard</span>
           <div className="grid grid-cols-3 gap-2">
             {["D15", "753", "Other"].map((y) => (
-              <button key={y} type="button" onClick={() => setYard(y)} className={"flex items-center justify-center gap-1.5 rounded-xl py-3.5 text-lg font-semibold ring-1 ring-inset " + (yard === y ? "bg-brand text-white ring-brand" : "bg-white text-ink ring-line hover:bg-surface")}>
+              <button key={y} type="button" onClick={() => setYard(y)} className={"flex items-center justify-center gap-1.5 rounded-lg py-3.5 text-lg font-semibold ring-1 ring-inset " + (yard === y ? "bg-brand text-white ring-brand" : "bg-field text-ink ring-line hover:bg-surface")}>
                 <MapPin className="h-4 w-4" />{y}
               </button>
             ))}
           </div>
         </section>
 
-        <section className="rounded-xl border border-line bg-card p-6 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
+        <section className="rounded-lg border border-line bg-card p-6 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
           <h2 className="text-lg font-semibold">Count a plate <span className="text-sm font-normal text-muted">· {book}</span></h2>
           <div className="relative mt-4">
             <label className="mb-1.5 block text-sm font-medium text-muted">Plate number or heat number</label>
             <input value={query} onChange={(e) => { setQuery(e.target.value); setPicked(null); }} placeholder="Type or scan, for example QY5598" className={field} autoComplete="off" disabled={!canCount} />
             {matches.length > 0 && (
-              <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-line bg-white shadow-lg">
+              <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-line bg-field shadow-lg">
                 {matches.map((p) => (
                   <li key={p.lot_no}>
                     <button type="button" onClick={() => { setPicked(p); setQuery(p.ident); setKg(String(Math.round(p.kg))); setPcs(String(p.pcs || 1)); setMatches([]); }} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-brand-soft">
@@ -75,7 +75,7 @@ export function CountScreen({ sessionId, book, lines, canClose, canCount }: { se
               </ul>
             )}
           </div>
-          {picked && <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2.5 text-[0.92rem] text-ok"><CheckCircle2 className="h-4 w-4" /> In the books: {picked.grade}, {picked.size} mm. Weigh it and type what you actually see.</div>}
+          {picked && <div className="mt-4 flex items-center gap-2 rounded-lg bg-ok-soft px-4 py-2.5 text-[0.92rem] text-ok"><CheckCircle2 className="h-4 w-4" /> In the books: {picked.grade}, {picked.size} mm. Weigh it and type what you actually see.</div>}
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="block"><span className="mb-1.5 block text-sm font-medium text-muted">Weight counted (kg)</span>
@@ -83,21 +83,21 @@ export function CountScreen({ sessionId, book, lines, canClose, canCount }: { se
             <label className="block"><span className="mb-1.5 block text-sm font-medium text-muted">Pieces</span>
               <input inputMode="numeric" value={pcs} onChange={(e) => setPcs(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1" className={field + " num"} disabled={!canCount} /></label>
           </div>
-          {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-[0.92rem] text-bad">{error}</p>}
+          {error && <p role="alert" className="mt-4 rounded-lg bg-bad-soft px-4 py-2.5 text-[0.92rem] text-bad">{error}</p>}
           {flash?.ok && (
-            <p role="status" className={"mt-4 flex items-center gap-2 rounded-lg px-4 py-2.5 text-[0.92rem] " + (flash.match_status === "matched" ? "bg-emerald-50 text-ok" : "bg-amber-50 text-warn")}>
+            <p role="status" className={"mt-4 flex items-center gap-2 rounded-lg px-4 py-2.5 text-[0.92rem] " + (flash.match_status === "matched" ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn")}>
               {flash.match_status === "matched" ? <CheckCircle2 className="h-4 w-4" /> : <CircleAlert className="h-4 w-4" />}
               {flash.ident}: {flash.match_status === "matched" ? "saved, matches the books" : flash.match_status === "discrepancy" ? `saved, books say ${fmt(flash.books_kg ?? 0)} kg (difference ${fmt(Math.abs(flash.kg - (flash.books_kg ?? 0)))} kg, goes to review)` : "saved, but this plate is not in the books (goes to review)"}
             </p>
           )}
-          <button type="button" onClick={submit} disabled={!ready || pending} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 text-lg font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={submit} disabled={!ready || pending} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-4 text-lg font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40">
             <Plus className="h-5 w-5" /> {pending ? "Saving…" : "Save this count"}
           </button>
           {!canCount && <p className="mt-3 text-sm text-muted">Your account can view the count but not enter it.</p>}
         </section>
       </div>
 
-      <section className="rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(18,41,58,0.04)] xl:col-span-2">
+      <section className="rounded-lg border border-line bg-card shadow-[0_1px_2px_rgba(18,41,58,0.04)] xl:col-span-2">
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 className="font-semibold">Counted so far</h2>
           <span className="num rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold text-brand-dark">{lines.length} plates · {fmt(counted)} kg</span>
@@ -129,7 +129,7 @@ export function CountScreen({ sessionId, book, lines, canClose, canCount }: { se
         )}
         {canClose && (
           <div className="border-t border-line p-4">
-            <button type="button" disabled={pending} onClick={() => { if (confirm("Close this count? Nobody can add entries after this. It goes to review.")) start(async () => { const r = await closeCount(sessionId); if (!r.ok) setError(r.error); }); }} className="flex w-full items-center justify-center gap-2 rounded-xl border border-line py-3 font-semibold text-ink hover:bg-surface">
+            <button type="button" disabled={pending} onClick={() => { if (confirm("Close this count? Nobody can add entries after this. It goes to review.")) start(async () => { const r = await closeCount(sessionId); if (!r.ok) setError(r.error); }); }} className="flex w-full items-center justify-center gap-2 rounded-lg border border-line py-3 font-semibold text-ink hover:bg-surface">
               <Lock className="h-4 w-4" /> Close this count
             </button>
           </div>

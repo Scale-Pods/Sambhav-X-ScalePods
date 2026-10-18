@@ -43,7 +43,7 @@ async function Totals() {
       <Stat label="Total stock" value={tonnes(total)} unit="tonnes" sub={`${kg(total)} kg across both books`} tone="brand" />
       <Stat label="Plates in stock" value={kg(plates)} sub="each one traceable to its heat / plate number" />
       <Stat label="Sold so far" value={tonnes(sold)} unit="tonnes" sub="from the sales columns of both sheets" />
-      <div className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
+      <div className="rounded-lg border border-line bg-card p-5 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
         <p className="text-[0.8rem] font-medium uppercase tracking-wide text-muted">By stock book</p>
         <div className="mt-3 space-y-3">
           {books.map((b) => (
@@ -90,16 +90,16 @@ async function Review() {
   return (
     <div className="p-5">
       <div className="flex items-center gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-amber-50 text-warn"><ShieldAlert className="h-5 w-5" /></span>
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-warn-soft text-warn"><ShieldAlert className="h-5 w-5" /></span>
         <div>
           <p className="num text-2xl font-semibold leading-none">{kg(total)}</p>
           <p className="text-sm text-muted">items the sheets could not settle</p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-red-50 py-2"><p className="num text-lg font-semibold text-bad">{by.error ?? 0}</p><p className="text-[0.72rem] font-semibold uppercase text-bad">Serious</p></div>
-        <div className="rounded-lg bg-amber-50 py-2"><p className="num text-lg font-semibold text-warn">{by.warning ?? 0}</p><p className="text-[0.72rem] font-semibold uppercase text-warn">Check</p></div>
-        <div className="rounded-lg bg-sky-50 py-2"><p className="num text-lg font-semibold text-brand-dark">{by.info ?? 0}</p><p className="text-[0.72rem] font-semibold uppercase text-brand-dark">Note</p></div>
+        <div className="rounded-lg bg-bad-soft py-2"><p className="num text-lg font-semibold text-bad">{by.error ?? 0}</p><p className="text-[0.72rem] font-semibold uppercase text-bad">Serious</p></div>
+        <div className="rounded-lg bg-warn-soft py-2"><p className="num text-lg font-semibold text-warn">{by.warning ?? 0}</p><p className="text-[0.72rem] font-semibold uppercase text-warn">Check</p></div>
+        <div className="rounded-lg bg-info-soft py-2"><p className="num text-lg font-semibold text-brand-dark">{by.info ?? 0}</p><p className="text-[0.72rem] font-semibold uppercase text-brand-dark">Note</p></div>
       </div>
       <p className="mt-4 text-[0.88rem] leading-relaxed text-muted">
         Examples: sales with no date, plates sold for more than was received, purchases with no heat number. Nothing is changed silently; each item waits for a person to fix or approve it.

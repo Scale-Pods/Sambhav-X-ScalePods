@@ -31,7 +31,7 @@ async function Body({ params }: { params: Promise<{ lot: string }> }) {
   return (
     <div className="grid gap-6 xl:grid-cols-3">
       <div className="space-y-6 xl:col-span-2">
-        <div className="rounded-xl border border-line bg-card p-6 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
+        <div className="rounded-lg border border-line bg-card p-6 shadow-[0_1px_2px_rgba(18,41,58,0.04)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[0.8rem] font-medium uppercase tracking-wide text-muted">{lot.grade}</p>

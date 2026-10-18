@@ -43,7 +43,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const link = (p: number) => `/review?${new URLSearchParams({ ...(sp.kind ? { kind: sp.kind } : {}), ...(sp.severity ? { severity: sp.severity } : {}), page: String(p) })}`;
   const mayDecide = canDecide(me?.role);
   const total = kinds.reduce((s, k) => s + Number(k.n), 0);
-  const chip = (on: boolean) => "rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset " + (on ? "bg-brand text-white ring-brand" : "bg-white text-muted ring-line hover:text-ink");
+  const chip = (on: boolean) => "rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset " + (on ? "bg-brand text-white ring-brand" : "bg-field text-muted ring-line hover:text-ink");
   return (
     <Card>
       <div className="flex flex-wrap gap-2 border-b border-line px-5 py-4">

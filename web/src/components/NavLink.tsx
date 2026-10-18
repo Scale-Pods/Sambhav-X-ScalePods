@@ -10,13 +10,14 @@ export function NavLink({ href, children, soon }: { href: string; children: Reac
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={
-        "group flex items-center gap-3 rounded-lg px-3 py-2 text-[0.95rem] font-medium transition-colors " +
-        (active ? "bg-brand-soft text-brand-dark" : "text-muted hover:bg-surface hover:text-ink")
+        "group flex items-center gap-3 rounded-md px-3 py-2 text-[0.95rem] font-medium transition-colors " +
+        (active ? "bg-accent text-white shadow-[0_2px_10px_rgba(242,101,34,0.35)]" : "text-steel-ink hover:bg-white/[0.06] hover:text-white")
       }
     >
       {children}
-      {soon && <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wide text-muted">Soon</span>}
+      {soon && <span className="ml-auto rounded-sm bg-white/[0.07] px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-steel-muted">Soon</span>}
     </Link>
   );
 }

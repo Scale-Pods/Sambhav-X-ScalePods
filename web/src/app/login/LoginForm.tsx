@@ -7,7 +7,7 @@ import { signIn, type LoginState } from "./actions";
 export function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(signIn, {});
   const [show, setShow] = useState(false);
-  const field = "mt-1.5 w-full rounded-xl border border-line bg-white px-4 py-3 text-[1rem] focus:border-brand";
+  const field = "mt-1.5 w-full rounded-md border border-line bg-field px-4 py-3 text-[1rem] focus:border-brand";
   return (
     <form action={action} className="mt-6 space-y-4">
       <label className="block">
@@ -30,8 +30,8 @@ export function LoginForm() {
           </button>
         </div>
       </label>
-      {state.error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-[0.9rem] text-bad">{state.error}</p>}
-      <button disabled={pending} className="w-full rounded-xl bg-brand py-3.5 text-[1rem] font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60">
+      {state.error && <p role="alert" className="rounded-lg bg-bad-soft px-3 py-2 text-[0.9rem] text-bad">{state.error}</p>}
+      <button disabled={pending} className="w-full rounded-md bg-ink py-3.5 text-[1rem] font-semibold text-surface transition-colors hover:bg-accent hover:text-white disabled:opacity-60">
         {pending ? "Signing in…" : "Sign in"}
       </button>
     </form>

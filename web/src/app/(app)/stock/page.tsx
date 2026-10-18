@@ -31,7 +31,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const { rows, total, pageSize } = await stockList({ q: sp.q, book: sp.book, all: sp.all === "1", page });
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const base = { q: sp.q, book: sp.book, all: sp.all };
-  const chip = (on: boolean) => "rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset " + (on ? "bg-brand text-white ring-brand" : "bg-white text-muted ring-line hover:text-ink");
+  const chip = (on: boolean) => "rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset " + (on ? "bg-brand text-white ring-brand" : "bg-field text-muted ring-line hover:text-ink");
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">

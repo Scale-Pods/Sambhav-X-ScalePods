@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI direction options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;600&family=Noto+Sans+Devanagari:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --brand:#0a76ad; --brand2:#075a86; --accent:#f26522; --ink:#12293a; --muted:#5b6b79; --line:#e2e8ee; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#f4f7fa; color:var(--ink); font-family:Inter, "Segoe UI", system-ui, sans-serif; }
+  .page { max-width:1180px; margin:0 auto; padding:32px 16px 80px; }
+  h1 { font-size:30px; letter-spacing:-.02em; margin:0 0 6px; }
+  .lead { color:var(--muted); max-width:760px; line-height:1.55; margin:0 0 28px; }
+  .opt { background:#fff; border:1px solid var(--line); border-radius:20px; padding:24px; margin-bottom:34px; }
+  .opt-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:16px; }
+  .opt-head h2 { margin:0; font-size:22px; letter-spacing:-.01em; }
+  .tag { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:4px 10px; border-radius:999px; background:#eaf5fb; color:var(--brand2); }
+  .tag.rec { background:#fff1e9; color:#b54708; }
+  .why { color:var(--muted); line-height:1.55; margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns: 1.6fr 1fr; gap:18px; }
+  @media (max-width:900px){ .grid2 { grid-template-columns:1fr; } }
+  .refs { margin-top:16px; display:flex; flex-wrap:wrap; gap:8px; }
+  .refs a { font-size:13px; color:var(--brand2); text-decoration:none; border:1px solid var(--line); padding:6px 10px; border-radius:999px; }
+  .refs a:hover { background:#eaf5fb; }
+  .frame { border-radius:16px; overflow:hidden; min-height:360px; position:relative; }
+  .logo-pill { display:inline-flex; background:#fff; border-radius:10px; padding:6px 10px; }
+  .logo-pill img { height:22px; display:block; }
+
+  /* shared mini app */
+  .app { display:grid; grid-template-columns:150px 1fr; height:100%; min-height:360px; }
+  .side { padding:16px 12px; display:flex; flex-direction:column; gap:6px; font-size:13px; }
+  .side .it { padding:7px 10px; border-radius:8px; }
+  .main { padding:18px; }
+  .ttl { font-weight:700; font-size:18px; margin:2px 0 12px; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
+  .stat { border-radius:12px; padding:12px; }
+  .stat small { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.07em; opacity:.7; }
+  .stat b { font-size:22px; font-variant-numeric:tabular-nums; }
+  .tbl { border-radius:12px; overflow:hidden; font-size:12.5px; }
+  .tr { display:grid; grid-template-columns:1.3fr 1fr .8fr; padding:8px 12px; }
+  .tr span:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  @media (max-width:640px){ .app { grid-template-columns:1fr; } .side { display:none; } .stats { grid-template-columns:1fr 1fr; } }
+
+  /* ---------- A: Steel Glass ---------- */
+  .A { font-family:"Plus Jakarta Sans", Inter, sans-serif; background:
+       radial-gradient(600px 300px at 10% 0%, #bfe6f7 0%, transparent 60%),
+       radial-gradient(500px 300px at 100% 20%, #ffd8c2 0%, transparent 55%),
+       radial-gradient(600px 400px at 50% 120%, #9fd0e8 0%, transparent 60%), #eef5f9; }
+  .A .side { background:rgba(255,255,255,.45); backdrop-filter:blur(16px); border-right:1px solid rgba(255,255,255,.7); }
+  .A .side .on { background:rgba(10,118,173,.12); color:var(--brand2); font-weight:600; }
+  .A .glass { background:rgba(255,255,255,.55); backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.75); box-shadow:0 8px 30px rgba(18,41,58,.08); }
+  .A .stat b { color:var(--brand2); }
+  .A .tr + .tr { border-top:1px solid rgba(18,41,58,.06); }
+  .A-login { display:grid; place-items:center; height:100%; min-height:360px; font-family:"Plus Jakarta Sans", sans-serif; background:
+       radial-gradient(400px 260px at 15% 20%, #8fd3f4 0%, transparent 60%),
+       radial-gradient(380px 260px at 90% 80%, #ffb48a 0%, transparent 60%), linear-gradient(135deg,#e7f3fa,#f7efe9); position:relative; overflow:hidden; }
+  .A-login .plate { position:absolute; width:180px; height:70px; border-radius:14px; background:rgba(255,255,255,.35); border:1px solid rgba(255,255,255,.7); backdrop-filter:blur(6px); transform:rotate(-14deg); }
+  .A-login .card { position:relative; width:78%; max-width:280px; padding:20px; border-radius:18px; background:rgba(255,255,255,.6); backdrop-filter:blur(22px); border:1px solid rgba(255,255,255,.85); box-shadow:0 20px 50px rgba(18,41,58,.12); }
+
+  /* ---------- B: Control Room ---------- */
+  .B { font-family:Inter, sans-serif; background:#0b1220; color:#dbe6f0;
+       background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px); background-size:28px 28px; }
+  .B .side { background:#0e1729; border-right:1px solid rgba(255,255,255,.06); color:#9fb0c3; }
+  .B .side .on { background:rgba(56,182,255,.12); color:#7fd3ff; }
+  .B .card { background:#111c30; border:1px solid rgba(255,255,255,.07); }
+  .B .stat b { color:#7fd3ff; text-shadow:0 0 18px rgba(56,182,255,.35); }
+  .B .stat.alert b { color:#ff9a62; text-shadow:0 0 18px rgba(242,101,34,.35); }
+  .B .tr + .tr { border-top:1px solid rgba(255,255,255,.05); }
+  .B.light { background:#f6f8fb; color:var(--ink); background-image:linear-gradient(rgba(18,41,58,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(18,41,58,.04) 1px,transparent 1px); }
+  .B.light .side { background:#fff; border-right:1px solid var(--line); color:var(--muted); }
+  .B.light .side .on { background:#eaf5fb; color:var(--brand2); }
+  .B.light .card { background:#fff; border:1px solid var(--line); }
+  .B.light .stat b { color:var(--brand2); text-shadow:none; }
+  .B.light .stat.alert b { color:#c2410c; text-shadow:none; }
+  .B.light .tr + .tr { border-top:1px solid var(--line); }
+  .B-login { display:grid; place-items:center; height:100%; min-height:360px; background:#070d18; position:relative; overflow:hidden; font-family:Inter, sans-serif; color:#dbe6f0; }
+  .B-login::before { content:""; position:absolute; inset:-40%; background:conic-gradient(from 200deg, transparent, rgba(56,182,255,.25), transparent 30%, rgba(242,101,34,.18), transparent 60%); filter:blur(40px); animation:spin 14s linear infinite; }
+  .B-login::after { content:""; position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px); background-size:26px 26px; mask-image:radial-gradient(circle at 50% 50%, #000 30%, transparent 75%); }
+  .B-login .card { position:relative; z-index:1; width:78%; max-width:280px; padding:20px; border-radius:16px; background:rgba(15,25,43,.75); border:1px solid rgba(127,211,255,.18); box-shadow:0 0 0 1px rgba(255,255,255,.03), 0 30px 60px rgba(0,0,0,.5); backdrop-filter:blur(10px); }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .toggle { font:600 12px Inter, sans-serif; border:1px solid var(--line); background:#fff; border-radius:999px; padding:6px 12px; cursor:pointer; }
+
+  /* ---------- C: Industrial Editorial ---------- */
+  .C { font-family:"IBM Plex Sans", Inter, sans-serif; background:#f7f5f2; }
+  .C .side { background:#1d2733; color:#c9d3dd; }
+  .C .side .on { background:var(--accent); color:#fff; }
+  .C .ttl { font-family:Manrope, sans-serif; font-weight:800; font-size:22px; letter-spacing:-.02em; }
+  .C .card { background:#fff; border:1px solid #e7e2da; }
+  .C .stat { border-left:4px solid var(--accent); border-radius:6px; }
+  .C .stat b { font-family:Manrope, sans-serif; font-weight:800; font-size:26px; }
+  .C .tr + .tr { border-top:1px solid #efe9e1; }
+  .C-login { display:grid; grid-template-columns:1fr 1fr; height:100%; min-height:360px; font-family:"IBM Plex Sans", sans-serif; }
+  .C-login .steel { background:repeating-linear-gradient(90deg, #8e9aa6 0 2px, #9aa6b2 2px 5px, #87939f 5px 7px), linear-gradient(#a3afbb,#6f7c88); background-blend-mode:multiply; color:#fff; padding:22px; display:flex; flex-direction:column; justify-content:flex-end; position:relative; }
+  .C-login .steel::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(13,22,32,.1),rgba(13,22,32,.75)); }
+  .C-login .steel h3 { position:relative; z-index:1; font-family:Manrope, sans-serif; font-weight:800; font-size:24px; line-height:1.1; margin:0; }
+  .C-login .steel p { position:relative; z-index:1; margin:8px 0 0; font-size:12px; opacity:.85; }
+  .C-login .form { background:#f7f5f2; display:grid; place-items:center; padding:16px; }
+  @media (max-width:640px){ .C-login { grid-template-columns:1fr; } }
+
+  /* login form bits */
+  .lbl { font-size:11px; opacity:.75; margin:10px 0 4px; }
+  .inp { height:32px; border-radius:9px; }
+  .btn { margin-top:14px; height:34px; border-radius:9px; display:grid; place-items:center; font-weight:600; font-size:13px; color:#fff; }
+
+  .fonts { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+  .font { border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .font .big { font-size:26px; margin:6px 0; }
+  .font small { color:var(--muted); }
+  .font a { font-size:12px; color:var(--brand2); }
+  .note { background:#fff8eb; border:1px solid #fde4b8; color:#7a4d00; border-radius:14px; padding:14px 16px; line-height:1.55; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Front-end look: three directions</h1>
+  <p class="lead">Each option shows the main screen and the login page with sample numbers. All three keep the Sambhav teal and orange and the same layout. Only the visual style changes, so any of them can be built on what we already have. All three get a light and dark mode.</p>
+
+  <!-- A -->
+  <section class="opt">
+    <div class="opt-head"><h2>A · Steel Glass</h2><span class="tag">Glassmorphism · light</span></div>
+    <p class="why">Soft colour washes in Sambhav teal and orange behind frosted-glass panels. It's modern and premium, and the most "wow" of the three on a big screen. The risk is that too much glass can hurt readability on dense tables, so we keep glass on the frame and use plainer panels for tables. Font: <b>Plus Jakarta Sans</b>.</p>
+    <div class="grid2">
+      <div class="frame A"><div class="app">
+        <div class="side"><span class="logo-pill"><img src="../web/public/logo.jpg" alt=""></span><div class="it on">Overview</div><div class="it">Summary</div><div class="it">Plates</div><div class="it">Physical count</div><div class="it">Needs review</div></div>
+        <div class="main"><div class="ttl">Stock overview</div>
+          <div class="stats"><div class="stat glass"><small>Total stock</small><b>2,719 t</b></div><div class="stat glass"><small>Plates in stock</small><b>1,343</b></div><div class="stat glass"><small>Needs review</small><b style="color:#c2410c">444</b></div></div>
+          <div class="tbl glass"><div class="tr" style="font-weight:600;opacity:.7"><span>Grade</span><span>Thickness</span><span>Balance</span></div><div class="tr"><span>SA 387 GR 22 CL2</span><span>12 mm</span><span>48,210 kg</span></div><div class="tr"><span>SA 387 GR 11 CL2</span><span>16 mm</span><span>31,940 kg</span></div><div class="tr"><span>S690QL</span><span>20 mm</span><span>22,615 kg</span></div></div>
+        </div></div></div>
+      <div class="frame A-login"><div class="plate" style="left:-30px;top:30px"></div><div class="plate" style="right:-40px;bottom:40px;transform:rotate(18deg)"></div><div class="plate" style="left:40%;top:-30px;width:120px;transform:rotate(8deg)"></div>
+        <div class="card"><span class="logo-pill"><img src="../web/public/logo.jpg" alt=""></span><div style="font-weight:700;font-size:18px;margin-top:12px">Sign in</div><div class="lbl">Email</div><div class="inp" style="background:rgba(255,255,255,.75);border:1px solid rgba(18,41,58,.08)"></div><div class="lbl">Password</div><div class="inp" style="background:rgba(255,255,255,.75);border:1px solid rgba(18,41,58,.08)"></div><div class="btn" style="background:linear-gradient(90deg,#0a76ad,#0b8fd1)">Sign in</div></div></div>
+    </div>
+    <div class="refs"><a href="https://css.glass" target="_blank">css.glass (glass effect)</a><a href="https://dribbble.com/search/glassmorphism-dashboard" target="_blank">Dribbble: glassmorphism dashboards</a><a href="https://ui.aceternity.com" target="_blank">Aceternity UI</a><a href="https://fonts.google.com/specimen/Plus+Jakarta+Sans" target="_blank">Plus Jakarta Sans</a></div>
+  </section>
+
+  <!-- B -->
+  <section class="opt">
+    <div class="opt-head"><h2>B · Control Room</h2><span class="tag rec">Recommended</span></div>
+    <p class="why">Dark-first, like a live operations screen. A faint grid, glowing teal numbers, and orange only for things that need attention. It's crisp and fast to read, ages well, and the dark mode is designed in from the start, not bolted on. The login has a slowly moving teal and orange glow behind the card. This is the style of Linear and Vercel. Font: <b>Inter</b> (or Geist), with the numbers in fixed-width figures so columns line up. <button class="toggle" onclick="document.getElementById('bmock').classList.toggle('light');this.textContent=this.textContent.includes('light')?'Show dark mode':'Show light mode'">Show light mode</button></p>
+    <div class="grid2">
+      <div class="frame B" id="bmock"><div class="app">
+        <div class="side"><span class="logo-pill"><img src="../web/public/logo.jpg" alt=""></span><div class="it on">Overview</div><div class="it">Summary</div><div class="it">Plates</div><div class="it">Physical count</div><div class="it">Needs review</div></div>
+        <div class="main"><div class="ttl">Stock overview</div>
+          <div class="stats"><div class="stat card"><small>Total stock</small><b>2,719 t</b></div><div class="stat card"><small>Plates in stock</small><b>1,343</b></div><div class="stat card alert"><small>Needs review</small><b>444</b></div></div>
+          <div class="tbl card"><div class="tr" style="font-weight:600;opacity:.6"><span>Grade</span><span>Thickness</span><span>Balance</span></div><div class="tr"><span>SA 387 GR 22 CL2</span><span>12 mm</span><span>48,210 kg</span></div><div class="tr"><span>SA 387 GR 11 CL2</span><span>16 mm</span><span>31,940 kg</span></div><div class="tr"><span>S690QL</span><span>20 mm</span><span>22,615 kg</span></div></div>
+        </div></div></div>
+      <div class="frame B-login"><div class="card"><span class="logo-pill"><img src="../web/public/logo.jpg" alt=""></span><div style="font-weight:700;font-size:18px;margin-top:12px">Sign in</div><div class="lbl">Email</div><div class="inp" style="background:#0b1424;border:1px solid rgba(255,255,255,.1)"></div><div class="lbl">Password</div><div class="inp" style="background:#0b1424;border:1px solid rgba(255,255,255,.1)"></div><div class="btn" style="background:linear-gradient(90deg,#0a76ad,#1aa3e8);box-shadow:0 0 24px rgba(26,163,232,.35)">Sign in</div></div></div>
+    </div>
+    <div class="refs"><a href="https://linear.app" target="_blank">Linear</a><a href="https://vercel.com/geist/introduction" target="_blank">Vercel Geist design system</a><a href="https://ui.shadcn.com/examples/dashboard" target="_blank">shadcn dashboard example</a><a href="https://dashboard.tremor.so" target="_blank">Tremor dashboard demo</a><a href="https://magicui.design" target="_blank">Magic UI (animated touches)</a><a href="https://rsms.me/inter/" target="_blank">Inter font</a></div>
+  </section>
+
+  <!-- C -->
+  <section class="opt">
+    <div class="opt-head"><h2>C · Industrial Editorial</h2><span class="tag">Bold · light</span></div>
+    <p class="why">Feels like a steel company: warm off-white paper, a dark steel sidebar, big confident numbers, and an orange rule on the key figures. The login shows a brushed-steel panel with one line of copy. It's the most "on brand" for a steel trader and very readable for senior users. Fonts: <b>Manrope</b> for headings and numbers, <b>IBM Plex Sans</b> for text.</p>
+    <div class="grid2">
+      <div class="frame C"><div class="app">
+        <div class="side"><span class="logo-pill"><img src="../web/public/logo.jpg" alt=""></span><div class="it on">Overview</div><div class="it">Summary</div><div class="it">Plates</div><div class="it">Physical count</div><div class="it">Needs review</div></div>
+        <div class="main"><div class="ttl">Stock overview</div>
+          <div class="stats"><div class="stat card"><small>Total stock</small><b>2,719 t</b></div><div class="stat card"><small>Plates in stock</small><b>1,343</b></div><div class="stat card"><small>Needs review</small><b style="color:#c2410c">444</b></div></div>
+          <div class="tbl card"><div class="tr" style="font-weight:600;opacity:.6"><span>Grade</span><span>Thickness</span><span>Balance</span></div><div class="tr"><span>SA 387 GR 22 CL2</span><span>12 mm</span><span>48,210 kg</span></div><div class="tr"><span>SA 387 GR 11 CL2</span><span>16 mm</span><span>31,940 kg</span></div><div class="tr"><span>S690QL</span><span>20 mm</span><span>22,615 kg</span></div></div>
+        </div></div></div>
+      <div class="frame C-login"><div class="steel"><h3>Every plate,<br>accounted for.</h3><p>Stock, orders and certificates in one place.</p></div>
+        <div class="form"><div style="width:100%;max-width:220px"><span class="logo-pill" style="border:1px solid #e7e2da"><img src="../web/public/logo.jpg" alt=""></span><div style="font-family:Manrope;font-weight:800;font-size:20px;margin-top:12px">Sign in</div><div class="lbl">Email</div><div class="inp" style="background:#fff;border:1px solid #e1dbd2"></div><div class="lbl">Password</div><div class="inp" style="background:#fff;border:1px solid #e1dbd2"></div><div class="btn" style="background:#1d2733">Sign in</div></div></div></div>
+    </div>
+    <div class="refs"><a href="https://stripe.com" target="_blank">Stripe (editorial type)</a><a href="https://fonts.google.com/specimen/Manrope" target="_blank">Manrope</a><a href="https://fonts.google.com/specimen/IBM+Plex+Sans" target="_blank">IBM Plex Sans</a><a href="https://www.tremor.so" target="_blank">Tremor charts</a></div>
+  </section>
+
+  <section class="opt">
+    <div class="opt-head"><h2>Fonts to choose from</h2><span class="tag">All free</span></div>
+    <div class="fonts">
+      <div class="font" style="font-family:Inter"><small>Inter · option B</small><div class="big">2,719.1 t</div>Clear at small sizes, the standard for data apps. <a href="https://rsms.me/inter/" target="_blank">rsms.me/inter</a></div>
+      <div class="font" style="font-family:'Plus Jakarta Sans'"><small>Plus Jakarta Sans · option A</small><div class="big">2,719.1 t</div>Friendly and modern, a little rounder. <a href="https://fonts.google.com/specimen/Plus+Jakarta+Sans" target="_blank">Google Fonts</a></div>
+      <div class="font" style="font-family:Manrope"><small>Manrope · option C headings</small><div class="big" style="font-weight:800">2,719.1 t</div>Strong, geometric, great big numbers. <a href="https://fonts.google.com/specimen/Manrope" target="_blank">Google Fonts</a></div>
+      <div class="font" style="font-family:'IBM Plex Sans'"><small>IBM Plex Sans · option C text</small><div class="big">2,719.1 t</div>Engineered, industrial feel. <a href="https://fonts.google.com/specimen/IBM+Plex+Sans" target="_blank">Google Fonts</a></div>
+      <div class="font" style="font-family:'Noto Sans Devanagari'"><small>Noto Sans Devanagari · Hindi labels</small><div class="big">गाड़ी नं. · भाड़ा</div>Pairs with any of the above for the Hindi labels. <a href="https://fonts.google.com/noto/specimen/Noto+Sans+Devanagari" target="_blank">Google Fonts</a></div>
+    </div>
+  </section>
+
+  <div class="note"><b>Two things that will lift any option:</b> (1) ask Sambhav for their logo as a transparent PNG or SVG. The current one has a white box behind it, which is why it sits in a white pill here. (2) We serve the chosen font from our own site, not from Google, so it always loads, even on the office network.</div>
+</div>
+</body>
+</html>

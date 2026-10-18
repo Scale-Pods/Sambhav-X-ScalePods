@@ -27,7 +27,7 @@ async function Body() {
   return (
     <div className="space-y-6">
       {open ? (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-brand/20 bg-brand-soft px-5 py-3.5 text-brand-dark">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-brand/20 bg-brand-soft px-5 py-3.5 text-brand-dark">
           <span className="flex items-center gap-2 font-semibold"><Radio className="h-4 w-4" /> Count window open · {open.book}</span>
           <span className="text-[0.92rem]">{open.name}. Opened {date(open.started_at)}.</span>
         </div>

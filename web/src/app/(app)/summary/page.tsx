@@ -30,7 +30,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
       aside={
         <div className="flex rounded-lg bg-surface p-1 text-sm font-medium">
           {["WB1", "WB2"].map((b) => (
-            <Link key={b} href={`/summary?book=${b}`} className={"rounded-md px-4 py-1.5 " + (b === book ? "bg-white text-brand-dark shadow-sm" : "text-muted")}>
+            <Link key={b} href={`/summary?book=${b}`} className={"rounded-md px-4 py-1.5 " + (b === book ? "bg-field text-brand-dark shadow-sm" : "text-muted")}>
               {b === "WB1" ? "WB1 · SPF alloy plates" : "WB2 · SPF + RS"}
             </Link>
           ))}

@@ -1,35 +1,85 @@
 @import "tailwindcss";
 
-/* Sambhav Pipes & Fittings: brand taken from sambhavpipes.com (teal-blue + orange accent) */
+/* Option C · Industrial Editorial. Sambhav teal + orange, warm paper, dark steel sidebar.
+   Every colour is a token, so dark mode is a second set of values, not a second set of classes. */
 :root {
   --brand: #0a76ad;
   --brand-dark: #075a86;
-  --brand-soft: #eaf5fb;
-  --ink: #12293a;
-  --muted: #5b6b79;
-  --line: #e2e8ee;
-  --surface: #f4f7fa;
-  --card: #ffffff;
+  --brand-soft: #e8f3f9;
   --accent: #f26522;
+  --accent-soft: #fff0e7;
+  --ink: #18222d;
+  --muted: #66707a;
+  --line: #e7e2da;
+  --surface: #f7f5f2;
+  --card: #ffffff;
+  --field: #ffffff;
+  --steel: #1d2733;
+  --steel-ink: #c9d3dd;
+  --steel-muted: #7f8c99;
   --ok: #1f8f64;
-  --warn: #b97a00;
-  --bad: #c93c3c;
+  --ok-soft: #e9f7f0;
+  --warn: #a86400;
+  --warn-soft: #fdf3e2;
+  --bad: #c0392b;
+  --bad-soft: #fdecea;
+  --info-soft: #e8f3f9;
+  --skel-a: #ece7e0;
+  --skel-b: #f7f4f0;
+  color-scheme: light;
+}
+
+:root.dark {
+  --brand: #3aa6dc;
+  --brand-dark: #7cc6ec;
+  --brand-soft: #14293a;
+  --accent: #ff7a3d;
+  --accent-soft: #3a2117;
+  --ink: #e6ebf0;
+  --muted: #93a0ad;
+  --line: #27313c;
+  --surface: #0f141a;
+  --card: #161d25;
+  --field: #1b232d;
+  --steel: #0a0f15;
+  --steel-ink: #c9d3dd;
+  --steel-muted: #6d7a87;
+  --ok: #4cc795;
+  --ok-soft: #12291f;
+  --warn: #f0b44c;
+  --warn-soft: #2e2412;
+  --bad: #ff7b6e;
+  --bad-soft: #351816;
+  --info-soft: #14293a;
+  --skel-a: #1d2530;
+  --skel-b: #26303c;
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-brand: var(--brand);
   --color-brand-dark: var(--brand-dark);
   --color-brand-soft: var(--brand-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-surface: var(--surface);
   --color-card: var(--card);
-  --color-accent: var(--accent);
+  --color-field: var(--field);
+  --color-steel: var(--steel);
+  --color-steel-ink: var(--steel-ink);
+  --color-steel-muted: var(--steel-muted);
   --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
   --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --color-bad: var(--bad);
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --color-bad-soft: var(--bad-soft);
+  --color-info-soft: var(--info-soft);
+  --font-sans: var(--font-body), var(--font-deva), "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-head), var(--font-body), "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 
@@ -47,11 +97,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* soft focus ring everywhere */
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* brushed steel: login panel and accents */
+.steel-panel {
+  background:
+    linear-gradient(180deg, rgba(13, 22, 32, 0.05), rgba(13, 22, 32, 0.78)),
+    repeating-linear-gradient(90deg, #8e9aa6 0 2px, #9aa6b2 2px 5px, #87939f 5px 7px),
+    linear-gradient(#a3afbb, #6f7c88);
+  background-blend-mode: normal, multiply, normal;
 }
 
 /* loading states */
@@ -60,10 +118,10 @@ body {
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #eef2f6 25%, #f8fafc 37%, #eef2f6 63%);
+  background: linear-gradient(90deg, var(--skel-a) 25%, var(--skel-b) 37%, var(--skel-a) 63%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 @keyframes progress-run {
   0% { width: 0; opacity: 1; }
