@@ -1,4 +1,5 @@
 import "server-only";
+import { connection } from "next/server";
 import { Pool, type PoolClient } from "pg";
 import { supabaseServer } from "./supabase";
 
@@ -19,6 +20,7 @@ export type Tx = Pick<PoolClient, "query">;
 
 /** The signed-in person's id from the verified session cookie, or null. */
 export async function currentUserId(): Promise<string | null> {
+  await connection(); // everything here is per person: render at request time, never in the prerendered shell
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getClaims();
   return (data?.claims?.sub as string | undefined) ?? null;
