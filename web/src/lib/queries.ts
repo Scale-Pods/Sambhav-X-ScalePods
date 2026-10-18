@@ -110,7 +110,7 @@ export async function lotDetail(lotNo: number) {
   return { lot: lot[0], moves, issues, ref: ref[0] ?? null };
 }
 
-export async function reviewList(kind?: string, severity?: string) {
+export async function reviewList(kind?: string, severity?: string, page = 1, pageSize = 50) {
   const params: unknown[] = [];
   const where = [`e.status = 'open'`];
   if (kind) {
@@ -121,17 +121,18 @@ export async function reviewList(kind?: string, severity?: string) {
     params.push(severity);
     where.push(`e.severity::text = $${params.length}`);
   }
-  const rows = await q<{ id: string; kind: string; severity: string; message: string; related_id: string | null; lot_no: string | null; raised_at: string }>(
-    `select e.id, e.kind::text, e.severity::text, e.message, e.related_id, l.lot_no, e.raised_at
+  const rows = await q<{ id: string; kind: string; severity: string; message: string; related_id: string | null; lot_no: string | null; raised_at: string; total: string }>(
+    `select e.id, e.kind::text, e.severity::text, e.message, e.related_id, l.lot_no, e.raised_at, count(*) over () total
     from public.exceptions e left join public.lots l on l.id = e.related_id and e.related_table = 'lots'
     where ${where.join(" and ")}
-    order by case e.severity::text when 'error' then 0 when 'warning' then 1 else 2 end, e.raised_at, e.message limit 300`,
+    order by case e.severity::text when 'error' then 0 when 'warning' then 1 else 2 end, e.raised_at, e.message
+    limit ${pageSize} offset ${(Math.max(1, page) - 1) * pageSize}`,
     params,
   );
   const kinds = await q<{ kind: string; severity: string; n: string }>(
     `select kind::text, severity::text, count(*) n from public.exceptions where status = 'open' group by 1, 2 order by 3 desc`,
   );
-  return { rows, kinds };
+  return { rows, kinds, total: Number(rows[0]?.total ?? 0), pageSize };
 }
 
 export type CountSession = { id: string; name: string; status: string; book: string; started_at: string | null; planned_date: string | null; lines: string; kg: string };

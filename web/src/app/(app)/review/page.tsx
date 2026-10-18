@@ -6,7 +6,7 @@ import { canDecide, currentStaff } from "@/lib/auth";
 import { ApproveButton } from "./ApproveButton";
 import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
 
-type SP = Promise<{ kind?: string; severity?: string }>;
+type SP = Promise<{ kind?: string; severity?: string; page?: string }>;
 
 const KIND: Record<string, string> = {
   legacy_data: "Old sheet data",
@@ -37,7 +37,10 @@ export default function ReviewPage({ searchParams }: { searchParams: SP }) {
 
 async function Body({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const [{ rows, kinds }, me] = await Promise.all([reviewList(sp.kind, sp.severity), currentStaff()]);
+  const page = Math.max(1, Number(sp.page ?? 1) || 1);
+  const [{ rows, kinds, total: shown, pageSize }, me] = await Promise.all([reviewList(sp.kind, sp.severity, page), currentStaff()]);
+  const pages = Math.max(1, Math.ceil(shown / pageSize));
+  const link = (p: number) => `/review?${new URLSearchParams({ ...(sp.kind ? { kind: sp.kind } : {}), ...(sp.severity ? { severity: sp.severity } : {}), page: String(p) })}`;
   const mayDecide = canDecide(me?.role);
   const total = kinds.reduce((s, k) => s + Number(k.n), 0);
   const chip = (on: boolean) => "rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset " + (on ? "bg-brand text-white ring-brand" : "bg-white text-muted ring-line hover:text-ink");
@@ -73,7 +76,13 @@ async function Body({ searchParams }: { searchParams: SP }) {
           </tbody>
         </table>
       </div>
-      <p className="border-t border-line px-5 py-3 text-sm text-muted">Showing the first 300. Approving records who decided, when, and why.</p>
+      <div className="flex items-center justify-between border-t border-line px-5 py-3 text-sm text-muted">
+        <span>{kg(shown)} items · page {page} of {pages}. Approving records who decided, when, and why.</span>
+        <div className="flex gap-2">
+          {page > 1 && <Link href={link(page - 1)} className="rounded-lg border border-line px-3 py-1.5 font-medium hover:bg-surface">Previous</Link>}
+          {page < pages && <Link href={link(page + 1)} className="rounded-lg border border-line px-3 py-1.5 font-medium hover:bg-surface">Next</Link>}
+        </div>
+      </div>
     </Card>
   );
 }
