@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { BarChart3, ClipboardCheck, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
+import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
 import { NavProgress } from "./NavProgress";
 import { ThemeToggle } from "./ThemeToggle";
@@ -15,8 +15,8 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <Suspense fallback={null}><NavProgress /></Suspense>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-steel px-4 py-5 lg:flex">
-        <Link href="/" className="mb-7 block rounded-lg bg-white px-3 py-2.5">
-          <Image src="/logo.jpg" alt="Sambhav Pipes & Fittings" width={361} height={86} priority className="h-auto w-full" />
+        <Link href="/" className="mb-8 block px-1">
+          <Logo variant="dark" priority />
         </Link>
 
         <Suspense fallback={<div className="flex-1" />}>
@@ -50,8 +50,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-8">
-          <Link href="/" className="rounded-md bg-white px-2 py-1 lg:hidden">
-            <Image src="/logo.jpg" alt="Sambhav" width={140} height={33} className="h-7 w-auto" />
+          <Link href="/" className="w-40 shrink-0 lg:hidden">
+            <Logo />
           </Link>
           <form action="/stock" className="relative ml-auto w-full max-w-md lg:ml-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />

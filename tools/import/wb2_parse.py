@@ -42,6 +42,13 @@ def txt(v):
     return s if s and s.upper() not in ("NA", "N/A", "NIL", "-", "NONE") else None
 
 
+def link_of(cell):
+    """A certificate cell often shows a file name with the real web address behind it: prefer the address."""
+    if cell.hyperlink is not None and cell.hyperlink.target:
+        return cell.hyperlink.target
+    return txt(cell.value)
+
+
 def norm(v):
     return re.sub(r"[^A-Z0-9]", "", str(v).upper()) if v is not None else ""
 
@@ -77,8 +84,8 @@ def main() -> None:
                 key = norm(plate or heat)
                 lot = dict(tab=tab, row=r, grade=grade, receipt_date=rec, thickness_mm=thk, width_mm=wid, length_mm=ln,
                            pieces=int(nos) if nos else None, heat_no=heat, plate_no=plate, tc_no=txt(ws.cell(r, P["tc"]).value),
-                           tc_link=txt(ws.cell(r, P["link"]).value), con_mtc=txt(ws.cell(r, P["con"]).value),
-                           con_link=txt(ws.cell(r, P["con_link"]).value), hsn=txt(ws.cell(r, P["hsn"]).value),
+                           tc_link=link_of(wsf.cell(r, P["link"])), con_mtc=txt(ws.cell(r, P["con"]).value),
+                           con_link=link_of(wsf.cell(r, P["con_link"])), hsn=txt(ws.cell(r, P["hsn"]).value),
                            rate_per_kg=num(ws.cell(r, P["rate"]).value), sheet_wt=wt,
                            invoice_weight_kg=None if is_formula else wt, theoretical_weight_kg=wt if is_formula else theo,
                            weight_source="formula" if is_formula else "typed", key=key)

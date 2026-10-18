@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Logo } from "./Logo";
 
 export function PageHeader({ title, hint, actions }: { title: string; hint?: string; actions?: ReactNode }) {
   return (
@@ -88,10 +89,7 @@ export function BrandLoader() {
   return (
     <div aria-busy="true" aria-label="Loading">
       <div className="mb-8 flex flex-col items-center gap-3 pt-6">
-        <div className="logo-breathe rounded-2xl bg-white px-6 py-4 shadow-[0_1px_2px_rgba(18,41,58,0.05)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.jpg" alt="Sambhav Pipes & Fittings" width={240} height={57} className="h-auto w-56" />
-        </div>
+        <Logo className="logo-breathe w-64" />
         <p className="text-sm text-muted">Getting your stock ready…</p>
       </div>
       <div className="mb-6 space-y-2"><div className="skeleton h-7 w-56" /><div className="skeleton h-4 w-96 max-w-full" /></div>

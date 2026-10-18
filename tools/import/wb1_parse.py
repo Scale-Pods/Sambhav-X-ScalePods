@@ -51,6 +51,13 @@ def txt(v):
     return s if s and s.upper() not in ("NA", "N/A", "NIL", "NO", "-", "NONE", "0", "0.0") else None
 
 
+def link_of(cell):
+    """A certificate cell often shows a file name with the real web address behind it: prefer the address."""
+    if cell.hyperlink is not None and cell.hyperlink.target:
+        return cell.hyperlink.target
+    return txt(cell.value)
+
+
 def norm(v):
     return re.sub(r"[^A-Z0-9]", "", str(v).upper())
 
@@ -129,7 +136,7 @@ def main() -> None:
                 make = txt(g(P, "MAKE"))
                 lots.append(dict(tab=tab, row=r, grade=grade, receipt_date=as_date(g(P, "DATE")), thickness_mm=thk, width_mm=wid, length_mm=ln,
                                  pieces=int(nos) if nos else None, heat_no=heat, plate_no=plate, keys="|".join(dict.fromkeys(keys)),
-                                 hsn=txt(g(P, "HSN")), rate_per_kg=num(g(P, "RATE")), link=txt(g(P, "LINK")), mtc_no=txt(g(P, "MTC NO")),
+                                 hsn=txt(g(P, "HSN")), rate_per_kg=num(g(P, "RATE")), link=link_of(wsf.cell(r, pick(P, "LINK"))) if pick(P, "LINK") else None, mtc_no=txt(g(P, "MTC NO")),
                                  make=make, cls=cl, sheet_wt=wt, weight_source="formula" if is_formula else "typed",
                                  purchase_inv=txt(g(P, "INV NO"))))
                 if not as_date(g(P, "DATE")):

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* dark mode follows the .dark class set by the theme switch */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Option C · Industrial Editorial. Sambhav teal + orange, warm paper, dark steel sidebar.
    Every colour is a token, so dark mode is a second set of values, not a second set of classes. */
 :root {

@@ -27,7 +27,7 @@ async function Body({ params }: { params: Promise<{ lot: string }> }) {
   if (!d) notFound();
   const { lot, moves, issues, ref } = d;
   const left = num(lot.kg);
-  const link = ref?.raw?.link;
+  const sheet: Record<string, string | null | undefined> = ref?.raw ?? {};
   return (
     <div className="grid gap-6 xl:grid-cols-3">
       <div className="space-y-6 xl:col-span-2">
@@ -76,8 +76,8 @@ async function Body({ params }: { params: Promise<{ lot: string }> }) {
       <div className="space-y-6">
         <Card title="Certificates and source">
           <dl className="space-y-3 px-5 py-4 text-[0.92rem]">
-            <div className="flex justify-between gap-4"><dt className="text-muted">Certificate link</dt><dd>{link ? <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-brand hover:underline">Open <ExternalLink className="h-3.5 w-3.5" /></a> : <span className="text-muted">none on the sheet</span>}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-muted">Consignment certificate</dt><dd className="text-right">{ref?.raw?.con_link ? <a href={ref.raw.con_link} target="_blank" rel="noreferrer" className="font-medium text-brand hover:underline">Open</a> : <span className="text-muted">none</span>}</dd></div>
+            <CertRow label="Mill certificate" url={sheet.link || sheet.tc_link} name={sheet.link_name} />
+            <CertRow label="Consignment certificate" url={sheet.con_link} name={sheet.con_link_name} />
             <div className="flex justify-between gap-4"><dt className="text-muted">Weight on sheet</dt><dd className="font-medium">{lot.invoice_weight_kg ? "typed" : "formula"}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-muted">Taken from</dt><dd className="text-right font-medium">{ref ? `sheet tab “${ref.source_tab}”, row ${ref.source_row}` : "-"}</dd></div>
           </dl>
@@ -98,6 +98,27 @@ async function Body({ params }: { params: Promise<{ lot: string }> }) {
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+/** Only real web addresses become links. A file name or a person's name typed in the link column is shown as text. */
+function CertRow({ label, url, name }: { label: string; url?: string | null; name?: string | null }) {
+  const isWeb = !!url && /^https?:\/\//i.test(url);
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-muted">{label}</dt>
+      <dd className="min-w-0 text-right">
+        {isWeb ? (
+          <a href={url!} target="_blank" rel="noopener noreferrer" title={name ?? undefined} className="inline-flex items-center gap-1 font-medium text-brand hover:underline">
+            Open <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        ) : url ? (
+          <span className="break-words text-muted" title="Written on the sheet, but there is no link behind it">{url}</span>
+        ) : (
+          <span className="text-muted">none on the sheet</span>
+        )}
+      </dd>
     </div>
   );
 }
