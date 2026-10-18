@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { BarChart3, ClipboardCheck, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
 import { NavLink } from "./NavLink";
+import { NavProgress } from "./NavProgress";
 import { UserChip } from "./UserChip";
 
 const icon = "h-[1.15rem] w-[1.15rem] shrink-0";
@@ -10,6 +11,7 @@ const icon = "h-[1.15rem] w-[1.15rem] shrink-0";
 export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
+      <Suspense fallback={null}><NavProgress /></Suspense>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-card px-4 py-5 lg:flex">
         <Link href="/" className="mb-6 block px-1">
           <Image src="/logo.jpg" alt="Sambhav Pipes & Fittings" width={361} height={86} priority className="h-auto w-full" />

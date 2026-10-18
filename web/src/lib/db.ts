@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { connection } from "next/server";
 import { Pool, type PoolClient } from "pg";
 import { supabaseServer } from "./supabase";
@@ -12,26 +13,29 @@ const pool =
   g.__pool ??
   (g.__pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: Number(process.env.DB_POOL_MAX ?? 3),
+    max: Number(process.env.DB_POOL_MAX ?? 6),
     ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
   }));
 
 export type Tx = Pick<PoolClient, "query">;
 
 /** The signed-in person's id from the verified session cookie, or null. */
-export async function currentUserId(): Promise<string | null> {
+export const currentUserId = cache(async (): Promise<string | null> => {
   await connection(); // everything here is per person: render at request time, never in the prerendered shell
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getClaims();
   return (data?.claims?.sub as string | undefined) ?? null;
-}
+});
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function inTx<T>(userId: string, readOnly: boolean, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  if (!UUID.test(userId)) throw new NotSignedIn(); // the id comes from a verified session; this keeps the inlined claim string safe
   const client = await pool.connect();
   try {
-    await client.query(readOnly ? "begin read only" : "begin");
-    await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: userId, role: "authenticated" })]);
-    await client.query("set local role authenticated");
+    // open the transaction, say who is asking, and switch role: one round trip instead of three
+    const claims = JSON.stringify({ sub: userId, role: "authenticated" });
+    await client.query(`${readOnly ? "begin read only" : "begin"}; select set_config('request.jwt.claims', '${claims}', true); set local role authenticated`);
     const out = await fn(client);
     await client.query("commit");
     return out;

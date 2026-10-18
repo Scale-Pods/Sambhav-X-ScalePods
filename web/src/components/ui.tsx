@@ -56,10 +56,46 @@ export const td = "px-4 py-2.5 text-[0.92rem]";
 
 export function Skeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="animate-pulse space-y-3 p-5">
+    <div className="space-y-4 p-5" aria-busy="true" aria-label="Loading">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="h-4 rounded bg-surface" style={{ width: `${60 + ((i * 17) % 40)}%` }} />
+        <div key={i} className="flex items-center gap-4">
+          <div className="skeleton h-4 w-1/4" />
+          <div className="skeleton h-4 flex-1" style={{ maxWidth: `${38 + ((i * 13) % 30)}%` }} />
+          <div className="skeleton ml-auto h-4 w-20" />
+        </div>
       ))}
+    </div>
+  );
+}
+
+export function StatsSkeleton() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-busy="true" aria-label="Loading totals">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="rounded-xl border border-line bg-card p-5">
+          <div className="skeleton h-3 w-24" />
+          <div className="skeleton mt-4 h-8 w-36" />
+          <div className="skeleton mt-4 h-3 w-40" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** First load: the Sambhav logo, breathing, with the page outline underneath. */
+export function BrandLoader() {
+  return (
+    <div aria-busy="true" aria-label="Loading">
+      <div className="mb-8 flex flex-col items-center gap-3 pt-6">
+        <div className="logo-breathe rounded-2xl bg-white px-6 py-4 shadow-[0_1px_2px_rgba(18,41,58,0.05)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.jpg" alt="Sambhav Pipes & Fittings" width={240} height={57} className="h-auto w-56" />
+        </div>
+        <p className="text-sm text-muted">Getting your stock ready…</p>
+      </div>
+      <div className="mb-6 space-y-2"><div className="skeleton h-7 w-56" /><div className="skeleton h-4 w-96 max-w-full" /></div>
+      <StatsSkeleton />
+      <div className="mt-6 rounded-xl border border-line bg-card"><Skeleton rows={6} /></div>
     </div>
   );
 }

@@ -53,3 +53,34 @@ body {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* loading states */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #eef2f6 25%, #f8fafc 37%, #eef2f6 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+@keyframes progress-run {
+  0% { width: 0; opacity: 1; }
+  100% { width: 88%; opacity: 1; }
+}
+@keyframes progress-done {
+  0% { width: 88%; opacity: 1; }
+  60% { width: 100%; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+.nav-progress-run { animation: progress-run 12s cubic-bezier(0.1, 0.7, 0.2, 1) forwards; }
+.nav-progress-done { animation: progress-done 0.45s ease-out forwards; }
+@keyframes logo-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(0.985); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.logo-breathe { animation: logo-breathe 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .logo-breathe, .nav-progress-run { animation: none; }
+}

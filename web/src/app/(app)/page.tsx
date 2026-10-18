@@ -3,13 +3,13 @@ import { Suspense } from "react";
 import { ArrowRight, ShieldAlert } from "lucide-react";
 import { bookTotals, recentSales, reviewCounts, stockByGrade } from "@/lib/queries";
 import { date, kg, num, tonnes } from "@/lib/format";
-import { Badge, Card, PageHeader, Skeleton, Stat, td, th } from "@/components/ui";
+import { Badge, Card, PageHeader, Skeleton, Stat, StatsSkeleton, td, th } from "@/components/ui";
 
 export default function Overview() {
   return (
     <>
       <PageHeader title="Stock overview" hint="What is in the yard right now, worked out from every purchase and sale, not typed by hand." />
-      <Suspense fallback={<Skeleton rows={4} />}>
+      <Suspense fallback={<StatsSkeleton />}>
         <Totals />
       </Suspense>
       <div className="mt-6 grid gap-6 xl:grid-cols-5">
