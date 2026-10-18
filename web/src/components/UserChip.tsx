@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { currentStaff } from "@/lib/auth";
+import { NotSignedIn } from "@/lib/db";
 import { signOut } from "@/app/login/actions";
 
 const ROLE: Record<string, string> = { owner: "Owner", admin: "Administrator", approver: "Approver", accounts: "Accounts", sales: "Sales", office: "Office", viewer: "View only", partner_rs: "Partner" };
@@ -8,8 +9,8 @@ export async function UserChip() {
   let me = null;
   try {
     me = await currentStaff();
-  } catch {
-    /* signed out: the gate handles it */
+  } catch (e) {
+    if (!(e instanceof NotSignedIn)) throw e; // keep Next's own signals; signed-out is handled by the gate
   }
   if (!me) return null;
   const initials = me.full_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
