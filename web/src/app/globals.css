@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* Sambhav Pipes & Fittings: brand taken from sambhavpipes.com (teal-blue + orange accent) */
+:root {
+  --brand: #0a76ad;
+  --brand-dark: #075a86;
+  --brand-soft: #eaf5fb;
+  --ink: #12293a;
+  --muted: #5b6b79;
+  --line: #e2e8ee;
+  --surface: #f4f7fa;
+  --card: #ffffff;
+  --accent: #f26522;
+  --ok: #1f8f64;
+  --warn: #b97a00;
+  --bad: #c93c3c;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-soft: var(--brand-soft);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+html {
+  font-size: 15.5px;
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* soft focus ring everywhere */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
