@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { ClipboardCheck, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
+import { ClipboardCheck, Factory, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
 import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
 import { NavProgress } from "./NavProgress";
@@ -28,6 +28,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <NavLink href="/summary"><Table2 className={icon} />Summary</NavLink>
               <NavLink href="/stock"><Layers className={icon} />Plates</NavLink>
               <NavLink href="/count"><ClipboardCheck className={icon} />Physical count</NavLink>
+              <NavLink href="/mill-orders"><Factory className={icon} />Mill orders</NavLink>
             </div>
             <div className="flex flex-col gap-1">
               <p className={group}>Business</p>
