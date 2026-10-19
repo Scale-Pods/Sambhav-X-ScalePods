@@ -36,7 +36,7 @@ export async function Reconciliation({ sessionId, filter, canExport, startedLabe
           <span className="font-semibold text-ink">How it is worked out:</span> opening stock = what was counted + anything that went out after the window opened ({startedLabel}) but before that plate was counted − anything that came in during that time. Then it is compared with the books at the moment the window opened.
         </p>
         <div className="flex flex-wrap gap-2 border-b border-line px-5 py-3">
-          {tabs.map(([k, l]) => <Link key={k} href={`/count?tab=reconcile&rs=${k}`} className={chip(filter === k)}>{l}</Link>)}
+          {tabs.map(([k, l]) => <Link key={k} href={`/count?tab=reconcile&s=${sessionId}&rs=${k}`} className={chip(filter === k)}>{l}</Link>)}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">

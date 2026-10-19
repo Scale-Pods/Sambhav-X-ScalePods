@@ -28,7 +28,8 @@ export default function CountPage({ searchParams }: { searchParams: SP }) {
 async function Body({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const [me, sessions] = await Promise.all([currentStaff(), countSessions()]);
-  const open = sessions.find((s) => s.status === "counting");
+  const opens = sessions.filter((s) => s.status === "counting");
+  const open = opens.find((s) => s.id === sp.s) ?? opens[0];
   const reviewed = sessions.filter((s) => s.status === "review");
   // the session the tabs work on: the open one, otherwise the latest closed one (for its reconciliation)
   const session = open ?? reviewed[0] ?? null;
@@ -39,6 +40,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     open && tab === "moves" ? windowMoves(open.id) : Promise.resolve([]),
   ]);
 
+  const q = (tab: string, extra = "") => `/count?tab=${tab}${open && opens.length > 1 ? `&s=${open.id}` : ""}${extra}`;
   const tabCls = (on: boolean) => "flex items-center gap-2 border-b-2 px-1 pb-3 text-[0.95rem] font-semibold transition-colors " + (on ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink");
 
   return (
@@ -47,6 +49,13 @@ async function Body({ searchParams }: { searchParams: SP }) {
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-accent/30 bg-accent-soft px-5 py-3.5">
           <span className="flex items-center gap-2 font-display font-bold text-ink"><Radio className="h-4 w-4 text-accent" /> Count window open · {open.book}</span>
           <span className="text-[0.92rem] text-muted">{open.name}. Opened {when(open.started_at)}. {kg(open.lines)} plates counted so far.</span>
+          {opens.length > 1 && (
+            <span className="ml-auto flex gap-1.5">
+              {opens.map((o) => (
+                <Link key={o.id} href={`/count?tab=${tab}&s=${o.id}`} className={"rounded-md px-3 py-1 text-sm font-semibold " + (o.id === open.id ? "bg-ink text-surface" : "bg-field text-muted ring-1 ring-inset ring-line hover:text-ink")}>{o.book}</Link>
+              ))}
+            </span>
+          )}
         </div>
       ) : (
         <Card title="No count is open">
@@ -57,11 +66,18 @@ async function Body({ searchParams }: { searchParams: SP }) {
         </Card>
       )}
 
+      {open && opens.length < 2 && canRunCount(me?.role) && (
+        <details className="rounded-lg border border-line bg-card px-5 py-3">
+          <summary className="cursor-pointer text-[0.9rem] font-medium text-muted">Open a count for the other stock book</summary>
+          <div className="pt-4"><StartCount /></div>
+        </details>
+      )}
+
       {session && (
         <nav className="flex flex-wrap gap-6 border-b border-line" aria-label="Count sections">
-          {open && <Link href="/count?tab=count" className={tabCls(tab === "count")}><ClipboardCheck className="h-4 w-4" /> Count plates</Link>}
-          {open && <Link href="/count?tab=moves" className={tabCls(tab === "moves")}><ArrowLeftRight className="h-4 w-4" /> Moves during count</Link>}
-          <Link href="/count?tab=reconcile" className={tabCls(tab === "reconcile")}><Scale className="h-4 w-4" /> Reconciliation{!open && session ? ` · ${session.name}` : ""}</Link>
+          {open && <Link href={q("count")} className={tabCls(tab === "count")}><ClipboardCheck className="h-4 w-4" /> Count plates</Link>}
+          {open && <Link href={q("moves")} className={tabCls(tab === "moves")}><ArrowLeftRight className="h-4 w-4" /> Moves during count</Link>}
+          <Link href={q("reconcile")} className={tabCls(tab === "reconcile")}><Scale className="h-4 w-4" /> Reconciliation{!open && session ? ` · ${session.name}` : ""}</Link>
         </nav>
       )}
 
