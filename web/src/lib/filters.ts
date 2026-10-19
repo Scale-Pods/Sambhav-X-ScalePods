@@ -73,10 +73,11 @@ type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 /** Read the filter from the address. `fallback` is the page's default period. */
-export function parseFilter(sp: SP, fallback: Preset = "fy"): Filter {
+export function parseFilter(sp: SP, fallback: Preset = "fy", today?: string | null): Filter {
   const p = one(sp.p) as Preset | undefined;
   const preset: Preset = p && (PRESETS.some((x) => x.id === p) || p === "custom") ? p : fallback;
-  let { from, to } = rangeFor(preset);
+  // `today === null` means "the clock is not known yet" (the server pass of a browser component): no date range until it is
+  let { from, to } = today === null ? { from: null, to: null } : rangeFor(preset, today);
   if (preset === "custom") {
     const f = one(sp.from), t = one(sp.to);
     from = f && ISO.test(f) ? f : null;
@@ -118,8 +119,8 @@ export function previousRange(f: Filter): { from: string; to: string } | null {
 
 const fmtDay = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
-export function periodLabel(f: Filter): string {
-  if (f.preset === "fy") return fyOf(todayIST()).label;
+export function periodLabel(f: Filter, today?: string | null): string {
+  if (f.preset === "fy" && today !== null) return fyOf(today ?? todayIST()).label;
   if (f.preset !== "custom") return PRESETS.find((p) => p.id === f.preset)?.label ?? "";
   if (f.from && f.to) return `${fmtDay(f.from)} – ${fmtDay(f.to)}`;
   if (f.from) return `From ${fmtDay(f.from)}`;

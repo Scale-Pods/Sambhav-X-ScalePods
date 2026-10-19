@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { useToday } from "./useToday";
 import { Calendar, Check, ChevronDown, Layers, Ruler, Search, X } from "lucide-react";
 import { FILTER_KEYS, PRESETS, filterParams, pageDefault, parseFilter, periodLabel, rangeFor, type Filter, type Preset } from "@/lib/filters";
 
@@ -25,7 +26,8 @@ function useFilterNav(start: (fn: () => void) => void) {
   const pathname = usePathname();
   const sp = useSearchParams();
   const fallback = pageDefault(pathname);
-  const current = useMemo(() => parseFilter(Object.fromEntries(sp.entries()), fallback), [sp, fallback]);
+  const today = useToday();
+  const current = useMemo(() => parseFilter(Object.fromEntries(sp.entries()), fallback, today), [sp, fallback, today]);
   const go = (next: Filter) => {
     const keep = new URLSearchParams(sp.toString());
     FILTER_KEYS.forEach((k) => keep.delete(k));
@@ -34,13 +36,13 @@ function useFilterNav(start: (fn: () => void) => void) {
     const qs = keep.toString();
     start(() => router.replace(pathname + (qs ? "?" + qs : ""), { scroll: false }));
   };
-  return { current, go, fallback };
+  return { current, go, fallback, today };
 }
 
 function FilterBar({ grades, start, extra, hide }: { grades: string[]; start: (fn: () => void) => void; extra?: ReactNode; hide: string[] }) {
-  const { current: f, go, fallback } = useFilterNav(start);
+  const { current: f, go, fallback, today } = useFilterNav(start);
   const chips: { label: string; clear: () => void }[] = [];
-  if (f.preset !== fallback) chips.push({ label: periodLabel(f), clear: () => go({ ...f, preset: fallback, ...rangeFor(fallback) }) });
+  if (f.preset !== fallback) chips.push({ label: periodLabel(f, today), clear: () => go({ ...f, preset: fallback, ...rangeFor(fallback) }) });
   if (f.book) chips.push({ label: f.book, clear: () => go({ ...f, book: null }) });
   f.grades.forEach((g) => chips.push({ label: g, clear: () => go({ ...f, grades: f.grades.filter((x) => x !== g) }) }));
   if (f.tmin != null || f.tmax != null) chips.push({ label: `${f.tmin ?? 0}–${f.tmax ?? "∞"} mm`, clear: () => go({ ...f, tmin: null, tmax: null }) });
@@ -49,7 +51,7 @@ function FilterBar({ grades, start, extra, hide }: { grades: string[]; start: (f
   return (
     <div className="mb-6 space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <PeriodPicker f={f} go={go} />
+        <PeriodPicker f={f} go={go} today={today} />
         {!hide.includes("book") && (
           <div className="flex overflow-hidden rounded-md border border-line bg-field" role="group" aria-label="Stock book">
             {[null, "WB1", "WB2"].map((b) => (
@@ -100,7 +102,7 @@ function usePopover() {
 const trigger = "flex items-center gap-2 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium hover:border-muted/50";
 const panel = "absolute left-0 top-full z-30 mt-1.5 rounded-lg border border-line bg-card p-1.5 shadow-xl";
 
-function PeriodPicker({ f, go }: { f: Filter; go: (f: Filter) => void }) {
+function PeriodPicker({ f, go, today }: { f: Filter; go: (f: Filter) => void; today: string | null }) {
   const { open, setOpen, ref } = usePopover();
   const [from, setFrom] = useState(f.from ?? "");
   const [to, setTo] = useState(f.to ?? "");
@@ -109,7 +111,7 @@ function PeriodPicker({ f, go }: { f: Filter; go: (f: Filter) => void }) {
   return (
     <div className="relative" ref={ref}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={trigger + " min-w-48"}>
-        <Calendar className="h-4 w-4 text-muted" /> {periodLabel(f)} <ChevronDown className="ml-auto h-4 w-4 text-muted" />
+        <Calendar className="h-4 w-4 text-muted" /> {periodLabel(f, today)} <ChevronDown className="ml-auto h-4 w-4 text-muted" />
       </button>
       {open && (
         <div className={panel + " w-72"} role="listbox" aria-label="Period">
