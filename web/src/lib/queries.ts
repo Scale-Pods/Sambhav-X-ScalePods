@@ -162,11 +162,65 @@ export async function countLines(sessionId: string, limit = 60) {
     counted_at: string; who: string | null; lot_no: string | null; grade: string | null;
   }>(
     `select c.id, coalesce(c.plate_no, c.heat_no) ident, c.match_status, c.weight_kg, c.pieces, c.counted_at, y.code yard, st.full_name who, l.lot_no, g.code grade,
-            (select sum(m.weight_kg) from public.stock_movements m where m.lot_id = c.matched_lot_id) books_kg
+            -- what the books expect at the moment of counting: ledger balance, adjusted for anything logged as moving during the window
+            (select sum(m.weight_kg) from public.stock_movements m where m.lot_id = c.matched_lot_id)
+              + coalesce((select sum(case when w.direction = 'in' then w.weight_kg else -w.weight_kg end) from public.count_window_movements w
+                          where w.session_id = c.session_id and w.lot_id = c.matched_lot_id and w.status = 'active' and w.occurred_at <= c.counted_at), 0) books_kg
      from public.count_lines c
        left join public.yards y on y.id = c.yard_id left join public.staff st on st.id = c.counted_by
        left join public.lots l on l.id = c.matched_lot_id left join public.grades g on g.id = c.grade_id
      where c.session_id = $1 and c.match_status <> 'rejected' order by c.counted_at desc limit ${limit}`,
     [sessionId],
   );
+}
+
+export type WindowMove = {
+  id: string; ident: string; direction: "in" | "out"; weight_kg: string; pieces: number; occurred_at: string; reference: string | null;
+  note: string | null; status: string; who: string | null; lot_no: string | null; grade: string | null;
+};
+
+export async function windowMoves(sessionId: string, limit = 100) {
+  return q<WindowMove>(
+    `select w.id, w.ident, w.direction, w.weight_kg, w.pieces, w.occurred_at, w.reference, w.note, w.status, st.full_name who, l.lot_no, g.code grade
+     from public.count_window_movements w left join public.staff st on st.id = w.entered_by
+       left join public.lots l on l.id = w.lot_id left join public.grades g on g.id = l.grade_id
+     where w.session_id = $1 and w.status <> 'rejected' order by w.occurred_at desc limit ${limit}`,
+    [sessionId],
+  );
+}
+
+export type ReconRow = {
+  lot_id: string; lot_no: string; ident: string; grade: string; thickness_mm: string; books_kg: string; counted_kg: string | null;
+  count_lines: number; last_counted_at: string | null; out_before_kg: string; in_before_kg: string; opening_kg: string | null; diff_kg: string | null; status: string;
+};
+
+/** Plate-by-plate result of a count, worked back to the moment the window opened (see public.count_reconciliation). */
+export async function reconciliation(sessionId: string) {
+  const [rows, unknownCounted, unknownMoves] = await Promise.all([
+    q<ReconRow>(`select * from public.count_reconciliation($1) order by abs(coalesce(diff_kg, books_kg)) desc`, [sessionId]),
+    q<{ ident: string; weight_kg: string; yard: string | null; counted_at: string; who: string | null }>(
+      `select coalesce(c.plate_no, c.heat_no) ident, c.weight_kg, y.code yard, c.counted_at, st.full_name who
+       from public.count_lines c left join public.yards y on y.id = c.yard_id left join public.staff st on st.id = c.counted_by
+       where c.session_id = $1 and c.match_status = 'unmatched' order by c.counted_at desc`, [sessionId]),
+    q<{ ident: string; direction: string; weight_kg: string; occurred_at: string; reference: string | null }>(
+      `select ident, direction, weight_kg, occurred_at, reference from public.count_window_movements
+       where session_id = $1 and status = 'needs_plate' order by occurred_at desc`, [sessionId]),
+  ]);
+  const n = (v: string | null) => Number(v ?? 0);
+  const counted = rows.filter((r) => r.counted_kg != null);
+  return {
+    rows, unknownCounted, unknownMoves,
+    totals: {
+      inBooks: rows.filter((r) => n(r.books_kg) > 0.5).length,
+      counted: counted.length,
+      notCounted: rows.filter((r) => r.status === "not_counted").length,
+      matched: rows.filter((r) => r.status === "matched").length,
+      short: rows.filter((r) => r.status === "short").length,
+      excess: rows.filter((r) => r.status === "excess").length,
+      booksKg: rows.reduce((a, r) => a + n(r.books_kg), 0),
+      countedBooksKg: counted.reduce((a, r) => a + n(r.books_kg), 0),
+      openingKg: counted.reduce((a, r) => a + n(r.opening_kg), 0),
+      diffKg: counted.reduce((a, r) => a + n(r.diff_kg), 0),
+    },
+  };
 }

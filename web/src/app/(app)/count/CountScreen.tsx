@@ -87,7 +87,7 @@ export function CountScreen({ sessionId, book, lines, canClose, canCount }: { se
           {flash?.ok && (
             <p role="status" className={"mt-4 flex items-center gap-2 rounded-lg px-4 py-2.5 text-[0.92rem] " + (flash.match_status === "matched" ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn")}>
               {flash.match_status === "matched" ? <CheckCircle2 className="h-4 w-4" /> : <CircleAlert className="h-4 w-4" />}
-              {flash.ident}: {flash.match_status === "matched" ? "saved, matches the books" : flash.match_status === "discrepancy" ? `saved, books say ${fmt(flash.books_kg ?? 0)} kg (difference ${fmt(Math.abs(flash.kg - (flash.books_kg ?? 0)))} kg, goes to review)` : "saved, but this plate is not in the books (goes to review)"}
+              {flash.ident}: {flash.match_status === "matched" ? "saved, matches the books" : flash.match_status === "discrepancy" ? `saved, expected ${fmt(flash.books_kg ?? 0)} kg allowing for moves during the count (difference ${fmt(Math.abs(flash.kg - (flash.books_kg ?? 0)))} kg, goes to review)` : "saved, but this plate is not in the books (goes to review)"}
             </p>
           )}
           <button type="button" onClick={submit} disabled={!ready || pending} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-4 text-lg font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40">

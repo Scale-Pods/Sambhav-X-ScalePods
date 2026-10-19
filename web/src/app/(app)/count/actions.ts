@@ -67,3 +67,32 @@ export async function closeCount(sessionId: string): Promise<Simple> {
   revalidatePath("/count");
   return { ok: true };
 }
+
+export type MoveResult = { ok: true; status: "active" | "needs_plate"; ident: string } | { ok: false; error: string };
+
+/** Log a plate that moved while the count is open. `occurredAt` is the local date-time typed in the yard (India time). */
+export async function recordWindowMove(sessionId: string, ident: string, direction: "in" | "out", kg: number, pcs: number,
+  occurredAt: string, reference: string, note: string): Promise<MoveResult> {
+  if (!Number.isFinite(kg) || kg <= 0 || !Number.isInteger(pcs) || pcs < 0) return { ok: false, error: "Check the weight and pieces." };
+  if (direction !== "in" && direction !== "out") return { ok: false, error: "Choose in or out." };
+  const at = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(occurredAt) ? `${occurredAt}:00+05:30` : null;
+  try {
+    const rows = await call<{ r: { status: "active" | "needs_plate" } }>(
+      "select public.record_window_movement($1::uuid, $2, $3, $4::numeric, $5::int, $6::timestamptz, $7, $8) as r",
+      [sessionId, ident, direction, kg, pcs, at, reference || null, note || null]);
+    revalidatePath("/count");
+    return { ok: true, status: rows[0].r.status, ident };
+  } catch (e) {
+    return { ok: false, error: userMessage(e) };
+  }
+}
+
+export async function rejectWindowMove(id: string): Promise<Simple> {
+  try {
+    await call("select public.reject_window_movement($1::uuid)", [id]);
+  } catch (e) {
+    return { ok: false, error: userMessage(e) };
+  }
+  revalidatePath("/count");
+  return { ok: true };
+}
