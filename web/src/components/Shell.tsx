@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { BarChart3, ClipboardCheck, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
+import { ClipboardCheck, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
 import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
 import { NavProgress } from "./NavProgress";
+import { PeriodPill } from "./PeriodPill";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserChip } from "./UserChip";
 
@@ -62,9 +63,7 @@ export function Shell({ children }: { children: ReactNode }) {
             />
           </form>
           <div className="ml-auto hidden items-center gap-3 sm:flex">
-            <span className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line bg-field px-3 py-1.5 text-[0.8rem] font-medium text-muted">
-              <BarChart3 className="h-3.5 w-3.5" /> FY 2026-27
-            </span>
+            <Suspense fallback={null}><PeriodPill /></Suspense>
           </div>
           <ThemeToggle />
           <Suspense fallback={<span className="h-9 w-9 rounded-full bg-line" />}>

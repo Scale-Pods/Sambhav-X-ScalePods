@@ -14,3 +14,4 @@ export const currentStaff = cache(async (): Promise<Me | null> => {
 export const canDecide = (role?: string) => role === "owner" || role === "admin" || role === "approver";
 export const canCount = (role?: string) => role === "owner" || role === "admin" || role === "approver" || role === "office";
 export const canRunCount = (role?: string) => role === "owner" || role === "admin";
+export const canExport = (role?: string) => role === "owner" || role === "admin";

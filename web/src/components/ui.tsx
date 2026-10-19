@@ -28,15 +28,23 @@ export function Card({ title, aside, children, className = "" }: { title?: strin
   );
 }
 
-export function Stat({ label, value, unit, sub, tone }: { label: string; value: string; unit?: string; sub?: string; tone?: "brand" | "accent" }) {
+export type Delta = { text: string; tone: "good" | "bad" | "neutral"; up: boolean | null };
+
+export function Stat({ label, value, unit, sub, tone, delta }: { label: string; value: string; unit?: string; sub?: string; tone?: "brand" | "accent"; delta?: Delta }) {
+  const dtone = delta?.tone === "good" ? "text-ok" : delta?.tone === "bad" ? "text-bad" : "text-muted";
   return (
     <div className="rounded-lg border border-line border-l-4 border-l-accent bg-card p-5 shadow-[0_1px_2px_rgba(24,34,45,0.04)]">
       <p className="text-[0.74rem] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
-      <p className={"num mt-2.5 font-display text-[2.2rem] font-extrabold leading-none tracking-[-0.02em] " + (tone === "accent" ? "text-accent" : tone === "brand" ? "text-ink" : "")}>
+      <p className={"mt-2.5 font-display text-[2.1rem] font-extrabold leading-none tracking-[-0.02em] " + (tone === "accent" ? "text-accent" : "")}>
         {value}
         {unit && <span className="ml-1.5 font-sans text-base font-medium tracking-normal text-muted">{unit}</span>}
       </p>
-      {sub && <p className="mt-2.5 text-[0.85rem] text-muted">{sub}</p>}
+      {delta && (
+        <p className={"mt-2.5 text-[0.82rem] font-semibold " + dtone}>
+          {delta.up === null ? "" : delta.up ? "▲ " : "▼ "}{delta.text}
+        </p>
+      )}
+      {sub && <p className="mt-1.5 text-[0.82rem] text-muted">{sub}</p>}
     </div>
   );
 }

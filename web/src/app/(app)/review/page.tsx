@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { reviewList } from "@/lib/queries";
+import { gradeOptions } from "@/lib/analytics";
+import { parseFilter } from "@/lib/filters";
+import { FilterShell } from "@/components/FilterBar";
 import { kg } from "@/lib/format";
 import { canDecide, currentStaff } from "@/lib/auth";
 import { ApproveButton } from "./ApproveButton";
 import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
 
-type SP = Promise<{ kind?: string; severity?: string; page?: string }>;
+type SP = Promise<Record<string, string | undefined>>;
 
 const KIND: Record<string, string> = {
   legacy_data: "Old sheet data",
@@ -38,13 +41,15 @@ export default function ReviewPage({ searchParams }: { searchParams: SP }) {
 async function Body({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
-  const [{ rows, kinds, total: shown, pageSize }, me] = await Promise.all([reviewList(sp.kind, sp.severity, page), currentStaff()]);
+  const f = parseFilter(sp as Record<string, string>, "all");
+  const [{ rows, kinds, total: shown, pageSize }, me, grades] = await Promise.all([reviewList(sp.kind, sp.severity, page, 50, f), currentStaff(), gradeOptions()]);
   const pages = Math.max(1, Math.ceil(shown / pageSize));
-  const link = (p: number) => `/review?${new URLSearchParams({ ...(sp.kind ? { kind: sp.kind } : {}), ...(sp.severity ? { severity: sp.severity } : {}), page: String(p) })}`;
+  const link = (p: number) => { const u = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]); u.set("page", String(p)); return `/review?${u}`; };
   const mayDecide = canDecide(me?.role);
   const total = kinds.reduce((s, k) => s + Number(k.n), 0);
   const chip = (on: boolean) => "rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset " + (on ? "bg-brand text-white ring-brand" : "bg-field text-muted ring-line hover:text-ink");
   return (
+    <FilterShell grades={grades} hide={["unit"]}>
     <Card>
       <div className="flex flex-wrap gap-2 border-b border-line px-5 py-4">
         <Link href="/review" className={chip(!sp.kind && !sp.severity)}>All ({kg(total)})</Link>
@@ -84,5 +89,6 @@ async function Body({ searchParams }: { searchParams: SP }) {
         </div>
       </div>
     </Card>
+    </FilterShell>
   );
 }

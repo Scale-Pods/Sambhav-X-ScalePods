@@ -29,6 +29,12 @@
   --info-soft: #e8f3f9;
   --skel-a: #ece7e0;
   --skel-b: #f7f4f0;
+  /* charts: validated with the dataviz palette checker (lightness, chroma, colour-blind separation, contrast) */
+  --chart-in: #0a76ad;
+  --chart-out: #f26522;
+  --chart-grid: #ece7e0;
+  --chart-axis: #7a838c;
+  --seq-1: #e3f1f8; --seq-2: #b9dcee; --seq-3: #7fc0e1; --seq-4: #3b97c8; --seq-5: #0a6797;
   color-scheme: light;
 }
 
@@ -56,6 +62,11 @@
   --info-soft: #14293a;
   --skel-a: #1d2530;
   --skel-b: #26303c;
+  --chart-in: #2d93c8;
+  --chart-out: #e8692e;
+  --chart-grid: #232d38;
+  --chart-axis: #8b97a3;
+  --seq-1: #19303f; --seq-2: #1d4a63; --seq-3: #236b8f; --seq-4: #2d8fc2; --seq-5: #63b8e3;
   color-scheme: dark;
 }
 
