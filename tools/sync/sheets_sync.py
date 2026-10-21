@@ -54,15 +54,16 @@ def google():
     return (build("sheets", "v4", credentials=creds, cache_discovery=False), build("drive", "v3", credentials=creds, cache_discovery=False))
 
 
-def read_sheet(sheets, spreadsheet_id: str, skip: set[str]) -> dict[str, list[tuple[int, list[str], dict]]]:
-    """tab -> [(row_no, cells, links)] for the non-empty rows."""
-    fields = "sheets(properties(title),data(startRow,rowData(values(formattedValue,hyperlink))))"
+def read_sheet(sheets, spreadsheet_id: str, skip: set[str]) -> tuple[dict[str, list[tuple[int, list[str], dict]]], list[dict]]:
+    """(tab -> [(row_no, cells, links)] for the non-empty rows, [{title, hidden}] in the sheet's own tab order)."""
+    fields = "sheets(properties(title,index,hidden),data(startRow,rowData(values(formattedValue,hyperlink))))"
     meta = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id, includeGridData=True, fields=fields).execute(num_retries=3)
-    out = {}
-    for sh in meta["sheets"]:
+    out, order = {}, []
+    for sh in sorted(meta["sheets"], key=lambda x: x["properties"].get("index", 0)):
         title = sh["properties"]["title"]
         if title in skip:
             continue
+        order.append({"title": title, "hidden": bool(sh["properties"].get("hidden"))})
         rows = []
         for grid in sh.get("data", []):
             start = grid.get("startRow", 0)
@@ -76,7 +77,7 @@ def read_sheet(sheets, spreadsheet_id: str, skip: set[str]) -> dict[str, list[tu
                 links = {str(j): v["hyperlink"] for j, v in enumerate(vals) if v.get("hyperlink")}
                 rows.append((start + i + 1, cells, links))
         out[title] = rows
-    return out
+    return out, order
 
 
 def digest(cells, links) -> str:
@@ -109,7 +110,7 @@ def sync_one(conn, sheets, drive, src, force: bool) -> str:
             conn.commit()
             return "unchanged"
 
-        data = read_sheet(sheets, sid, set(skip or []))
+        data, order = read_sheet(sheets, sid, set(skip or []))
         cur.execute("select count(*) from public.sheet_rows where source_key=%s", (key,))
         baseline = cur.fetchone()[0] == 0
         seen = new = changed = removed = 0
@@ -152,7 +153,7 @@ def sync_one(conn, sheets, drive, src, force: bool) -> str:
         # a tab that disappeared from the sheet: its rows are marked deleted
         cur.execute("update public.sheet_rows set deleted_at = now(), changed_at = now() where source_key=%s and deleted_at is null and not (tab = any(%s))", (key, list(data.keys())))
         removed += cur.rowcount
-        cur.execute("update public.sheet_sources set last_modified_at=%s, last_synced_at=now(), last_error=null where key=%s", (mod_dt, key))
+        cur.execute("update public.sheet_sources set last_modified_at=%s, last_synced_at=now(), last_error=null, tabs=%s where key=%s", (mod_dt, Jsonb(order), key))
         cur.execute("""update public.sheet_sync_runs set status='ok', finished_at=now(), tabs=%s, rows_seen=%s, rows_new=%s, rows_changed=%s, rows_removed=%s where id=%s""",
                     (len(data), seen, new, changed, removed, run))
         conn.commit()

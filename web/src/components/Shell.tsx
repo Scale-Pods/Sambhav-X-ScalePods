@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { ClipboardCheck, Factory, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
+import { ClipboardCheck, Factory, FileSpreadsheet, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
 import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
 import { NavProgress } from "./NavProgress";
 import { PeriodPill } from "./PeriodPill";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserChip } from "./UserChip";
+import { ViewToggle } from "./ViewToggle";
 
 const icon = "h-[1.15rem] w-[1.15rem] shrink-0";
 const group = "px-3 pb-1.5 font-display text-[0.68rem] font-bold uppercase tracking-[0.14em] text-steel-muted";
@@ -38,6 +39,10 @@ export function Shell({ children }: { children: ReactNode }) {
               <NavLink href="/payments" soon><ReceiptIndianRupee className={icon} />Payments</NavLink>
             </div>
             <div className="flex flex-col gap-1">
+              <p className={group}>Your sheets</p>
+              <NavLink href="/sheets"><FileSpreadsheet className={icon} />Sheet view</NavLink>
+            </div>
+            <div className="flex flex-col gap-1">
               <p className={group}>Control</p>
               <NavLink href="/review"><ShieldAlert className={icon} />Needs review</NavLink>
             </div>
@@ -51,8 +56,8 @@ export function Shell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-8">
-          <Link href="/" className="w-40 shrink-0 lg:hidden">
+        <header className="sticky top-0 z-10 flex items-center gap-2 sm:gap-3 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-8">
+          <Link href="/" className="w-28 shrink-0 sm:w-40 lg:hidden">
             <Logo />
           </Link>
           <form action="/stock" className="relative ml-auto w-full max-w-md lg:ml-0">
@@ -66,6 +71,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="ml-auto hidden items-center gap-3 sm:flex">
             <Suspense fallback={null}><PeriodPill /></Suspense>
           </div>
+          <Suspense fallback={null}><ViewToggle /></Suspense>
           <ThemeToggle />
           <Suspense fallback={<span className="h-9 w-9 rounded-full bg-line" />}>
             <UserChip />
