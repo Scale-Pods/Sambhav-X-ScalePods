@@ -3,7 +3,9 @@ name: Sheets sync
 # One-way mirror: Google Sheets -> Supabase. Reads sheets, never writes to them.
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # every 15 minutes, 07:30-22:30 India time. Each run is billed as a full minute and a private repo on the free GitHub plan has
+    # 2,000 minutes a month (60 runs a day = about 1,800). Tighten to */5 only after checking the organisation's plan.
+    - cron: "*/15 2-16 * * *"
   workflow_dispatch:
     inputs:
       force:
