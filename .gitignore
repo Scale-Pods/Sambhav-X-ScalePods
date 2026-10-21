@@ -39,3 +39,7 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# credentials (repo is public)
+secrets/
+*service-account*.json
