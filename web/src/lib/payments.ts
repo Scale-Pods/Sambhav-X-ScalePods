@@ -22,7 +22,7 @@ export function readPayParams(sp: Record<string, string | string[] | undefined>)
   };
 }
 
-class W {
+export class W {
   params: unknown[] = [];
   parts: string[] = [];
   p(v: unknown) { this.params.push(v); return `$${this.params.length}`; }
@@ -42,9 +42,9 @@ class W {
 }
 
 // ---------------------------------------------------------------- lists
-type Page<T> = { rows: T[]; total: number; sum: number; page: number; pages: number };
+export type Page<T> = { rows: T[]; total: number; sum: number; page: number; pages: number };
 
-async function list<T>(view: string, w: W, order: string, pp: PayParams, sumCol: string): Promise<Page<T>> {
+export async function list<T>(view: string, w: W, order: string, pp: { page: number; all?: boolean }, sumCol: string): Promise<Page<T>> {
   const [stats] = await q<{ n: string; s: string | null }>(`select count(*) n, sum(${sumCol}) s from public.${view} where ${w.sql}`, w.params);
   const total = Number(stats.n);
   const size = pp.all ? 50000 : PAGE_SIZE; // "all" is for the CSV download
