@@ -112,3 +112,24 @@ export function TonnesByMonthChart({ points }: { points: { k: string; p753: numb
     </ChartCard>
   );
 }
+
+/** One count per month: enquiries, quotations. */
+export function MonthlyCountChart({ title, subtitle, points, name, tone = "in" }: { title: string; subtitle: string; points: { k: string; v: number }[]; name: string; tone?: "in" | "out" }) {
+  const t = useChartTheme();
+  const data = points.map((p) => ({ label: monthLabel(p.k), v: p.v }));
+  return (
+    <ChartCard title={title} subtitle={subtitle} table={<SimpleTable head={["Month", name]} rows={data.map((d) => [d.label, f0.format(d.v)])} />}>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} barCategoryGap="22%" margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke={t.grid} strokeWidth={1} />
+            <XAxis dataKey="label" tickLine={false} axisLine={{ stroke: t.grid }} tick={{ fill: t.axis, fontSize: 11 }} interval="preserveStartEnd" minTickGap={12} />
+            <YAxis tickLine={false} axisLine={false} tick={{ fill: t.axis, fontSize: 11 }} width={40} allowDecimals={false} />
+            <Tooltip cursor={{ fill: t.grid, opacity: 0.6 }} content={(p) => <Tip active={p.active} payload={p.payload as ReadonlyArray<TipEntry>} label={p.label} suffix={name.toLowerCase()} />} />
+            <Bar dataKey="v" name={name} fill={tone === "in" ? t.in : t.out} radius={[4, 4, 0, 0]} maxBarSize={32} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
+  );
+}

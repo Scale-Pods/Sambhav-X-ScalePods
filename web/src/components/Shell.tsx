@@ -35,7 +35,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <p className={group}>Business</p>
               <NavLink href="/orders"><Package className={icon} />Orders &amp; dispatch</NavLink>
               <NavLink href="/quotations" soon><FileText className={icon} />Quotations</NavLink>
-              <NavLink href="/mail" soon><Mail className={icon} />Mail &amp; leads</NavLink>
+              <NavLink href="/mail"><Mail className={icon} />Mail &amp; leads</NavLink>
               <NavLink href="/payments"><ReceiptIndianRupee className={icon} />Invoices &amp; payments</NavLink>
             </div>
             <div className="flex flex-col gap-1">

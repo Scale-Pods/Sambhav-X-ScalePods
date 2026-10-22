@@ -144,7 +144,7 @@ export const unitLabel = (u: Unit) => (u === "t" ? "t" : "kg");
 
 /** Plates and Needs-review open on all dates (a period would hide older stock); Overview and Summary open on this FY. */
 export function pageDefault(pathname: string): Preset {
-  return pathname.startsWith("/stock") || pathname.startsWith("/review") ? "all" : "fy";
+  return pathname.startsWith("/stock") || pathname.startsWith("/review") || pathname.startsWith("/mail/inbox") || pathname.startsWith("/mail/clients") ? "all" : "fy";
 }
 
 export const FILTER_KEYS = ["p", "from", "to", "book", "g", "tmin", "tmax", "u"] as const;
