@@ -130,3 +130,15 @@ Selection (`tools/docs-trial/pick_uncertain.py`): documents where Haiku's own ou
 - Sonnet fixed the two cases Haiku got wrong: the Hindco supplier note (now a customer order) and the Bright Steel note (direction). It read the rotated Gadhavi note's width correctly (1250; Haiku said 1230 without a flag) and read the cut-off rates on the Silicon Steel note (136).
 - Neither model got the TechnipEnergies email total (₹57,009 "Order Value") – a prompt rule is needed.
 - Two-step plan cost: Haiku for every document, Sonnet only for the uncertain ~45% → about $0.01 (under ₹1) per document on average.
+
+## 9. Independent check against the Dispatch FMS sheet (22–24 Oct 2026)
+
+The number in each sample file name (`PO_1030…`) is the order number in the Dispatch FMS, and staff typed those orders' lines into the sheet. That gives an answer key that is **not** my own reading (`tools/docs-trial/score_sheet.py`, read-only).
+
+- Haiku run 2 plus Sonnet on the uncertain ones, about 128 plate lines across 70 orders:
+  - **Rates: 83 of 86 agree with the sheet** (97%). The 3 that differ were all flagged by the model.
+  - **Sizes: 108 of 128 lines match a sheet line by size.** Most of the rest are the sheet differing from the document (sizes edited at dispatch, or the document covers part of an order).
+  - Quantities differ mainly in unit: the sheet often holds kg or tonnes where the document says pieces.
+- **The sheet has typos the reading catches.** Example: a PO says 20 × 1250 × 6000, the sheet says 20 × 1500 × 6000. Reading the original document is a check on the sheet, not only the other way round.
+- Real model slips seen here: width 1230 instead of 1250 on a rotated handwritten note (Haiku, fixed by Sonnet), one length read as 63000 instead of 6300 on a typed PO, and "6000/6300" kept as one number on a handwritten sheet (to be split in the form).
+- The review screen now shows each read next to the sheet: is this PO already in the Dispatch FMS, which known customer is closest, and which grade-list entry each grade matches.

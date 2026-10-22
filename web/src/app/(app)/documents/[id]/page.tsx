@@ -6,7 +6,9 @@ import { ArrowLeft } from "lucide-react";
 import { Badge, Card, Skeleton } from "@/components/ui";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { documentDetail } from "@/lib/documents";
+import { matchRead } from "@/lib/docmatch";
 import { supabaseServer } from "@/lib/supabase";
+import { MatchPanel } from "../MatchPanel";
 import { ReviewForm } from "../ReviewForm";
 
 type P = Promise<{ id: string }>;
@@ -35,6 +37,7 @@ async function Body({ params }: { params: P }) {
   const signed = await supabase.storage.from("documents").createSignedUrl(d.doc.storage_path, 3600);
   const url = signed.data?.signedUrl;
   const canEdit = Boolean(me && canUploadDocs(me.role)) && d.doc.review_status === "pending";
+  const matches = d.read ? await matchRead(d.read) : null;
   const usd = d.runs.reduce((a, r) => a + r.usd, 0);
 
   return (
@@ -68,6 +71,7 @@ async function Body({ params }: { params: P }) {
             )}
           </div>
         )}
+        {d.read && matches && <MatchPanel read={d.read} m={matches} />}
         {d.read ? (
           <ReviewForm key={d.doc.id + d.runs.length} id={d.doc.id} original={d.read} firstChecks={d.checks} canEdit={canEdit} />
         ) : (
