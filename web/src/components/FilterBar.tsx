@@ -217,3 +217,33 @@ export function ParamSelect({ name, value, options, label }: { name: string; val
     </label>
   );
 }
+
+/** A search box that lives in the address (?q=). Waits for a pause in typing before it searches. */
+export function ParamSearch({ placeholder, value }: { placeholder: string; value: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const [text, setText] = useState(value);
+  const [pending, start] = useTransition();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => setText(value), [value]);
+  const push = (v: string) => {
+    const u = new URLSearchParams(sp.toString());
+    if (v.trim()) u.set("q", v.trim()); else u.delete("q");
+    u.delete("page");
+    start(() => router.replace(pathname + (u.toString() ? "?" + u.toString() : ""), { scroll: false }));
+  };
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+      <input
+        value={text}
+        onChange={(e) => { setText(e.target.value); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => push(e.target.value), 350); }}
+        onKeyDown={(e) => { if (e.key === "Enter") { if (timer.current) clearTimeout(timer.current); push(text); } }}
+        placeholder={placeholder}
+        aria-busy={pending}
+        className="w-64 rounded-md border border-line bg-field py-1.5 pl-8 pr-2 text-[0.85rem]"
+      />
+    </div>
+  );
+}

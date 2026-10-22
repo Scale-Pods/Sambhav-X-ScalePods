@@ -4,6 +4,8 @@ import { reconciliation } from "@/lib/queries";
 import { canExport, currentStaff } from "@/lib/auth";
 import { parseFilter, todayIST } from "@/lib/filters";
 import { readPlateQuery } from "@/lib/plateQuery";
+import { isoDay } from "@/lib/money";
+import { brokerageList, expensesList, gpayList, payablesList, pettyList, purchasesList, readPayParams, receivablesList, salesList } from "@/lib/payments";
 
 // CSV downloads for the owner and administrators only: exports take data outside the system.
 const cell = (v: unknown) => {
@@ -47,6 +49,42 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ kind: strin
     body = csv(["Plate / heat", "Grade", "Thickness (mm)", "Books at window start (kg)", "Counted (kg)", "Out before count (kg)", "In before count (kg)", "Opening worked back (kg)", "Difference (kg)", "Result", "Times counted"],
       rows.map((r) => [r.ident, r.grade, Number(r.thickness_mm), kg(Number(r.books_kg)), r.counted_kg == null ? "" : kg(Number(r.counted_kg)), kg(Number(r.out_before_kg)), kg(Number(r.in_before_kg)),
         r.opening_kg == null ? "" : kg(Number(r.opening_kg)), r.diff_kg == null ? "" : kg(Number(r.diff_kg)), r.status, r.count_lines]));
+  } else if (kind.startsWith("pay-")) {
+    const pp = { ...readPayParams(sp), all: true };
+    const d = isoDay;
+    const co = (e: string) => (e === "SAI" ? "Sai" : "SPF");
+    if (kind === "pay-sales") {
+      const { rows } = await salesList(pp);
+      body = csv(["Invoice date", "Invoice no", "Company", "Customer", "Salesperson", "PO no", "Amount", "Credit days", "Due date", "Transporter", "Made by", "Checked by"],
+        rows.map((r) => [d(r.invoice_date), r.invoice_no, co(r.entity), r.client, r.salesperson, r.po_no, r.amount, r.credit_days, d(r.due_date), r.transporter, r.made_by, r.checked_by]));
+    } else if (kind === "pay-purchases") {
+      const { rows } = await purchasesList(pp);
+      body = csv(["Invoice date", "Invoice no", "Company", "Supplier", "Purchased for", "Amount", "Weight", "Unit", "Rate", "Credit days", "Due date", "Broker", "Bought by", "Checked by", "Bill"],
+        rows.map((r) => [d(r.invoice_date), r.invoice_no, co(r.entity), r.vendor, r.purchased_for, r.amount, r.weight, r.unit, r.rate, r.credit_days, d(r.due_date), r.broker, r.purchased_by, r.checked_by, r.file_url]));
+    } else if (kind === "pay-expenses") {
+      const { rows } = await expensesList(pp);
+      body = csv(["Date", "Type", "Company", "Paid to", "Invoice no", "Amount", "TDS", "Checked by", "Bill"],
+        rows.map((r) => [d(r.invoice_date), r.category, co(r.entity), r.vendor, r.invoice_no, r.amount, r.tds, r.checked_by, r.file_url]));
+    } else if (kind === "pay-receivables") {
+      const { rows } = await receivablesList(pp);
+      body = csv(["Customer", "Company", "Invoice no", "Invoice date", "Due date", "PO no", "Salesperson", "Invoice amount", "Received", "Owed", "Days late", "Note"],
+        rows.map((r) => [r.party, co(r.entity), r.invoice_no, d(r.invoice_date), d(r.due_date), r.po_no, r.salesperson, r.amount, r.received, r.pending, r.overdue_days, r.kind]));
+    } else if (kind === "pay-payables") {
+      const { rows } = await payablesList(pp);
+      body = csv(["Supplier", "Company", "Invoice no", "Invoice date", "Due date", "Bought for", "Broker", "Invoice amount", "Advance", "TDS", "To pay", "Days late", "Note"],
+        rows.map((r) => [r.vendor, co(r.entity), r.invoice_no, d(r.invoice_date), d(r.due_date), r.purchased_for, r.broker, r.amount, r.advance, r.tds, r.pending, r.overdue_days, r.remark]));
+    } else if (kind === "pay-gpay") {
+      const { rows } = await gpayList(pp);
+      body = csv(["Date", "What for", "For whom", "Amount", "Paid by", "Screenshot"], rows.map((r) => [d(r.entered_at), r.description, r.for_whom, r.amount, r.paid_by, r.file_url]));
+    } else if (kind === "pay-cash") {
+      const { rows } = await pettyList(pp);
+      body = csv(["Date", "Spent by", "On what", "Amount", "Bill"], rows.map((r) => [d(r.entered_at), r.who, r.what, r.amount, r.file_url]));
+    } else if (kind === "pay-brokerage") {
+      const { rows } = await brokerageList(pp);
+      body = csv(["Date", "Company", "Party", "Broker", "Weight", "Rate", "Unit", "Basic amount"], rows.map((r) => [d(r.entry_date), co(r.entity), r.party, r.broker, r.weight, r.rate, r.unit, r.basic_amount]));
+    } else {
+      return NextResponse.json({ error: "Unknown export" }, { status: 404 });
+    }
   } else {
     return NextResponse.json({ error: "Unknown export" }, { status: 404 });
   }

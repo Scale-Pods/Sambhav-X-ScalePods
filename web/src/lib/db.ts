@@ -29,9 +29,24 @@ export const currentUserId = cache(async (): Promise<string | null> => {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const TRANSIENT = new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "ETIMEDOUT", "ECONNREFUSED"]);
+
+/** A connection from the pool. A brief network failure (a failed name lookup, a reset) is retried twice before it is shown as an error. */
+async function connect(): Promise<PoolClient> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await pool.connect();
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      if (attempt >= 3 || !code || !TRANSIENT.has(code)) throw e;
+      await new Promise((r) => setTimeout(r, 250 * attempt));
+    }
+  }
+}
+
 async function inTx<T>(userId: string, readOnly: boolean, fn: (tx: Tx) => Promise<T>): Promise<T> {
   if (!UUID.test(userId)) throw new NotSignedIn(); // the id comes from a verified session; this keeps the inlined claim string safe
-  const client = await pool.connect();
+  const client = await connect();
   try {
     // open the transaction, say who is asking, and switch role: one round trip instead of three
     const claims = JSON.stringify({ sub: userId, role: "authenticated" });
