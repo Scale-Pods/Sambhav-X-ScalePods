@@ -54,7 +54,7 @@ async function Body() {
 
       <section>
         <h2 className="font-display text-lg font-bold">Your Google Sheets, as copied</h2>
-        <p className="mt-1 max-w-3xl text-[0.9rem] text-muted">Exact copies of the sheets, refreshed every 15 minutes during working hours. Keep editing in Google Sheets until each part moves into the app.</p>
+        <p className="mt-1 max-w-3xl text-[0.9rem] text-muted">Exact copies of the sheets, refreshed once a day (and whenever we ask for a fresh copy). Keep editing in Google Sheets until each part moves into the app.</p>
         {!admin || sources.length === 0 ? (
           <Card className="mt-4">
             <p className="flex items-center gap-2 px-5 py-8 text-[0.92rem] text-muted"><Lock className="h-4 w-4" /> The copies of the sheets are open to the owner and administrators for now, because they hold payments and expenses.</p>

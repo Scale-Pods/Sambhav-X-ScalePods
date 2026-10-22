@@ -1,7 +1,7 @@
 import "server-only";
 import { q } from "./db";
 
-// The live, read-only copy of the client's Google Sheets (filled every 15 minutes by tools/sync/sheets_sync.py).
+// The live, read-only copy of the client's Google Sheets (filled once a day and on request by tools/sync/sheets_sync.py).
 // Row-level security lets administrators read it; everyone else gets nothing back.
 
 export type SheetTabMeta = { title: string; hidden: boolean };
