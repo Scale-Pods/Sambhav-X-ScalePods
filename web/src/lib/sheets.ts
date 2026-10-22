@@ -28,7 +28,10 @@ export async function sheetSources() {
 }
 
 export async function sheetSource(key: string) {
-  return (await sheetSources()).find((s) => s.key === key) ?? null;
+  const rows = await q<SheetSource>(`
+    select s.key, s.name, s.spreadsheet_id, s.active, s.tabs, s.last_synced_at, s.last_modified_at, s.last_error, 0 rows
+    from public.sheet_sources s where s.key = $1`, [key]);
+  return rows[0] ?? null;
 }
 
 /** Row counts per tab, for the tab bar. */
@@ -38,7 +41,7 @@ export async function tabCounts(key: string) {
   return Object.fromEntries(rows.map((r) => [r.tab, r.n])) as Record<string, number>;
 }
 
-const PAGE = 200;
+const PAGE = 100;
 
 /**
  * One tab, the way the sheet shows it. The header row is the top row (of the first six) with the most filled cells; it and the
