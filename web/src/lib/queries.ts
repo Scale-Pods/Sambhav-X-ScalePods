@@ -152,7 +152,7 @@ export async function countSessions() {
             (select count(*) from public.count_lines c where c.session_id = s.id and c.match_status <> 'rejected') lines,
             (select coalesce(sum(c.weight_kg), 0) from public.count_lines c where c.session_id = s.id and c.match_status <> 'rejected') kg
      from public.count_sessions s join public.stock_books b on b.id = s.stock_book_id
-     where s.status in ('counting', 'review') order by s.started_at desc nulls last`,
+     where s.status in ('counting', 'review', 'posted') order by s.started_at desc nulls last`,
   );
 }
 
@@ -222,5 +222,46 @@ export async function reconciliation(sessionId: string) {
       openingKg: counted.reduce((a, r) => a + n(r.opening_kg), 0),
       diffKg: counted.reduce((a, r) => a + n(r.diff_kg), 0),
     },
+  };
+}
+
+
+export type PostingRequest = {
+  id: string; status: string; risk_tier: string; created_by: string | null; decided_by_name: string | null; reviewer_note: string | null;
+  outcome: string; lot_no: string; ident: string; grade: string | null; books_kg: string; counted_opening_kg: string | null;
+  adjust_kg: string; adjust_pcs: string; books_now_kg: string; window_out_kg: string; window_in_kg: string; final_kg: string | null;
+};
+
+/** The count's differences, as sent for approval (one request per plate). Empty until the count has been sent. */
+export async function postingRequests(sessionId: string) {
+  return q<PostingRequest>(
+    `select a.id, a.status::text, a.risk_tier::text, a.created_by, d.full_name decided_by_name, a.reviewer_note,
+            a.proposed->>'outcome' outcome, a.proposed->>'lot_no' lot_no, a.proposed->>'ident' ident, a.proposed->>'grade' grade,
+            a.proposed->>'books_kg' books_kg, a.proposed->>'counted_opening_kg' counted_opening_kg,
+            a.proposed->>'adjust_kg' adjust_kg, a.proposed->>'adjust_pcs' adjust_pcs, a.proposed->>'books_now_kg' books_now_kg,
+            a.proposed->>'window_out_kg' window_out_kg, a.proposed->>'window_in_kg' window_in_kg,
+            case when a.status in ('approved', 'corrected') then a.final->>'adjust_kg' end final_kg
+     from public.approval_requests a left join public.staff d on d.id = a.decided_by
+     where a.batch_id = $1 and a.kind = 'count_posting'
+     order by case a.proposed->>'outcome' when 'short' then 1 when 'excess' then 2 else 3 end, abs((a.proposed->>'adjust_kg')::numeric) desc`,
+    [sessionId]);
+}
+
+export type PostingPreview = { outcome: string; n: string; kg: string };
+
+/** What sending the count for approval would create, in numbers. */
+export async function postingPreview(sessionId: string) {
+  const [rows, unknown, counted] = await Promise.all([
+    q<PostingPreview>(`select outcome, count(*) n, sum(adjust_kg) kg from public.count_posting_preview($1) group by 1`, [sessionId]),
+    q<{ n: string }>(`select count(distinct upper(coalesce(plate_no, heat_no))) n from public.count_lines where session_id = $1 and matched_lot_id is null and match_status <> 'rejected'`, [sessionId]),
+    q<{ n: string }>(`select count(distinct matched_lot_id) n from public.count_lines where session_id = $1 and matched_lot_id is not null and match_status <> 'rejected'`, [sessionId]),
+  ]);
+  const by = (k: string) => rows.find((r) => r.outcome === k);
+  return {
+    counted: Number(counted[0]?.n ?? 0),
+    short: { n: Number(by("short")?.n ?? 0), kg: Number(by("short")?.kg ?? 0) },
+    excess: { n: Number(by("excess")?.n ?? 0), kg: Number(by("excess")?.kg ?? 0) },
+    missing: { n: Number(by("missing")?.n ?? 0), kg: Number(by("missing")?.kg ?? 0) },
+    unknown: Number(unknown[0]?.n ?? 0),
   };
 }

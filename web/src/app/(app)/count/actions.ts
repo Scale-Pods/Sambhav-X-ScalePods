@@ -96,3 +96,53 @@ export async function rejectWindowMove(id: string): Promise<Simple> {
   revalidatePath("/count");
   return { ok: true };
 }
+
+
+/** Send the closed count for approval: one request per plate that differs. Owner or administrator only. */
+export async function postCount(sessionId: string): Promise<Simple> {
+  try {
+    await call("select public.post_count_session($1::uuid)", [sessionId]);
+  } catch (e) {
+    return { ok: false, error: userMessage(e) };
+  }
+  revalidatePath("/count");
+  return { ok: true };
+}
+
+/** Decide one difference. `adjustKg` approves a different amount than the one proposed (recorded as a correction). */
+export async function decideAdjustment(id: string, decision: "approved" | "rejected", note: string, adjustKg?: number): Promise<Simple> {
+  const n = note.trim().slice(0, 300);
+  try {
+    if (decision === "approved" && adjustKg != null && Number.isFinite(adjustKg)) {
+      await call(
+        `select public.decide_approval($1::uuid, 'corrected', (select proposed || jsonb_build_object('adjust_kg', $2::numeric) from public.approval_requests where id = $1::uuid), $3)`,
+        [id, adjustKg, n || null]);
+    } else {
+      await call("select public.decide_approval($1::uuid, $2::public.approval_status, null, $3)", [id, decision, n || null]);
+    }
+  } catch (e) {
+    return { ok: false, error: userMessage(e) };
+  }
+  revalidatePath("/count");
+  return { ok: true };
+}
+
+/** Decide every pending difference of one kind in this count, one by one. Stops at the first error and says how far it got. */
+export async function decideGroup(sessionId: string, outcome: "short" | "excess" | "missing", decision: "approved" | "rejected", note: string): Promise<Simple & { done?: number }> {
+  if (!["short", "excess", "missing"].includes(outcome)) return { ok: false, error: "Unknown group." };
+  const n = note.trim().slice(0, 300);
+  let done = 0;
+  try {
+    const ids = await call<{ id: string }>(
+      `select id from public.approval_requests where batch_id = $1::uuid and kind = 'count_posting' and status = 'pending' and proposed->>'outcome' = $2`, [sessionId, outcome]);
+    for (const r of ids) {
+      await call("select public.decide_approval($1::uuid, $2::public.approval_status, null, $3)", [r.id, decision, n || null]);
+      done++;
+    }
+  } catch (e) {
+    revalidatePath("/count");
+    return { ok: false, error: `${userMessage(e)} (${done} decided before this stopped)`, done };
+  }
+  revalidatePath("/count");
+  return { ok: true, done };
+}
