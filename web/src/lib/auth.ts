@@ -15,3 +15,4 @@ export const canDecide = (role?: string) => role === "owner" || role === "admin"
 export const canCount = (role?: string) => role === "owner" || role === "admin" || role === "approver" || role === "office";
 export const canRunCount = (role?: string) => role === "owner" || role === "admin";
 export const canExport = (role?: string) => role === "owner" || role === "admin";
+export const canUploadDocs = (role?: string) => ["owner", "admin", "approver", "accounts", "sales", "office"].includes(role ?? "");

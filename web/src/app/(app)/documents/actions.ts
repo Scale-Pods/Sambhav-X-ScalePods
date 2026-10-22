@@ -1,0 +1,51 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { call, q, userMessage } from "@/lib/db";
+import { canUploadDocs, currentStaff } from "@/lib/auth";
+import type { Read } from "@/lib/docreader/checks";
+
+export type Result = { ok: true } | { ok: false; error: string };
+
+const HEADER = ["doc_kind", "direction", "seller_entity_named", "buyer_name", "buyer_gstin", "po_number", "document_number", "po_date", "currency",
+  "payment_terms", "delivery_terms", "net_amount", "tax_amount", "total_amount"] as const;
+const LINE = ["description", "grade", "thickness_mm", "width_mm", "length_mm", "qty", "qty_unit", "weight_kg", "rate", "rate_unit", "amount"] as const;
+
+/** What the person changed, field by field, against what the AI read. The AI's version comes from the database, never from the browser. */
+function diff(before: Read, after: Read) {
+  const out: { field: string; from: string; to: string }[] = [];
+  for (const k of HEADER) if (String(before[k] ?? "") !== String(after[k] ?? "")) out.push({ field: k, from: String(before[k] ?? ""), to: String(after[k] ?? "") });
+  if (before.is_firm_order !== after.is_firm_order) out.push({ field: "is_firm_order", from: String(before.is_firm_order), to: String(after.is_firm_order) });
+  const n = Math.max(before.lines.length, after.lines.length);
+  for (let i = 0; i < n; i++) {
+    const b = before.lines[i], a = after.lines[i];
+    if (!b) { out.push({ field: `lines.${i}`, from: "", to: "added" }); continue; }
+    if (!a) { out.push({ field: `lines.${i}`, from: "present", to: "removed" }); continue; }
+    for (const k of LINE) if (String(b[k] ?? "") !== String(a[k] ?? "")) out.push({ field: `lines.${i}.${k}`, from: String(b[k] ?? ""), to: String(a[k] ?? "") });
+  }
+  return out;
+}
+
+export async function reviewDocument(id: string, decision: "confirmed" | "corrected" | "rejected", edited: Read | null, note: string): Promise<Result> {
+  try {
+    const me = await currentStaff();
+    if (!me || !canUploadDocs(me.role)) return { ok: false, error: "Your role cannot review documents" };
+    const rows = await q<{ extracted: Read | null }>(`select extracted from public.documents where id = $1::uuid`, [id]);
+    const before = rows[0]?.extracted;
+    let final: Read | null = null;
+    let changes: ReturnType<typeof diff> = [];
+    if (decision !== "rejected") {
+      if (!before || !Array.isArray(before.lines)) return { ok: false, error: "Nothing was read from this document, so it can only be rejected" };
+      final = edited ?? before;
+      if (!Array.isArray(final.lines)) return { ok: false, error: "The form is incomplete" };
+      changes = diff(before, final);
+      decision = changes.length > 0 ? "corrected" : "confirmed";
+    }
+    await call(`select public.review_document($1::uuid, $2, $3::jsonb, $4::jsonb, $5)`, [id, decision, final ? JSON.stringify(final) : null, JSON.stringify(changes), note]);
+  } catch (e) {
+    return { ok: false, error: userMessage(e) };
+  }
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${id}`);
+  return { ok: true };
+}
