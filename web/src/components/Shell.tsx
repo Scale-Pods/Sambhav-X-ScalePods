@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { ClipboardCheck, Factory, FileSpreadsheet, FileText, Home, Layers, Mail, Package, ReceiptIndianRupee, Search, ShieldAlert, Table2 } from "lucide-react";
+import { ClipboardCheck, Factory, FileSpreadsheet, Home, Layers, Search, ShieldAlert, Table2 } from "lucide-react";
 import { Logo } from "./Logo";
+import { BusinessNav } from "./BusinessNav";
 import { NavLink } from "./NavLink";
 import { NavProgress } from "./NavProgress";
 import { PeriodPill } from "./PeriodPill";
@@ -31,13 +32,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <NavLink href="/count"><ClipboardCheck className={icon} />Physical count</NavLink>
               <NavLink href="/mill-orders"><Factory className={icon} />Mill orders</NavLink>
             </div>
-            <div className="flex flex-col gap-1">
-              <p className={group}>Business</p>
-              <NavLink href="/orders"><Package className={icon} />Orders &amp; dispatch</NavLink>
-              <NavLink href="/quotations" soon><FileText className={icon} />Quotations</NavLink>
-              <NavLink href="/mail"><Mail className={icon} />Mail &amp; leads</NavLink>
-              <NavLink href="/payments"><ReceiptIndianRupee className={icon} />Invoices &amp; payments</NavLink>
-            </div>
+            <Suspense fallback={null}><BusinessNav /></Suspense>
             <div className="flex flex-col gap-1">
               <p className={group}>Your sheets</p>
               <NavLink href="/sheets"><FileSpreadsheet className={icon} />Sheet view</NavLink>
