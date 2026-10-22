@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { Download, Search } from "lucide-react";
 import { gradeOptions, plates } from "@/lib/analytics";
 import { readPlateQuery } from "@/lib/plateQuery";
@@ -24,6 +25,7 @@ export default function StockPage({ searchParams }: { searchParams: SP }) {
 }
 
 async function Body({ searchParams }: { searchParams: SP }) {
+  await connection(); // these pages work out today's date: render them at request time, never while the shell is prepared
   const sp = await searchParams;
   const pq = readPlateQuery(sp);
   const [grades, { rows, total, page, size }, me] = await Promise.all([gradeOptions(), plates(pq), currentStaff()]);

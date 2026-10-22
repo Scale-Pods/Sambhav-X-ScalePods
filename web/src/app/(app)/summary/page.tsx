@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { Download } from "lucide-react";
 import { gradeOptions, summary, type SummaryRow } from "@/lib/analytics";
 import { canExport, currentStaff } from "@/lib/auth";
@@ -22,6 +23,7 @@ export default function SummaryPage({ searchParams }: { searchParams: SP }) {
 }
 
 async function Body({ searchParams }: { searchParams: SP }) {
+  await connection(); // these pages work out today's date: render them at request time, never while the shell is prepared
   const sp = await searchParams;
   const f = parseFilter(sp, "fy");
   const view = sp.view === "period" ? "period" : "sheet";

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { ageing, gradeOptions, heatmap, kpis, recentSales, stockByGrade, timeline, topSold } from "@/lib/analytics";
 import { parseFilter, periodLabel, rangeLabel, todayIST, unitLabel, weight, type Filter } from "@/lib/filters";
 import { date, num } from "@/lib/format";
@@ -30,6 +31,7 @@ function change(now: number, before: number | null, goodWhenUp: boolean | null, 
 }
 
 async function Body({ searchParams }: { searchParams: SP }) {
+  await connection(); // these pages work out today's date: render them at request time, never while the shell is prepared
   const f = parseFilter(await searchParams, "fy");
   const [grades, k, tl, byGrade, ages, sold, heat, recent] = await Promise.all([
     gradeOptions(), kpis(f), timeline(f), stockByGrade(f), ageing(f), topSold(f), heatmap(f), recentSales(f),

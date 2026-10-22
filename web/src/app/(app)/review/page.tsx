@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { reviewList } from "@/lib/queries";
 import { gradeOptions } from "@/lib/analytics";
 import { parseFilter } from "@/lib/filters";
@@ -39,6 +40,7 @@ export default function ReviewPage({ searchParams }: { searchParams: SP }) {
 }
 
 async function Body({ searchParams }: { searchParams: SP }) {
+  await connection(); // these pages work out today's date: render them at request time, never while the shell is prepared
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const f = parseFilter(sp as Record<string, string>, "all");
