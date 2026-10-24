@@ -5,6 +5,7 @@ import { canExport, currentStaff } from "@/lib/auth";
 import { parseFilter, todayIST } from "@/lib/filters";
 import { readPlateQuery } from "@/lib/plateQuery";
 import { isoDay } from "@/lib/money";
+import { compare, partiesList, readTallyParams } from "@/lib/tally";
 import { brokerageList, expensesList, gpayList, payablesList, pettyList, purchasesList, readPayParams, receivablesList, salesList } from "@/lib/payments";
 
 // CSV downloads for the owner and administrators only: exports take data outside the system.
@@ -73,6 +74,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ kind: strin
       const { rows } = await payablesList(pp);
       body = csv(["Supplier", "Company", "Invoice no", "Invoice date", "Due date", "Bought for", "Broker", "Invoice amount", "Advance", "TDS", "To pay", "Days late", "Note"],
         rows.map((r) => [r.vendor, co(r.entity), r.invoice_no, d(r.invoice_date), d(r.due_date), r.purchased_for, r.broker, r.amount, r.advance, r.tds, r.pending, r.overdue_days, r.remark]));
+    } else if (kind === "tally-parties") {
+      const { rows } = await partiesList({ ...readTallyParams(sp), all: true });
+      body = csv(["Name", "Kind", "GSTIN", "State", "Balance (Dr positive)", "Orders in your sheets"], rows.map((r) => [r.name, r.parent_group, r.gstin, r.state, r.balance, r.orders]));
+    } else if (kind === "tally-receivables" || kind === "tally-payables") {
+      const { rows } = await compare(kind === "tally-receivables" ? "receivable" : "payable", { ...readTallyParams(sp), all: true });
+      body = csv(["Status", "In Tally", "In the sheet", "Tally balance", "Sheet amount", "Difference"], rows.map((r) => [r.status, r.tally_name, r.sheet_name, r.tally_name ? r.tally : "", r.sheet_name ? r.sheet : "", r.diff]));
     } else if (kind === "pay-gpay") {
       const { rows } = await gpayList(pp);
       body = csv(["Date", "What for", "For whom", "Amount", "Paid by", "Screenshot"], rows.map((r) => [d(r.entered_at), r.description, r.for_whom, r.amount, r.paid_by, r.file_url]));

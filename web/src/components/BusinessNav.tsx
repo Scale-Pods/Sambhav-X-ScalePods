@@ -1,4 +1,4 @@
-import { FileText, Mail, Package, ReceiptIndianRupee } from "lucide-react";
+import { BookOpenCheck, FileText, Mail, Package, ReceiptIndianRupee } from "lucide-react";
 import { canExport, currentStaff } from "@/lib/auth";
 import { NavLink } from "./NavLink";
 
@@ -21,6 +21,7 @@ export async function BusinessNav() {
       <NavLink href="/quotations" soon><FileText className={icon} />Quotations</NavLink>
       <NavLink href="/mail"><Mail className={icon} />Mail &amp; leads</NavLink>
       <NavLink href="/payments"><ReceiptIndianRupee className={icon} />Invoices &amp; payments</NavLink>
+      <NavLink href="/tally"><BookOpenCheck className={icon} />Tally</NavLink>
     </div>
   );
 }
