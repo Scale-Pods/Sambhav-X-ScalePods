@@ -81,7 +81,16 @@ function Clean-Xml([string]$s) {
     $s = [regex]::Replace($s, "&#(?:[0-8]|1[1-2]|1[4-9]|2[0-9]|3[0-1]);", "")
     return [regex]::Replace($s, "[\x00-\x08\x0B\x0C\x0E-\x1F]", "")
 }
-function To-Xml([string]$text) { $d = New-Object Xml.XmlDocument; $d.LoadXml((Clean-Xml $text)); return $d }
+# Some answers use prefixed tags (UDF:...) without saying what the prefix means, which XML refuses to read. Declare each prefix on the first tag.
+function To-Xml([string]$text) {
+    $t = Clean-Xml $text
+    $prefixes = @([regex]::Matches($t, "</?([A-Za-z][A-Za-z0-9]*):[A-Za-z]") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique | Where-Object { $_ -ne "xml" -and $t -notmatch "xmlns:$_=" })
+    if ($prefixes.Count -gt 0) {
+        $decl = ($prefixes | ForEach-Object { " xmlns:$_=`"urn:tally:$_`"" }) -join ""
+        $t = [regex]::Replace($t, "<ENVELOPE", "<ENVELOPE$decl", 1)
+    }
+    $d = New-Object Xml.XmlDocument; $d.LoadXml($t); return $d
+}
 
 function Txt($node, [string]$path) { $n = $node.SelectSingleNode($path); if ($null -ne $n) { return $n.InnerText.Trim() } else { return "" } }
 function Num([string]$s) {

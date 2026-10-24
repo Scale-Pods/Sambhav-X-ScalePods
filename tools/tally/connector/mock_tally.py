@@ -32,8 +32,8 @@ def parse_date(s):
 def voucher(day, kind, n):
     d = day.strftime("%Y%m%d")
     guid = f"test-{d}-{kind}-{n}"
-    head = (f'<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER REMOTEID="{guid}" VCHTYPE="{kind}" ACTION="Create"><OLDAUDITENTRYIDS.LIST TYPE="Number"><OLDAUDITENTRYIDS>-1</OLDAUDITENTRYIDS></OLDAUDITENTRYIDS.LIST>'
-            f'<DATE>{d}</DATE><GUID>{guid}</GUID><VOUCHERTYPENAME>{kind}</VOUCHERTYPENAME><VOUCHERNUMBER>{kind[:2].upper()}/{d[4:]}/{n}</VOUCHERNUMBER>'
+    head = (f'<TALLYMESSAGE><VOUCHER REMOTEID="{guid}" VCHTYPE="{kind}" ACTION="Create"><OLDAUDITENTRYIDS.LIST TYPE="Number"><OLDAUDITENTRYIDS>-1</OLDAUDITENTRYIDS></OLDAUDITENTRYIDS.LIST>'
+            f'<DATE>{d}</DATE><UDF:MYFIELD>x</UDF:MYFIELD><GUID>{guid}</GUID><VOUCHERTYPENAME>{kind}</VOUCHERTYPENAME><VOUCHERNUMBER>{kind[:2].upper()}/{d[4:]}/{n}</VOUCHERNUMBER>'
             f'<CSTFORMISSUETYPE>&#4; Not Applicable</CSTFORMISSUETYPE><ENTEREDBY>test</ENTEREDBY><ALTERID>{100 + n}</ALTERID><ISCANCELLED>{"Yes" if n == 9 else "No"}</ISCANCELLED>')
     if kind == "Sales":
         return head + (
