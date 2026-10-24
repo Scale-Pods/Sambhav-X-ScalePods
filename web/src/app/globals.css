@@ -100,6 +100,11 @@
 html {
   font-size: 15.5px;
 }
+/* big monitors: everything is sized in rem, so growing the root size makes the whole app fill the screen in proportion
+   (laptops stay as they are; the size grows gently above 1536px and stops at 20px for 27-inch and wider screens) */
+@media (min-width: 1536px) {
+  html { font-size: min(20px, calc(15.5px + (100vw - 1536px) * 0.0045)); }
+}
 
 body {
   background: var(--surface);

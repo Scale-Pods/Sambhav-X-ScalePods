@@ -73,7 +73,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <UserChip />
           </Suspense>
         </header>
-        <main className="mx-auto w-full max-w-[1320px] flex-1 px-4 py-8 sm:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[110rem] flex-1 px-4 py-8 sm:px-8 2xl:px-12">{children}</main>
       </div>
     </div>
   );
