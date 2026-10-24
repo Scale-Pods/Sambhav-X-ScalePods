@@ -1,5 +1,5 @@
 import "server-only";
-import { q } from "./db";
+import { q, qTx } from "./db";
 
 // The live, read-only copy of the client's Google Sheets (filled once a day and on request by tools/sync/sheets_sync.py).
 // Row-level security lets administrators read it; everyone else gets nothing back.
@@ -34,39 +34,42 @@ export async function sheetSource(key: string) {
   return rows[0] ?? null;
 }
 
-/** Row counts per tab, for the tab bar. */
+/** Row counts per tab, for the tab bar (worked out at each sync, migration 23). */
 export async function tabCounts(key: string) {
-  const rows = await q<{ tab: string; n: number }>(
-    `select tab, count(*)::int n from public.sheet_rows where source_key = $1 and deleted_at is null group by tab`, [key]);
+  const rows = await q<{ tab: string; n: number }>(`select tab, all_rows n from public.v_sheet_tab_meta where source_key = $1`, [key]);
   return Object.fromEntries(rows.map((r) => [r.tab, r.n])) as Record<string, number>;
 }
 
 const PAGE = 100;
 
+export type TabData = { header: SheetRow | null; frozen: SheetRow[]; rows: SheetRow[]; total: number; page: number; pages: number; size: number; width: number };
+
 /**
- * One tab, the way the sheet shows it. The header row is the top row (of the first six) with the most filled cells; it and the
- * rows above it (group labels such as "Client Details") stay frozen on top. Then the rows in sheet order, a page at a time.
- * `search` matches any cell.
+ * One tab, the way the sheet shows it. The header row and the frozen rows above it (group labels such as "Client Details") come from the
+ * per-tab facts worked out at each sync; the rows follow in sheet order, a page at a time. `search` matches any cell.
+ * Everything is read in one transaction, so a tab costs two quick queries (three when searching).
  */
-export async function sheetTab(key: string, tab: string, page: number, search: string) {
-  const top = await q<SheetRow>(
-    `select row_no, cells, links from public.sheet_rows
-     where source_key = $1 and tab = $2 and deleted_at is null order by row_no limit 6`, [key, tab]);
-  const filled = (r: SheetRow) => r.cells.filter((c) => c !== "").length;
-  const header = top.reduce<SheetRow | null>((best, r) => (filled(r) >= 3 && (!best || filled(r) > filled(best)) ? r : best), null);
-  const after = header?.row_no ?? 0;
-  const frozen = header ? top.filter((r) => r.row_no <= header.row_no).slice(-3) : [];
-  const like = search ? `%${search.replace(/[\\%_]/g, (m) => "\\" + m)}%` : null;
-  const [stats] = await q<{ total: number; width: number }>(
-    `select count(*)::int total, coalesce(max(jsonb_array_length(cells)), 0)::int width from public.sheet_rows
-     where source_key = $1 and tab = $2 and deleted_at is null and row_no > $3 and ($4::text is null or cells::text ilike $4)`,
-    [key, tab, after, like]);
-  const p = Math.max(1, Math.min(page, Math.ceil(stats.total / PAGE) || 1));
-  const rows = await q<SheetRow>(
-    `select row_no, cells, links from public.sheet_rows
-     where source_key = $1 and tab = $2 and deleted_at is null and row_no > $3 and ($4::text is null or cells::text ilike $4)
-     order by row_no limit ${PAGE} offset $5`,
-    [key, tab, after, like, (p - 1) * PAGE]);
-  const width = Math.max(stats.width, ...frozen.map((r) => r.cells.length));
-  return { header, frozen, rows, total: stats.total, page: p, pages: Math.max(1, Math.ceil(stats.total / PAGE)), size: PAGE, width };
+export async function sheetTab(key: string, tab: string, page: number, search: string): Promise<TabData> {
+  return qTx(async (q) => {
+    const [m] = await q<{ header_row: number | null; frozen: SheetRow[]; total: number; width: number }>(
+      `select header_row, frozen, total, width from public.v_sheet_tab_meta where source_key = $1 and tab = $2`, [key, tab]);
+    if (!m) return { header: null, frozen: [], rows: [], total: 0, page: 1, pages: 1, size: PAGE, width: 1 };
+    const after = m.header_row ?? 0;
+    const like = search ? `%${search.replace(/[\\%_]/g, (c) => "\\" + c)}%` : null;
+    let total = m.total;
+    if (like) {
+      const [s] = await q<{ total: number }>(
+        `select count(*)::int total from public.sheet_rows where source_key = $1 and tab = $2 and deleted_at is null and row_no > $3 and cells::text ilike $4`, [key, tab, after, like]);
+      total = s.total;
+    }
+    const pages = Math.max(1, Math.ceil(total / PAGE));
+    const p = Math.max(1, Math.min(page, pages));
+    const rows = await q<SheetRow>(
+      `select row_no, cells, links from public.sheet_rows
+       where source_key = $1 and tab = $2 and deleted_at is null and row_no > $3 and ($4::text is null or cells::text ilike $4)
+       order by row_no limit ${PAGE} offset $5`,
+      [key, tab, after, like, (p - 1) * PAGE]);
+    const header = m.header_row == null ? null : (m.frozen.find((r) => r.row_no === m.header_row) ?? null);
+    return { header, frozen: m.frozen, rows, total, page: p, pages, size: PAGE, width: Math.max(m.width, 1) };
+  });
 }
