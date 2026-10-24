@@ -4,7 +4,7 @@
 # Remove again with uninstall.ps1 (or delete the two tasks in Task Scheduler).
 param(
     [string]$Folder = $PSScriptRoot,
-    [string]$NightlyAt = "02:00",
+    [string[]]$SyncAt = @("13:00", "17:30"),   # during office hours, when this PC is on (a missed time runs as soon as the PC is back)
     [int]$CheckEveryMinutes = 5,
     [string]$TaskPrefix = "ScalePods Tally",
     [switch]$SkipTest
@@ -32,10 +32,10 @@ $args2 = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script
 $who = "$env:USERDOMAIN\$env:USERNAME"
 $principal = New-ScheduledTaskPrincipal -UserId $who -LogonType Interactive -RunLevel Limited
 
-$nightly = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $args1 -WorkingDirectory $Folder
-$t1 = New-ScheduledTaskTrigger -Daily -At $NightlyAt
+$syncAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $args1 -WorkingDirectory $Folder
+$t1 = @($SyncAt | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
 $s1 = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 4)
-Register-ScheduledTask -TaskName "$TaskPrefix nightly" -Action $nightly -Trigger $t1 -Settings $s1 -Principal $principal -Description "ScalePods: read Tally (read-only) and send it to ScalePods every night." -Force | Out-Null
+Register-ScheduledTask -TaskName "$TaskPrefix sync" -Action $syncAction -Trigger $t1 -Settings $s1 -Principal $principal -Description "ScalePods: read Tally (read-only) and send it to ScalePods during office hours." -Force | Out-Null
 
 $check = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $args2 -WorkingDirectory $Folder
 $t2 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $CheckEveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
@@ -44,5 +44,5 @@ Register-ScheduledTask -TaskName "$TaskPrefix check" -Action $check -Trigger $t2
 
 Write-Host "`nInstalled:"
 Get-ScheduledTask -TaskName "$TaskPrefix*" | Select-Object TaskName, State | Format-Table -AutoSize
-Write-Host "The nightly sync runs at $NightlyAt; the check runs every $CheckEveryMinutes minutes. Logs: $Folder\logs"
+Write-Host "The sync runs daily at $($SyncAt -join " and "); the check runs every $CheckEveryMinutes minutes. Logs: $Folder\logs"
 Write-Host "Keep Tally open with the company loaded, and DISCONNECT the remote session instead of signing out."

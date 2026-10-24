@@ -17,7 +17,7 @@ TallyPrime (office PC, port 9001) --> tally-connector.ps1 --HTTPS--> Supabase fu
 | Package for the PC (holds the secret key, git-ignored) | `python tools/tally/connector/make_package.py` → `data/tally-connector-package/` |
 
 ## Modes
-- `Sync` (nightly 02:00): ledgers, stock items, outstanding bills, and vouchers. The first run reads the whole financial year; later runs read the last 45 days plus future-dated entries to the year end.
+- `Sync` (daily at 13:00 and 17:30, office hours; a missed time runs when the PC is back): ledgers, stock items, outstanding bills, and vouchers. The first run reads the whole financial year; later runs read the last 45 days plus future-dated entries to the year end.
 - `Check` (every 5 minutes): tells the app this PC is alive; if someone pressed "Sync now" it runs a sync.
 - `Detect`: finds the date format this Tally accepts (the real Tally ignored `yyyymmdd` and answered with its default day).
 - `Replay -Folder`: sends saved XML files (testing, or a manual fallback when the PC cannot reach the internet).
