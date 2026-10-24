@@ -85,7 +85,15 @@ export async function q<T = Record<string, unknown>>(sql: string, params: unknow
 export async function qTx<T>(fn: (q: <R = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<R[]>) => Promise<T>): Promise<T> {
   const id = await currentUserId();
   if (!id) throw new NotSignedIn();
-  return inTx(id, true, (tx) => fn(async <R,>(sql: string, params: unknown[] = []) => (await tx.query(sql, params)).rows as R[]));
+  return inTx(id, true, (tx) => {
+    // one connection runs one query at a time: queue them, so nothing is sent while another is still running
+    let chain: Promise<unknown> = Promise.resolve();
+    return fn(<R,>(sql: string, params: unknown[] = []) => {
+      const run = chain.then(() => tx.query(sql, params));
+      chain = run.catch(() => undefined);
+      return run.then((r) => r.rows as R[]);
+    });
+  });
 }
 
 /** Write as the signed-in person. Only ever used to call the checked functions in the database (record_count_line and friends). */
