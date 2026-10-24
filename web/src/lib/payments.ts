@@ -1,5 +1,5 @@
 import "server-only";
-import { q } from "./db";
+import { q, qTx } from "./db";
 import { parseFilter, todayIST, type Filter } from "./filters";
 
 // Invoices and payments, read from the typed views over the synced Google Sheets (see migration 19).
@@ -116,10 +116,11 @@ export async function payOverview(p: PayParams) {
   const purchases = mk((w) => { w.and("entry_no = 1"); w.range("invoice_date", p.f); });
   const exp = mk((w) => w.range("coalesce(invoice_date, entered_at::date)", p.f));
   const monthlyW = () => mk((w) => { w.and("entry_no = 1"); w.range("invoice_date", p.f); w.and("invoice_date is not null"); });
-  const run = <T,>(sql: (w: W) => string, w: W) => q<T>(sql(w), w.params);
 
   const recW = mk(); const dueSoonFrom = recW.p(today);
-  const [salesT, purchT, expT, rec, pay, monthly, topDebtors, byPerson, ageing, topCreditors, expByCat, typed, dups, undated] = await Promise.all([
+  const [salesT, purchT, expT, rec, pay, monthly, topDebtors, byPerson, ageing, topCreditors, expByCat, typed, dups, undated] = await qTx((q) => {
+    const run = <T,>(sql: (w: W) => string, w: W) => q<T>(sql(w), w.params);
+    return Promise.all([
     run<{ n: string; s: string }>((w) => `select count(*) n, coalesce(sum(amount),0) s from public.v_sales_invoices where ${w.sql}`, sales),
     run<{ n: string; s: string }>((w) => `select count(*) n, coalesce(sum(amount),0) s from public.v_purchase_invoices where ${w.sql}`, purchases),
     run<{ n: string; s: string }>((w) => `select count(*) n, coalesce(sum(amount),0) s from public.v_expenses where ${w.sql}`, exp),
@@ -153,6 +154,7 @@ export async function payOverview(p: PayParams) {
     q<{ n: string }>(`select count(*) n from public.v_sales_invoices where entry_no > 1`),
     q<{ s: string; pu: string }>(`select (select count(*) from public.v_sales_invoices where invoice_date is null) s, (select count(*) from public.v_purchase_invoices where invoice_date is null) pu`),
   ]);
+  });
 
   const tp = (re: RegExp) => typed.filter((t) => re.test(t.particulars)).reduce((a, t) => a + n(t.amount), 0);
   return {

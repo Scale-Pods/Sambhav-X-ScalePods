@@ -80,6 +80,14 @@ export async function q<T = Record<string, unknown>>(sql: string, params: unknow
   return inTx(id, true, async (tx) => (await tx.query(sql, params)).rows as T[]);
 }
 
+/** Several reads as the signed-in person in one transaction on one connection. An overview page asks 10-14 questions; sent together they
+ *  no longer queue for the pool one by one (the connection runs them in turn, without a round of set-up for each). */
+export async function qTx<T>(fn: (q: <R = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<R[]>) => Promise<T>): Promise<T> {
+  const id = await currentUserId();
+  if (!id) throw new NotSignedIn();
+  return inTx(id, true, (tx) => fn(async <R,>(sql: string, params: unknown[] = []) => (await tx.query(sql, params)).rows as R[]));
+}
+
 /** Write as the signed-in person. Only ever used to call the checked functions in the database (record_count_line and friends). */
 export async function call<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
   const id = await currentUserId();

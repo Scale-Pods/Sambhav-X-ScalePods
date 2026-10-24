@@ -1,5 +1,5 @@
 import "server-only";
-import { q } from "./db";
+import { q, qTx } from "./db";
 import { parseFilter, todayIST, type Filter } from "./filters";
 import { W, list, type Page } from "./payments";
 
@@ -59,10 +59,11 @@ export async function orderOverview(p: OrderParams) {
   const today = todayIST();
   const mk = (period = true) => orderWhere({ ...p, q: "" }, period);
   const lineW = () => { const w = new W(); if (p.company) w.and(`company = ${w.p(p.company)}`); w.range("order_date", p.f); return w; };
-  const run = <T,>(sql: (w: W) => string, w: W) => q<T>(sql(w), w.params);
   const openW = mk(false); const lateFrom = openW.p(today);
 
-  const [inPeriod, open, monthly, topClients, bySales, grades, material, transport, openOldest] = await Promise.all([
+  const [inPeriod, open, monthly, topClients, bySales, grades, material, transport, openOldest] = await qTx((q) => {
+    const run = <T,>(sql: (w: W) => string, w: W) => q<T>(sql(w), w.params);
+    return Promise.all([
     run<{ n: string; done: string; lines: string }>((w) => `select count(*) n, count(*) filter (where status = 'Complete') done, coalesce(sum(lines),0) lines from public.v_orders where ${w.sql}`, mk()),
     run<{ n: string; lines: string; late: string; open_lines: string }>((w) =>
       `select count(*) filter (where status = 'Open') n, coalesce(sum(lines - done_lines) filter (where status = 'Open'),0) open_lines,
@@ -83,6 +84,7 @@ export async function orderOverview(p: OrderParams) {
     run<{ order_no: string; client: string | null; order_date: string | null; etd: string | null; lines: string; done_lines: string; salesperson: string | null }>((w) =>
       `select order_no, client, order_date, etd, lines, done_lines, salesperson from public.v_orders where ${w.sql} and status = 'Open' order by etd asc nulls last, order_no_num desc limit 12`, mk(false)),
   ]);
+  });
   return {
     period: { n: n(inPeriod[0].n), done: n(inPeriod[0].done), lines: n(inPeriod[0].lines) },
     open: { n: n(open[0].n), late: n(open[0].late), lines: n(open[0].open_lines) },
@@ -114,8 +116,9 @@ export function tripsList(p: OrderParams): Promise<Page<TripRow>> {
 
 export async function vehiclesOverview(p: OrderParams) {
   const w = () => tripWhere({ ...p, q: "" }, false);
-  const run = <T,>(sql: (w: W) => string) => { const x = w(); return q<T>(sql(x), x.params); };
-  const [tot, monthly, byEntity, byGrade, typed, undated] = await Promise.all([
+  const [tot, monthly, byEntity, byGrade, typed, undated] = await qTx((q) => {
+    const run = <T,>(sql: (w: W) => string) => { const x = w(); return q<T>(sql(x), x.params); };
+    return Promise.all([
     run<{ trips: string; kg: string }>((x) => `select count(*) trips, coalesce(sum(weight_kg),0) kg from public.v_vehicle_register where ${x.sql}`),
     run<{ m: string; p753: string; d15: string }>((x) =>
       `select to_char(date_trunc('month', dispatch_date), 'YYYY-MM-DD') m, coalesce(sum(weight_kg) filter (where plot = '753'),0) p753, coalesce(sum(weight_kg) filter (where plot = 'D15'),0) d15
@@ -127,6 +130,7 @@ export async function vehiclesOverview(p: OrderParams) {
     q<{ cells: string[] }>(`select cells from public.sheet_rows where source_key = 'dispatch_26_27' and tab = '26-27' and row_no between 2 and 13 and deleted_at is null order by row_no`),
     q<{ n: string }>(`select count(*) n from public.v_vehicle_register where dispatch_date is null`),
   ]);
+  });
   const num = (t: string | undefined) => Number(String(t ?? "").replace(/[^0-9.\-]/g, "")) || 0;
   return {
     trips: n(tot[0].trips), kg: n(tot[0].kg),

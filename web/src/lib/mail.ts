@@ -1,5 +1,5 @@
 import "server-only";
-import { q } from "./db";
+import { qTx } from "./db";
 import { parseFilter, todayIST, type Filter, type Preset } from "./filters";
 import { W, list, type Page } from "./payments";
 
@@ -70,9 +70,10 @@ export function leadsList(p: MailParams): Promise<Page<LeadRow>> {
 export async function mailOverview(f: Filter) {
   const today = todayIST();
   const mkQ = (col: string) => { const w = new W(); w.range(col, f); return w; };
-  const run = <T,>(sql: (w: W) => string, w: W) => q<T>(sql(w), w.params);
 
-  const [inbox, quotes, leads, leadsMonthly, quotesMonthly, leadStates, leadProducts, leadKinds, quoteMaterials, topClients, typed] = await Promise.all([
+  const [inbox, quotes, leads, leadsMonthly, quotesMonthly, leadStates, leadProducts, leadKinds, quoteMaterials, topClients, typed] = await qTx((q) => {
+    const run = <T,>(sql: (w: W) => string, w: W) => q<T>(sql(w), w.params);
+    return Promise.all([
     q<{ pending: string; urgent: string; follow: string; fresh: string; replied: string }>(
       `select count(*) filter (where state = 'Pending') pending, count(*) filter (where state = 'Pending' and status = 'URGENT') urgent,
               count(*) filter (where state = 'Pending' and status = 'Follow Up') follow, count(*) filter (where state = 'Pending' and status = 'New') fresh,
@@ -90,6 +91,7 @@ export async function mailOverview(f: Filter) {
     run<{ label: string; v: string; e: string }>((w) => `select max(client_name) label, count(*) v, client_email e from public.v_quotations where client_email is not null and ${w.sql} group by client_email order by 2 desc limit 10`, mkQ("quoted_at::date")),
     q<{ cells: string[] }>(`select cells from public.sheet_rows where source_key = 'email_tracker' and tab = 'Dashboard' and deleted_at is null order by row_no`),
   ]);
+  });
   const dash = (label: string) => n(typed.find((r) => r.cells[0] === label)?.cells[1]?.replace(/[^0-9.]/g, ""));
   return {
     inbox: { pending: n(inbox[0].pending), urgent: n(inbox[0].urgent), follow: n(inbox[0].follow), fresh: n(inbox[0].fresh), replied: n(inbox[0].replied) },

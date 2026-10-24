@@ -194,6 +194,11 @@ def main() -> None:
         for src in cur.fetchall():
             t = time.time()
             print(f"{src[0]:20} {sync_one(conn, sheets, drive, src, a.force)}  ({time.time() - t:.1f}s)")
+        # the app reads stored copies of the sheet-based views (migration 22): rebuild them from what was just synced
+        t = time.time()
+        cur.execute("select app.refresh_sheet_stores()")
+        conn.commit()
+        print(f"{'stored views':20} refreshed  ({time.time() - t:.1f}s)")
 
 
 if __name__ == "__main__":
