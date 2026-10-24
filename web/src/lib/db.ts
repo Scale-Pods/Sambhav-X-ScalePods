@@ -9,10 +9,15 @@ import { supabaseServer } from "./supabase";
 // The connection itself is never used without a signed-in user.
 const g = globalThis as unknown as { __pool?: Pool };
 
+// Supabase's session pooler (port 5432) allows only 15 clients in all, which a few serverless instances use up ("EMAXCONNSESSION", the
+// whole site failing). Every query here is one self-contained transaction, so in production the transaction pooler (port 6543) is used:
+// it serves many more clients and a role switched with "set local" ends with the transaction.
+const connectionString = process.env.NODE_ENV === "production" ? (process.env.DATABASE_URL ?? "").replace(/(pooler\.supabase\.com):5432\//, "$1:6543/") : process.env.DATABASE_URL;
+
 const pool =
   g.__pool ??
   (g.__pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     max: Number(process.env.DB_POOL_MAX ?? 6),
     ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
   }));
