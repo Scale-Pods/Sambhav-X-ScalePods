@@ -6,13 +6,15 @@
 #   -Mode Check    every 5 minutes: tell ScalePods this PC is alive and run a sync if someone pressed "Sync now"
 #   -Mode Detect   find the date format this Tally accepts (prints a table; changes nothing)
 #   -Mode Replay   send XML files saved earlier (-Folder), for testing or as a manual fallback
+#   -Mode Dump     save one voucher with every field Tally gives us (-VoucherNo "730/26-27" -From yyyyMMdd) to logs\ (read-only, sends nothing)
 param(
-    [ValidateSet("Sync", "Check", "Detect", "Replay")][string]$Mode = "Sync",
+    [ValidateSet("Sync", "Check", "Detect", "Replay", "Dump")][string]$Mode = "Sync",
     [string]$Config = (Join-Path $PSScriptRoot "config.json"),
     [string]$From = "", [string]$To = "",          # yyyyMMdd, optional (Sync)
     [string]$Folder = "",                          # Replay: folder with saved XML
     [string]$Company = "",                         # Replay: company name when companies.xml is not in the folder
-    [string]$Trigger = "schedule"
+    [string]$Trigger = "schedule",
+    [string]$VoucherNo = ""                        # Dump: the voucher number to save
 )
 
 $ErrorActionPreference = "Stop"
@@ -150,10 +152,13 @@ function Read-Vouchers([string]$xml) {
         $date = Txt $v "DATE"; $type = Txt $v "VOUCHERTYPENAME"; if (-not $type) { $type = $v.GetAttribute("VCHTYPE") }
         if (-not $guid -or -not $date -or -not $type) { continue }
         $entries = New-Object Collections.Generic.List[object]; $items = New-Object Collections.Generic.List[object]
-        foreach ($e in @($v.SelectNodes("ALLLEDGERENTRIES.LIST")) + @($v.SelectNodes("LEDGERENTRIES.LIST"))) {
+        # The real Tally lists the same ledger lines under both ALLLEDGERENTRIES and LEDGERENTRIES: take one list, never both
+        $lines = @($v.SelectNodes("ALLLEDGERENTRIES.LIST")); if ($lines.Count -eq 0) { $lines = @($v.SelectNodes("LEDGERENTRIES.LIST")) }
+        foreach ($e in $lines) {
             $a = Num (Txt $e "AMOUNT"); if ($null -eq $a) { continue }
             $entries.Add([ordered]@{ ledger = (Txt $e "LEDGERNAME"); amount = (-$a) })
         }
+        $haveLedgerLines = ($entries.Count -gt 0)
         foreach ($i in @($v.SelectNodes("ALLINVENTORYENTRIES.LIST")) + @($v.SelectNodes("INVENTORYENTRIES.LIST"))) {
             $qtyTxt = Txt $i "BILLEDQTY"; if (-not $qtyTxt) { $qtyTxt = Txt $i "ACTUALQTY" }
             $rateTxt = Txt $i "RATE"
@@ -163,11 +168,20 @@ function Read-Vouchers([string]$xml) {
             $amt = Num (Txt $i "AMOUNT")
             $items.Add([ordered]@{ item = (Txt $i "STOCKITEMNAME"); descr = $desc; qty = (Num $qtyTxt); unit = (Unit-Of $qtyTxt); rate = (Num $rateTxt)
                                    amount = $amt; godown = $godown; batch = $batch })
-            foreach ($al in $i.SelectNodes("ACCOUNTINGALLOCATIONS.LIST")) {
-                $a = Num (Txt $al "AMOUNT"); if ($null -ne $a) { $entries.Add([ordered]@{ ledger = (Txt $al "LEDGERNAME"); amount = (-$a) }) }
+            # the sales/purchase ledger split of an item line only counts when the voucher has no ledger lines of its own (they would be counted twice)
+            if (-not $haveLedgerLines) {
+                foreach ($al in $i.SelectNodes("ACCOUNTINGALLOCATIONS.LIST")) {
+                    $a = Num (Txt $al "AMOUNT"); if ($null -ne $a) { $entries.Add([ordered]@{ ledger = (Txt $al "LEDGERNAME"); amount = (-$a) }) }
+                }
             }
         }
-        $debit = 0; foreach ($e in $entries) { if ($e.amount -gt 0) { $debit += $e.amount } }
+        # the voucher amount is what the party was charged (the invoice total); with no party it is the debit total
+        $partyName = Txt $v "PARTYLEDGERNAME"; $debit = 0; $partySum = 0.0; $partyHit = $false
+        foreach ($e in $entries) {
+            if ($e.amount -gt 0) { $debit += $e.amount }
+            if ($partyName -and $e.ledger -eq $partyName) { $partySum += $e.amount; $partyHit = $true }
+        }
+        if ($partyHit -and [Math]::Abs($partySum) -gt 0) { $debit = [Math]::Abs($partySum) }
         $out.Add([ordered]@{ guid = $guid; alter_id = (Num (Txt $v "ALTERID")); vtype = $type; vno = (Txt $v "VOUCHERNUMBER"); vdate = $date
                              party = (Txt $v "PARTYLEDGERNAME"); amount = $debit; narration = (Txt $v "NARRATION"); cancelled = ((Txt $v "ISCANCELLED") -eq "Yes")
                              reference = (Txt $v "REFERENCE"); irn = (Txt $v "IRN"); entered_by = (Txt $v "ENTEREDBY"); entries = $entries.ToArray(); items = $items.ToArray() })
@@ -192,6 +206,14 @@ function Daybook-Xml($style, [datetime]$a, [datetime]$b) {
 }
 function Filter-Xml($style, [datetime]$a, [datetime]$b) {
     $fetch = "Date,GUID,AlterID,VoucherTypeName,VoucherNumber,PartyLedgerName,Narration,Reference,IsCancelled,EnteredBy,AllLedgerEntries.*,AllInventoryEntries.*"
+    $cond = "`$Date &gt;= `$`$Date:`"$($a.ToString($style.fmt, $inv))`" AND `$Date &lt;= `$`$Date:`"$($b.ToString($style.fmt, $inv))`""
+    return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>SPVouchers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"SPVouchers`" ISMODIFY=`"No`"><TYPE>Voucher</TYPE><FETCH>$fetch</FETCH><FILTERS>SPDateRange</FILTERS></COLLECTION><SYSTEM TYPE=`"Formulae`" NAME=`"SPDateRange`">$cond</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
+}
+# For -Mode Dump: the same request as Filter-Xml but asking for many more fields (names Tally does not know are simply left out of its answer)
+function Dump-Xml($style, [datetime]$a, [datetime]$b) {
+    $fetch = "Date,GUID,AlterID,VoucherTypeName,VoucherNumber,PartyLedgerName,Narration,Reference,ReferenceDate,IsCancelled,EnteredBy," +
+             "IRN,IRNAckNo,IRNAckDate,BasicBuyerName,BasicOrderRef,BasicOrderDate,BasicShippedBy,BasicShipDocumentNo,BasicShipVesselNo,BasicFinalDestination,BasicDueDateOfPymt,BasicOrderNo," +
+             "EWayBillDetails.*,PartyGSTIN,GSTRegistration,PlaceOfSupply,BuyerName,ConsigneeName,AllLedgerEntries.*,AllInventoryEntries.*,LedgerEntries.*,InventoryEntries.*"
     $cond = "`$Date &gt;= `$`$Date:`"$($a.ToString($style.fmt, $inv))`" AND `$Date &lt;= `$`$Date:`"$($b.ToString($style.fmt, $inv))`""
     return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>SPVouchers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"SPVouchers`" ISMODIFY=`"No`"><TYPE>Voucher</TYPE><FETCH>$fetch</FETCH><FILTERS>SPDateRange</FILTERS></COLLECTION><SYSTEM TYPE=`"Formulae`" NAME=`"SPDateRange`">$cond</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
@@ -330,6 +352,21 @@ try {
             Log "Testing date formats on $TallyUrl (reads only)..."
             $st = Detect-DateStyle $true
             if ($st) { Log "WORKS: $($st.name)"; Set-State "dateStyle" $st.name; Set-State "detectVersion" 2 } else { Log "No format worked. Send this log to ScalePods." }
+        }
+        "Dump" {
+            if (-not $VoucherNo -or -not $From) { throw "-VoucherNo and -From (the voucher's date, yyyyMMdd) are required" }
+            $st = Get-VoucherStyle
+            if (-not $st -or $st.kind -ne "filter") { throw "Dump needs the filter method; run -Mode Detect first" }
+            $day = Get-Day $From; $end = if ($To) { Get-Day $To } else { $day }
+            Log "Asking Tally for the vouchers of $($day.ToString('yyyy-MM-dd')) with every field we know to ask for (reads only)..."
+            $text = Clean-Xml (Ask-Tally (Dump-Xml $st $day $end) 300)
+            $hits = @([regex]::Matches($text, "<VOUCHER[ >].*?</VOUCHER>", "Singleline") | ForEach-Object { $_.Value } | Where-Object { $_ -match ("<VOUCHERNUMBER>\s*" + [regex]::Escape($VoucherNo) + "\s*</VOUCHERNUMBER>") })
+            if ($hits.Count -eq 0) { throw "Voucher $VoucherNo was not among the vouchers Tally returned for that date" }
+            $safe = ($VoucherNo -replace "[^A-Za-z0-9]", "-")
+            $file = Join-Path $LogDir ("dump-" + $safe + ".xml")
+            [IO.File]::WriteAllText($file, $hits[0], (New-Object Text.UTF8Encoding($false)))
+            $tags = @([regex]::Matches($hits[0], "<([A-Za-z][A-Za-z0-9.:]*)[ >]") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique | Where-Object { $_ -match "IRN|EWAY|BASIC|HSN|SHIP|ORDER|VEHICLE|TRANSPORT|DISPATCH|CONSIGN|BUYER" })
+            Log ("Saved {0} ({1:N0} bytes). Interesting fields found: {2}" -f $file, (Get-Item $file).Length, ($tags -join ", "))
         }
         "Check" {
             if (-not (Tally-Alive)) { Call "tally_check" @{ p_status = "tally_down"; p_message = "Tally did not answer on $TallyUrl"; p_version = $Version } | Out-Null; Log "Tally is not answering."; exit 1 }

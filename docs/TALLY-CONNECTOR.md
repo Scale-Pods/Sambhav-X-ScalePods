@@ -42,3 +42,9 @@ TallyPrime (office PC, port 9001) --> tally-connector.ps1 --HTTPS--> Supabase fu
 
 ## Next (app side)
 A Tally page: last sync and status, a Sync now button, and the comparisons Tally against the sheets (bills missing on either side, amounts that differ), receivables and payables against Tally.
+
+## Voucher amounts and the Dump mode (24 Oct 2026)
+
+- The real Tally lists each ledger line twice (under `ALLLEDGERENTRIES` and `LEDGERENTRIES`). The connector first added both lists, so a voucher's amount came out doubled (invoice 730/26-27: 40,99,414.40 instead of 20,49,707). It now takes one list, ignores the sales/purchase split inside item lines when the voucher has ledger lines, and sets the amount to the party's ledger line (the invoice total), or the debit total when there is no party. A sync overwrites the old rows, so one run after the new script is installed corrects every voucher.
+- `-Mode Dump -VoucherNo "730/26-27" -From 20261009` saves that one voucher with every field we know to ask for to `logs\dump-730-26-27.xml` and lists the fields that look like IRN, e-way bill, HSN, vehicle, order and dispatch. It only reads Tally and sends nothing. We use it to find the real field names before storing those fields.
+
