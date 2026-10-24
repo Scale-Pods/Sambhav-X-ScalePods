@@ -180,26 +180,41 @@ function Daybook-Xml($style, [datetime]$a, [datetime]$b) {
 }
 function Get-Day([string]$s) { return [datetime]::ParseExact($s, "yyyyMMdd", $inv) }
 
+# A format is accepted only when three separate windows each answer with vouchers from inside their own window and, together, from at least
+# three different days. A Tally that ignores the dates answers every window with the same default day, so it cannot pass by luck.
+function Test-Style($st, $windows, [bool]$verbose) {
+    $allDates = New-Object Collections.Generic.HashSet[string]; $total = 0; $ok = $true; $report = @()
+    foreach ($w in $windows) {
+        $a = $w[0]; $b = $w[1]
+        $vs = Read-Vouchers (Ask-Tally (Daybook-Xml $st $a $b) 300)
+        $dates = @($vs | ForEach-Object { $_.vdate } | Sort-Object -Unique)
+        $inside = @($dates | Where-Object { $d = Get-Day $_; $d -ge $a -and $d -le $b })
+        if ($inside.Count -ne $dates.Count) { $ok = $false }
+        $total += @($vs).Count; foreach ($d in $dates) { [void]$allDates.Add($d) }
+        $report += ("{0}..{1}: {2} vouchers on {3} day(s)" -f $a.ToString("MMdd"), $b.ToString("MMdd"), @($vs).Count, $dates.Count)
+    }
+    if ($verbose) { Log ("  {0,-18} {1} -> {2} distinct day(s) overall" -f $st.name, ($report -join " | "), $allDates.Count) }
+    return ($ok -and $total -gt 0 -and $allDates.Count -ge 3)
+}
 function Detect-DateStyle([bool]$verbose) {
-    foreach ($days in @(10, 40, 120)) {
-        $b = (Get-Date).Date; $a = $b.AddDays(-$days)
+    $t = (Get-Date).Date
+    $sets = @(
+        @(@($t.AddDays(-30), $t.AddDays(-21)), @($t.AddDays(-20), $t.AddDays(-11)), @($t.AddDays(-10), $t)),
+        @(@($t.AddDays(-90), $t.AddDays(-61)), @($t.AddDays(-60), $t.AddDays(-31)), @($t.AddDays(-30), $t))
+    )
+    foreach ($windows in $sets) {
         foreach ($st in $DateStyles) {
-            try {
-                $vs = Read-Vouchers (Ask-Tally (Daybook-Xml $st $a $b) 300)
-                $dates = @($vs | ForEach-Object { $_.vdate } | Sort-Object -Unique)
-                $inside = @($dates | Where-Object { $d = Get-Day $_; $d -ge $a -and $d -le $b })
-                if ($verbose) { Log ("  {0,-18} last {1,3} days -> {2,4} vouchers, dates {3}" -f $st.name, $days, @($vs).Count, (($dates | Select-Object -First 4) -join ",")) }
-                if (@($vs).Count -gt 0 -and $inside.Count -eq $dates.Count) { return $st }
-            } catch { if ($verbose) { Log ("  {0,-18} FAILED {1}" -f $st.name, $_.Exception.Message) } }
+            try { if (Test-Style $st $windows $verbose) { return $st } }
+            catch { if ($verbose) { Log ("  {0,-18} FAILED {1}" -f $st.name, $_.Exception.Message) } }
         }
     }
     return $null
 }
 function Get-VoucherStyle {
     $s = Get-State
-    if ($s.PSObject.Properties.Name -contains "dateStyle") { $found = $DateStyles | Where-Object { $_.name -eq $s.dateStyle }; if ($found) { return $found } }
+    if (($s.PSObject.Properties.Name -contains "dateStyle") -and ($s.PSObject.Properties.Name -contains "detectVersion") -and $s.detectVersion -eq 2) { $found = $DateStyles | Where-Object { $_.name -eq $s.dateStyle }; if ($found) { return $found } }
     $st = Detect-DateStyle $false
-    if ($st) { Set-State "dateStyle" $st.name; Log "Date format Tally accepts: $($st.name)" }
+    if ($st) { Set-State "dateStyle" $st.name; Set-State "detectVersion" 2; Log "Date format Tally accepts: $($st.name)" }
     return $st
 }
 
@@ -293,7 +308,7 @@ try {
         "Detect" {
             Log "Testing date formats on $TallyUrl (reads only)..."
             $st = Detect-DateStyle $true
-            if ($st) { Log "WORKS: $($st.name)"; Set-State "dateStyle" $st.name } else { Log "No format worked. Send this log to ScalePods." }
+            if ($st) { Log "WORKS: $($st.name)"; Set-State "dateStyle" $st.name; Set-State "detectVersion" 2 } else { Log "No format worked. Send this log to ScalePods." }
         }
         "Check" {
             if (-not (Tally-Alive)) { Call "tally_check" @{ p_status = "tally_down"; p_message = "Tally did not answer on $TallyUrl"; p_version = $Version } | Out-Null; Log "Tally is not answering."; exit 1 }

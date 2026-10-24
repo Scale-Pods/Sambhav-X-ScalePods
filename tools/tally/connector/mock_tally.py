@@ -11,7 +11,7 @@ ap.add_argument("--port", type=int, default=19001)
 ap.add_argument("--accept", default="dd-MMM-yyyy", help="the only date format it understands (yyyyMMdd, d-MMM-yyyy, dd-MM-yyyy, dd-MMM-yyyy, dd/MM/yyyy); prefix 'typed ' to require TYPE=\"Date\"")
 ap.add_argument("--masters", required=True)
 ap.add_argument("--company", default="ZZ SCALEPODS CONNECTOR TEST")
-ap.add_argument("--default-day-file", default="")
+ap.add_argument("--default-day", default="2026-10-31", help="the day Tally answers with when it cannot read the dates asked for")
 a = ap.parse_args()
 
 PATTERNS = {"yyyyMMdd": r"^\d{8}$", "d-MMM-yyyy": r"^\d{1,2}-[A-Za-z]{3}-\d{4}$", "dd-MM-yyyy": r"^\d{2}-\d{2}-\d{4}$",
@@ -95,7 +95,8 @@ class H(BaseHTTPRequestHandler):
             if ok:
                 out = daybook(parse_date(f.group(2)), parse_date(t.group(2)))
             else:  # what the real one did: ignore the dates, answer with its default day
-                out = daybook(dt.date(2026, 10, 31), dt.date(2026, 10, 31)).replace("Sales", "Journal").replace("Receipt", "Journal")
+                dd = dt.date.fromisoformat(a.default_day)
+                out = daybook(dd, dd).replace("Sales", "Journal").replace("Receipt", "Journal")
         else:
             out = "<ENVELOPE><RESPONSE>Unknown request</RESPONSE></ENVELOPE>"
         data = out.encode("utf-8")
