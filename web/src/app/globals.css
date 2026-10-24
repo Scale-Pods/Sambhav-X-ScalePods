@@ -117,6 +117,22 @@ body {
   border-radius: 6px;
 }
 
+/* scrollbars: thin, no arrow buttons, quiet colours that follow light and dark mode */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-button { display: none; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background-color: var(--line); border: 2px solid transparent; border-radius: 999px; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background-color: var(--muted); }
+/* the sidebar: the bar only shows while the pointer is over it */
+.nav-scroll { scrollbar-color: transparent transparent; }
+.nav-scroll:hover { scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+.nav-scroll::-webkit-scrollbar-thumb { background-color: transparent; }
+.nav-scroll:hover::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.18); }
+
 /* brushed steel: login panel and accents */
 .steel-panel {
   background:

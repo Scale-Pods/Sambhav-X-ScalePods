@@ -23,7 +23,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </Link>
 
         <Suspense fallback={<div className="flex-1" />}>
-          <nav className="flex flex-1 flex-col gap-6 overflow-y-auto">
+          <nav className="nav-scroll -mr-2 flex flex-1 flex-col gap-6 overflow-y-auto pr-2">
             <div className="flex flex-col gap-1">
               <p className={group}>Stock</p>
               <NavLink href="/"><Home className={icon} />Overview</NavLink>
