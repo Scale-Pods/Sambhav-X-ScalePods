@@ -172,11 +172,23 @@ $DateStyles = @(
     @{ name = "yyyyMMdd";          fmt = "yyyyMMdd";    typed = $false }, @{ name = "dd-MMM-yyyy";  fmt = "dd-MMM-yyyy"; typed = $false },
     @{ name = "dd-MM-yyyy";        fmt = "dd-MM-yyyy";  typed = $false }, @{ name = "dd/MM/yyyy";   fmt = "dd/MM/yyyy";  typed = $false },
     @{ name = "d-MMM-yyyy";        fmt = "d-MMM-yyyy";  typed = $false }, @{ name = "typed yyyyMMdd"; fmt = "yyyyMMdd"; typed = $true },
-    @{ name = "typed dd-MMM-yyyy"; fmt = "dd-MMM-yyyy"; typed = $true }, @{ name = "typed dd-MM-yyyy"; fmt = "dd-MM-yyyy"; typed = $true }
+    @{ name = "typed dd-MMM-yyyy"; fmt = "dd-MMM-yyyy"; typed = $true }, @{ name = "typed dd-MM-yyyy"; fmt = "dd-MM-yyyy"; typed = $true },
+    # second method: a list of vouchers with the date filter written into the request itself (does not rely on Tally's report dates)
+    @{ name = "filter d-MMM-yyyy"; fmt = "d-MMM-yyyy"; kind = "filter" }, @{ name = "filter dd-MM-yyyy"; fmt = "dd-MM-yyyy"; kind = "filter" },
+    @{ name = "filter yyyy-MM-dd"; fmt = "yyyy-MM-dd"; kind = "filter" }, @{ name = "filter dd/MM/yyyy"; fmt = "dd/MM/yyyy"; kind = "filter" }
 )
 function Daybook-Xml($style, [datetime]$a, [datetime]$b) {
     $t = ""; if ($style.typed) { $t = " TYPE=`"Date`"" }
     return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Day Book</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT><SVFROMDATE$t>$($a.ToString($style.fmt, $inv))</SVFROMDATE><SVTODATE$t>$($b.ToString($style.fmt, $inv))</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>"
+}
+function Filter-Xml($style, [datetime]$a, [datetime]$b) {
+    $fetch = "Date,GUID,AlterID,VoucherTypeName,VoucherNumber,PartyLedgerName,Narration,Reference,IsCancelled,EnteredBy,AllLedgerEntries.*,AllInventoryEntries.*"
+    $cond = "`$Date &gt;= `$`$Date:`"$($a.ToString($style.fmt, $inv))`" AND `$Date &lt;= `$`$Date:`"$($b.ToString($style.fmt, $inv))`""
+    return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>SPVouchers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"SPVouchers`" ISMODIFY=`"No`"><TYPE>Voucher</TYPE><FETCH>$fetch</FETCH><FILTERS>SPDateRange</FILTERS></COLLECTION><SYSTEM TYPE=`"Formulae`" NAME=`"SPDateRange`">$cond</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
+}
+function Voucher-Xml($style, [datetime]$a, [datetime]$b) {
+    if ($style.kind -eq "filter") { return (Filter-Xml $style $a $b) }
+    return (Daybook-Xml $style $a $b)
 }
 function Get-Day([string]$s) { return [datetime]::ParseExact($s, "yyyyMMdd", $inv) }
 
@@ -186,7 +198,7 @@ function Test-Style($st, $windows, [bool]$verbose) {
     $allDates = New-Object Collections.Generic.HashSet[string]; $total = 0; $ok = $true; $report = @()
     foreach ($w in $windows) {
         $a = $w[0]; $b = $w[1]
-        $vs = Read-Vouchers (Ask-Tally (Daybook-Xml $st $a $b) 300)
+        $vs = Read-Vouchers (Ask-Tally (Voucher-Xml $st $a $b) 300)
         $dates = @($vs | ForEach-Object { $_.vdate } | Sort-Object -Unique)
         $inside = @($dates | Where-Object { $d = Get-Day $_; $d -ge $a -and $d -le $b })
         if ($inside.Count -ne $dates.Count) { $ok = $false }
@@ -254,7 +266,7 @@ function Sync-Vouchers([string]$company, [datetime]$from, [datetime]$to, $style)
         $e = $d.AddDays($ChunkDays - 1); if ($e -gt $to) { $e = $to }
         # beyond today only future-dated entries can exist: one request is enough
         if ($d -gt (Get-Date).Date) { $e = $to }
-        $all = @(Read-Vouchers (Ask-Tally (Daybook-Xml $style $d $e) 900))
+        $all = @(Read-Vouchers (Ask-Tally (Voucher-Xml $style $d $e) 900))
         # Tally answers with its default day when it cannot read a date: keep only what falls inside the dates we asked for
         $vs = @($all | Where-Object { $vd = Get-Day $_.vdate; $vd -ge $d -and $vd -le $e })
         if ($all.Count -gt 0 -and $vs.Count -eq 0) { throw ("Tally ignored the dates for {0}-{1} (it returned {2} vouchers from other days); nothing was sent for this period" -f $d.ToString("yyyyMMdd"), $e.ToString("yyyyMMdd"), $all.Count) }
@@ -286,7 +298,7 @@ function Run-Sync([string]$fromStr, [string]$toStr, [string]$trigger) {
         if ($fromStr) { $from = Get-Day $fromStr } elseif ($full) { $from = [datetime]::Today.AddDays(-$Lookback) } else { $from = Get-Day $FyStart }
         $fyStart = Get-Day $FyStart; if ($from -lt $fyStart) { $from = $fyStart }
         $to = if ($toStr) { Get-Day $toStr } else { Get-Day $FyEnd }
-        Log ("Vouchers {0} to {1} (format {2})" -f $from.ToString("yyyy-MM-dd"), $to.ToString("yyyy-MM-dd"), $style.name)
+        Log ("Vouchers {0} to {1} (method {2})" -f $from.ToString("yyyy-MM-dd"), $to.ToString("yyyy-MM-dd"), $style.name)
         $records += Sync-Vouchers $company $from $to $style
         if (-not $full -and -not $fromStr) { Set-State "lastFull" (Get-Date -Format s) }
         Call "tally_run_finish" @{ p_run = $run; p_status = "ok"; p_records = [int]$records; p_error = $null } | Out-Null

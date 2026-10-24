@@ -16,9 +16,9 @@ a = ap.parse_args()
 
 PATTERNS = {"yyyyMMdd": r"^\d{8}$", "d-MMM-yyyy": r"^\d{1,2}-[A-Za-z]{3}-\d{4}$", "dd-MM-yyyy": r"^\d{2}-\d{2}-\d{4}$",
             "dd-MMM-yyyy": r"^\d{2}-[A-Za-z]{3}-\d{4}$", "dd/MM/yyyy": r"^\d{2}/\d{2}/\d{4}$"}
-FMT = {"yyyyMMdd": "%Y%m%d", "d-MMM-yyyy": "%d-%b-%Y", "dd-MM-yyyy": "%d-%m-%Y", "dd-MMM-yyyy": "%d-%b-%Y", "dd/MM/yyyy": "%d/%m/%Y"}
+FMT = {"yyyy-MM-dd": "%Y-%m-%d", "d-MMM-yyyy": "%d-%b-%Y", "yyyyMMdd": "%Y%m%d", "dd-MM-yyyy": "%d-%m-%Y", "dd-MMM-yyyy": "%d-%b-%Y", "dd/MM/yyyy": "%d/%m/%Y"}
 typed = a.accept.startswith("typed ")
-fmt_name = a.accept.replace("typed ", "")
+fmt_name = a.accept.replace("typed ", "").replace("filter ", "")
 
 
 def read(name):
@@ -89,9 +89,18 @@ class H(BaseHTTPRequestHandler):
             out = read("stockitems.xml")
         elif "Bills Receivable" in body or "Bills Payable" in body:
             out = BILLS
+        elif "SPVouchers" in body:
+            lits = re.findall(r'\$\$Date:"([^"]+)"', body.replace("&quot;", '"'))
+            try:
+                if not a.accept.startswith("filter "): raise ValueError
+                f = FMT.get(a.accept.replace("filter ", ""), "%d-%b-%Y")
+                out = daybook(dt.datetime.strptime(lits[0], f).date(), dt.datetime.strptime(lits[1], f).date())
+            except (ValueError, IndexError):
+                dd = dt.date.fromisoformat(a.default_day)
+                out = daybook(dd, dd).replace("Sales", "Journal").replace("Receipt", "Journal")
         elif "Day Book" in body:
             f = re.search(r"<SVFROMDATE([^>]*)>([^<]*)</SVFROMDATE>", body); t = re.search(r"<SVTODATE([^>]*)>([^<]*)</SVTODATE>", body)
-            ok = bool(f and t and re.match(PATTERNS[fmt_name], f.group(2)) and re.match(PATTERNS[fmt_name], t.group(2)) and (("TYPE" in f.group(1)) == typed))
+            ok = bool(not a.accept.startswith("filter ") and f and t and re.match(PATTERNS[fmt_name], f.group(2)) and re.match(PATTERNS[fmt_name], t.group(2)) and (("TYPE" in f.group(1)) == typed))
             if ok:
                 out = daybook(parse_date(f.group(2)), parse_date(t.group(2)))
             else:  # what the real one did: ignore the dates, answer with its default day
