@@ -160,6 +160,7 @@ function Read-Vouchers([string]$xml) {
         }
         $haveLedgerLines = ($entries.Count -gt 0)
         foreach ($i in @($v.SelectNodes("ALLINVENTORYENTRIES.LIST")) + @($v.SelectNodes("INVENTORYENTRIES.LIST"))) {
+            if (-not (Txt $i "STOCKITEMNAME")) { continue }   # Tally puts an empty item list in payments, receipts and journals
             $qtyTxt = Txt $i "BILLEDQTY"; if (-not $qtyTxt) { $qtyTxt = Txt $i "ACTUALQTY" }
             $rateTxt = Txt $i "RATE"
             $desc = @($i.SelectNodes("BASICUSERDESCRIPTION.LIST/BASICUSERDESCRIPTION") | ForEach-Object { $_.InnerText.Trim() } | Where-Object { $_ }) -join " | "
