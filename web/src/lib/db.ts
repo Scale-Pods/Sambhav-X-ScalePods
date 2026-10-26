@@ -22,6 +22,16 @@ const pool =
     ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
   }));
 
+/** Can the database be reached at all? For the uptime check (/api/health): no sign-in needed, nothing is read. */
+export async function ping(): Promise<boolean> {
+  try {
+    await Promise.race([pool.query("select 1"), new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 4000))]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type Tx = Pick<PoolClient, "query">;
 
 /** The signed-in person's id from the verified session cookie, or null. */

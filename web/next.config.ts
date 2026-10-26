@@ -6,6 +6,20 @@ const nextConfig: NextConfig = {
   // PDF page rendering (WebAssembly) and image resizing run as plain Node packages, not bundled
   serverExternalPackages: ["mupdf", "sharp"],
   partialPrefetching: true,
+  // the site may not be shown inside another site (clickjacking), and browsers must not guess file types or leak the full address to other sites
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
+        { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+      ],
+    }];
+  },
   turbopack: {
     rules: {
       "*.css": {
