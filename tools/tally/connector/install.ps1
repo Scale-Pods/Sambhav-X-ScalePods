@@ -15,7 +15,16 @@ $config = Join-Path $Folder "config.json"
 if (-not (Test-Path $script)) { throw "tally-connector.ps1 is not in $Folder" }
 if (-not (Test-Path $config)) { throw "config.json is not in $Folder. Copy it there first." }
 $cfg = Get-Content -Raw $config | ConvertFrom-Json
-if (-not $cfg.connectorKey -or $cfg.connectorKey -like "PASTE*") { throw "config.json has no connector key yet." }
+$hasProtected = ($cfg.PSObject.Properties.Name -contains "connectorKeyProtected") -and $cfg.connectorKeyProtected
+$hasPlain = ($cfg.PSObject.Properties.Name -contains "connectorKey") -and $cfg.connectorKey -and $cfg.connectorKey -notlike "PASTE*"
+if (-not $hasProtected -and -not $hasPlain) { throw "config.json has no connector key yet." }
+if ($hasPlain) {
+    # keep the key encrypted for this Windows user on this PC instead of as plain text in the file (a copied config.json then cannot be used elsewhere)
+    $cfg | Add-Member -NotePropertyName connectorKeyProtected -NotePropertyValue (ConvertTo-SecureString -String ([string]$cfg.connectorKey) -AsPlainText -Force | ConvertFrom-SecureString) -Force
+    $cfg.PSObject.Properties.Remove("connectorKey")
+    $cfg | ConvertTo-Json -Depth 5 | Set-Content -Path $config -Encoding UTF8
+    Write-Host "The connector key in config.json is now stored encrypted for this Windows user."
+}
 
 Write-Host "Folder:  $Folder"
 Write-Host "Tally:   $($cfg.tallyUrl)"

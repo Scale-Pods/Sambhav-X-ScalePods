@@ -61,7 +61,19 @@ function Send-Rpc([string]$fn, $body) {
         }
     }
 }
-function Call($fn, $extra) { $b = @{ p_key = $cfg.connectorKey }; foreach ($k in $extra.Keys) { $b[$k] = $extra[$k] }; return Send-Rpc $fn $b }
+# The key is kept in config.json either as plain text (connectorKey) or, after install.ps1, encrypted for this Windows user on this PC
+# (connectorKeyProtected, Windows DPAPI): a copy of config.json taken to another PC or user is then useless.
+function Get-ConnectorKey {
+    if (($cfg.PSObject.Properties.Name -contains "connectorKeyProtected") -and $cfg.connectorKeyProtected) {
+        try {
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR((ConvertTo-SecureString ([string]$cfg.connectorKeyProtected)))
+            try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+        } catch { throw "The connector key in config.json can only be opened by the Windows user who ran install.ps1, on the PC where it was run. Paste a fresh key into config.json (connectorKey) and run install.ps1 again." }
+    }
+    return [string]$cfg.connectorKey
+}
+$ConnectorKey = Get-ConnectorKey
+function Call($fn, $extra) { $b = @{ p_key = $ConnectorKey }; foreach ($k in $extra.Keys) { $b[$k] = $extra[$k] }; return Send-Rpc $fn $b }
 
 # Tells ScalePods where this run is, for the progress bar on the Tally page. Never allowed to break a sync: one failure switches it off for the run.
 $script:RunId = $null; $script:ProgressOff = $false; $script:Problems = @()

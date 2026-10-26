@@ -32,7 +32,7 @@ cfg = {
     "fyStart": "20260401",
     "fyEnd": "20270331",
     "lookbackDays": 45,
-    "chunkDays": 3,
+    "chunkDays": 10,
     "batchSize": 100,
 }
 json.dump(cfg, open(os.path.join(OUT, "config.json"), "w"), indent=2)
