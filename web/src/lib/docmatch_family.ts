@@ -53,16 +53,18 @@ export async function matchInvoice(r: InvoiceRead, docId: string): Promise<Invoi
     if (x[0]) ledger = { name: x[0].name, how: "name" };
   }
   const total = num(r.total_amount), inv = r.invoice_no.trim();
-  const vouchers = inv || total != null
+  const vouchers = inv || total != null || r.irn || r.eway_bill_no
     ? await q<InvoiceMatch["vouchers"][number]>(
         `select voucher_no, voucher_date::text date, voucher_type type, party_ledger party, amount::float8 amount, reference,
-                case when $1::text <> '' and app.norm_text(reference) = app.norm_text($1) then 'invoice number' else 'amount and date' end how
+                case when $5::text <> '' and app.norm_text(irn) = app.norm_text($5) then 'IRN' when $6::text <> '' and eway_bill_no = $6 then 'e-way bill'
+                     when $1::text <> '' and app.norm_text(reference) = app.norm_text($1) then 'invoice number' else 'amount and date' end how
            from public.tally_vouchers
           where deleted_at is null and voucher_type ilike 'Purchase%' and not is_cancelled
-            and (($1::text <> '' and app.norm_text(reference) = app.norm_text($1))
+            and (($5::text <> '' and app.norm_text(irn) = app.norm_text($5)) or ($6::text <> '' and eway_bill_no = $6)
+              or ($1::text <> '' and app.norm_text(reference) = app.norm_text($1))
               or ($2::numeric is not null and abs(amount - $2::numeric) <= 1 and $3::date is not null and voucher_date between $3::date - 15 and $3::date + 15 and ($4::text is null or party_ledger = $4)))
-          order by (app.norm_text(reference) = app.norm_text($1)) desc, voucher_date desc limit 4`,
-        [inv, total, /^\d{4}-\d{2}-\d{2}$/.test(r.invoice_date) ? r.invoice_date : null, ledger?.name ?? null])
+          order by ($5::text <> '' and app.norm_text(irn) = app.norm_text($5)) desc, (app.norm_text(reference) = app.norm_text($1)) desc, voucher_date desc limit 4`,
+        [inv, total, /^\d{4}-\d{2}-\d{2}$/.test(r.invoice_date) ? r.invoice_date : null, ledger?.name ?? null, r.irn.replace(/\s/g, ""), r.eway_bill_no.replace(/\s/g, "")])
     : [];
   const sheet = inv
     ? await q<InvoiceMatch["sheet"][number]>(

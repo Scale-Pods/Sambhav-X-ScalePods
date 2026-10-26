@@ -2,6 +2,7 @@ import "server-only";
 import { q } from "../db";
 import { canExport, canUploadDocs } from "../auth";
 import { stockFit } from "../stockfit";
+import { trailDetail, trailList } from "../tallytrail";
 
 // The only things the Ask box may do: fixed, read-only lookups. The AI picks one and fills in its few parameters; it never writes SQL.
 // Every lookup runs as the signed-in person (the database's row rules still apply) and returns a small, trimmed set of rows.
@@ -225,6 +226,25 @@ export const TOOLS: Tool[] = [
             and ($7::date is null or v.voucher_date >= $7::date) and ($8::date is null or v.voucher_date <= $8::date)
           order by v.voucher_date desc limit ${limit(i.limit, 8, 15)}`,
         [like(str(i.voucher_no)), like(str(i.irn)), str(i.eway_bill_no) || null, like(str(i.vehicle_no)), like(str(i.party)), str(i.type) || null, day(i.from), day(i.to)]);
+    },
+  },
+  {
+    name: "invoice_trail",
+    who: "admin",
+    description: "The paperwork behind a Tally sales invoice: the customer's PO (uploaded or in the orders sheet), the heat numbers on its lines and whether a mill certificate is filed for each, the vehicle register row, and any document with the same IRN or e-way bill. Use to ask whether an invoice has its PO or certificates.",
+    schema: { type: "object", properties: { invoice_no: { ...P, description: "the invoice (voucher) number, e.g. 730/26-27" } }, required: ["invoice_no"] },
+    async run(i) {
+      const rows = await trailList("all", str(i.invoice_no, 40), 1);
+      if (rows.length === 0) return { error: "No sales invoice with that number" };
+      const t = await trailDetail(rows[0].id);
+      if (!t) return { error: "Not found" };
+      return {
+        invoice: t.v.voucher_no, date: t.v.date, customer: t.v.party, amount_rs: t.v.amount, po_noted_in_tally: t.v.buyer_order_no, verbal_order: t.v.verbal,
+        po_documents: t.po_docs.map((d) => ({ file: d.file, review: d.review })), po_in_orders_sheet: t.po_orders.map((o) => `order ${o.order_no} (${o.client})`),
+        heats: t.heats.map((h) => ({ heat: h.heat, plates_in_books: h.lots.length, certificates_filed: [...new Set(h.lots.flatMap((l) => l.certs))], certificate_documents_read: h.cert_docs.length })),
+        vehicle_register: t.register.map((r) => `${r.dispatch_date} vehicle ${r.vehicle_no}`), e_way_bill: t.v.eway_bill_no, vehicle: t.v.vehicle_no, documents_with_same_irn_or_eway: t.same_numbers.map((d) => d.file),
+        more_matches_with_this_number: rows.length - 1,
+      };
     },
   },
   {

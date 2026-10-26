@@ -1,5 +1,6 @@
 import "server-only";
 import { q } from "./db";
+import { invoicesForPo } from "./tallytrail";
 import type { Read } from "./docreader/checks";
 
 // Step 5 of the reading engine: put what was read next to what we already know. Reads only; it never changes anything.
@@ -7,7 +8,7 @@ import type { Read } from "./docreader/checks";
 export type GradeMatch = { line: number; raw: string; code: string | null; how: "list" | "close" | "none"; candidates: string[] };
 export type OrderMatch = { order_no: string; client: string | null; po_no: string | null; order_date: string | null; status: string; matched_on: string };
 export type CustomerMatch = { client: string; orders: number; last_order: string | null; score: number };
-export type Matches = { grades: GradeMatch[]; orders: OrderMatch[]; customers: CustomerMatch[]; exactCustomer: boolean };
+export type Matches = { grades: GradeMatch[]; orders: OrderMatch[]; customers: CustomerMatch[]; exactCustomer: boolean; invoices: { id: string; voucher_no: string; date: string; party: string | null; amount: number }[] };
 
 const NORM = "regexp_replace(upper(%s), '[^A-Z0-9]', '', 'g')";
 
@@ -51,5 +52,7 @@ export async function matchRead(r: Read): Promise<Matches> {
            from public.v_orders where client is not null and (lower(client) % lower($1)) group by client order by score desc, orders desc limit 3`, [name])
     : [];
   const exactCustomer = customers.some((c) => c.client.trim().toLowerCase() === name.toLowerCase());
-  return { grades, orders, customers: customers.map((c) => ({ ...c, orders: Number(c.orders) })), exactCustomer };
+  // Tally sales invoices that carry this PO number (empty for people who may not read Tally)
+  const invoices = (await Promise.all(refs.map((x) => invoicesForPo(x)))).flat().slice(0, 5);
+  return { grades, orders, customers: customers.map((c) => ({ ...c, orders: Number(c.orders) })), exactCustomer, invoices };
 }

@@ -28,6 +28,18 @@ export function MatchPanel({ read, m }: { read: Read; m: Matches }) {
         ) : <span className="text-muted">Not an incoming order, so nothing to look up.</span>}
       </div>
 
+      {m.invoices.length > 0 && (
+        <div>
+          <span className="mr-2 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Invoiced in Tally</span>
+          <ul className="mt-1 space-y-0.5">
+            {m.invoices.map((i) => (
+              <li key={i.id}><Badge tone="ok">Invoiced</Badge>{" "}<Link href={`/tally/invoices/${i.id}`} className="font-medium text-brand hover:underline">Invoice {i.voucher_no}</Link>
+                <span className="text-muted"> · {i.date} · {(i.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, "")} · ₹{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(i.amount)}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {read.buyer_name && (
         <div>
           <span className="mr-2 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Customer</span>

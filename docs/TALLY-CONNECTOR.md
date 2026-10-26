@@ -56,3 +56,12 @@ The Dump of invoice 730/26-27 showed where Tally keeps them. The sync now reads 
 
 The connector tells ScalePods where a run is (`tally_run_progress`: stage, percent, what it is reading) at every step: customers and vendors, stock items and bills take the first 6 %, then each block of vouchers moves the bar up to 99 %, and finishing sets 100 %. A failed progress call switches reporting off for that run and never stops the sync. The Tally page polls `/api/tally/live` every 3 seconds while a sync is waiting or running (every 15 seconds otherwise), shows the bar, and refreshes the numbers when the run ends. A "Sync now" request that the PC has not yet picked up shows a sliding bar, and after 10 minutes a hint that the PC may be off.
 
+
+### Invoice paperwork trail (26 Oct 2026)
+
+`/tally/invoices` lists every live Tally sales invoice with the paperwork behind it, matched on the documents' own numbers (`web/src/lib/tallytrail.ts`):
+- **Customer PO:** the number after "PO NO" in Tally's Buyer's Order No. is looked for in uploaded documents and in the Dispatch FMS orders sheet. "Verbal", "by mail" and similar notes are shown as verbal orders and never matched (they would match every other verbal order).
+- **Certificates:** the heat number on each line (the batch name, or "HEAT NO." in the description) against our plates, their filed certificates (`lot_certificates`) and read-but-unconfirmed certificate documents.
+- **Vehicle register:** the register's invoice number against the number before the "/" of the Tally voucher number, within a date window (the register sheet runs to 29 Sep 2026).
+- **Same numbers:** an uploaded document carrying the same IRN or e-way bill number.
+The invoice page shows each of these; a vendor invoice's review screen also looks for the Tally purchase voucher by IRN, e-way bill, invoice number, or amount near the date; a customer PO's review screen shows the Tally invoices that cite its number. Tally data is owner/administrator only. The Ask box can answer "does invoice 730/26-27 have its PO and certificates?".

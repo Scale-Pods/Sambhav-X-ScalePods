@@ -5,7 +5,7 @@ import { SectionTabs } from "@/components/SectionTabs";
 import { Card, PageHeader, Skeleton } from "@/components/ui";
 
 const TABS: [string, string][] = [
-  ["/tally", "Status"], ["/tally/parties", "Customers and vendors"], ["/tally/receivables", "Debtors vs sheets"], ["/tally/payables", "Creditors vs sheets"],
+  ["/tally", "Status"], ["/tally/parties", "Customers and vendors"], ["/tally/receivables", "Debtors vs sheets"], ["/tally/payables", "Creditors vs sheets"], ["/tally/invoices", "Invoices and paperwork"],
 ];
 
 export default function TallyLayout({ children }: { children: ReactNode }) {
