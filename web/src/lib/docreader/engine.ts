@@ -75,6 +75,12 @@ export async function readDocument(docId: string): Promise<{ ok: true; second: b
     if (d.review_status !== "pending") return { ok: false, error: "This document has already been reviewed" };
     if (d.extraction_status === "needs_review") return { ok: true, second: false, usd: 0 };
     if (!ACCEPTED_TYPES.includes(d.mime_type)) return { ok: false, error: "Only PDF, JPG, PNG and WebP files can be read" };
+    // spending limits (daily, per document, per person per hour) are checked in the database before anything is sent to the AI
+    const limit = await q<{ why: string | null }>(`select public.ai_read_allowed($1::uuid) why`, [docId]);
+    if (limit[0]?.why) {
+      await call(`select public.fail_extraction($1::uuid, $2)`, [docId, limit[0].why]).catch(() => {});
+      return { ok: false, error: limit[0].why };
+    }
 
     const supabase = await supabaseServer();
     const dl = await supabase.storage.from("documents").download(d.storage_path);

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, FileUp } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 
 type Item = { key: string; name: string; state: "waiting" | "uploading" | "reading" | "done" | "duplicate" | "error"; msg?: string };
 
@@ -23,9 +24,14 @@ export function UploadBox() {
   async function one(file: File, key: string) {
     try {
       patch(key, { state: "uploading" });
-      const fd = new FormData();
-      fd.set("file", file);
-      const up = await fetch("/api/documents/upload", { method: "POST", body: fd });
+      // 1. ask for a one-time upload link, 2. send the file straight to storage (no size limit from our server), 3. have the app check and register it
+      const start = await fetch("/api/documents/upload/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, size: file.size, mime: file.type }) });
+      const s = await start.json().catch(() => ({}));
+      if (!start.ok) return patch(key, { state: "error", msg: s.error ?? "Upload failed" });
+      const store = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
+      const put = await store.storage.from("documents").uploadToSignedUrl(s.path, s.token, file, { contentType: file.type });
+      if (put.error) return patch(key, { state: "error", msg: "The file could not be sent. Try again." });
+      const up = await fetch("/api/documents/upload/finish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: s.path, name: file.name }) });
       const u = await up.json().catch(() => ({}));
       if (!up.ok) return patch(key, { state: "error", msg: u.error ?? "Upload failed" });
       if (u.duplicate_of) return patch(key, { state: "duplicate", msg: "This exact file is already in the list." });

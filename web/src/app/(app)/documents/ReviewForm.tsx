@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { type Check, type Read, type ReadLine, runChecks } from "@/lib/docreader/checks";
+import { type Check, type Read, type ReadLine, checkKey, runChecks } from "@/lib/docreader/checks";
 import { KIND } from "@/lib/docreader/labels";
 import { reviewDocument } from "./actions";
 
@@ -22,10 +22,14 @@ export function ReviewForm({ id, original, firstChecks, canEdit }: { id: string;
   const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
+  const [acked, setAcked] = useState<string[]>([]);
 
   // the rules run again as the person edits, so a fixed value stops being amber at once
   const checks = useMemo(() => (JSON.stringify(r) === JSON.stringify(original) ? firstChecks : [...runChecks(r), ...firstChecks.filter((c) => c.field === "pages" || c.field === "second_read")]), [r, original, firstChecks]);
   const amber = new Set(checks.filter((c) => c.level === "amber").map((c) => c.field));
+  // each value still flagged must be ticked as looked at before the document can be confirmed (the server checks this again)
+  const flagged = useMemo(() => runChecks(r).filter((c) => c.level === "amber"), [r]);
+  const unticked = flagged.filter((c) => !acked.includes(checkKey(c)));
   const changed = JSON.stringify(r) !== JSON.stringify(original);
   const edited = (k: keyof Read) => String(r[k]) !== String(original[k]);
 
@@ -38,7 +42,7 @@ export function ReviewForm({ id, original, firstChecks, canEdit }: { id: string;
     setError("");
     if (decision === "rejected" && !note.trim()) { setError("Say why you are rejecting it."); return; }
     start(async () => {
-      const res = await reviewDocument(id, decision, decision === "rejected" ? null : r, note);
+      const res = await reviewDocument(id, decision, decision === "rejected" ? null : r, note, acked);
       if (!res.ok) setError(res.error); else router.push("/documents");
     });
   }
@@ -65,7 +69,16 @@ export function ReviewForm({ id, original, firstChecks, canEdit }: { id: string;
           <h3 className="font-display text-[0.95rem] font-bold">Checks</h3>
           <ul className="space-y-1 text-[0.88rem]">
             {checks.filter((c) => c.field !== "second_read").map((c, i) => (
-              <li key={i} className={c.level === "amber" ? "text-warn" : "text-muted"}><span className="font-semibold">{c.level === "amber" ? "Check: " : "Note: "}</span>{c.message}</li>
+              <li key={i} className={c.level === "amber" ? "text-warn" : "text-muted"}>
+                <span className="font-semibold">{c.level === "amber" ? "Check: " : "Note: "}</span>{c.message}
+                {c.level === "amber" && canEdit && (
+                  <label className="ml-2 inline-flex items-center gap-1.5 whitespace-nowrap text-ink">
+                    <input type="checkbox" disabled={pending} checked={acked.includes(checkKey(c))}
+                      onChange={(e) => setAcked((a) => (e.target.checked ? [...a, checkKey(c)] : a.filter((k) => k !== checkKey(c))))} />
+                    <span className="text-[0.82rem]">I checked this against the document</span>
+                  </label>
+                )}
+              </li>
             ))}
           </ul>
         </div>
@@ -143,7 +156,7 @@ export function ReviewForm({ id, original, firstChecks, canEdit }: { id: string;
           <div className="flex flex-wrap items-center gap-2">
             {!rejecting ? (
               <>
-                <button disabled={pending} onClick={() => submit("confirmed")} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60">
+                <button disabled={pending || unticked.length > 0} title={unticked.length > 0 ? "Tick each flagged check once you have looked at it" : undefined} onClick={() => submit("confirmed")} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60">
                   {pending ? "Saving…" : changed ? "Save my corrections and confirm" : "Looks right, confirm"}
                 </button>
                 <button disabled={pending} onClick={() => setRejecting(true)} className="rounded-lg border border-line px-4 py-2 text-sm font-medium hover:bg-surface">Reject</button>

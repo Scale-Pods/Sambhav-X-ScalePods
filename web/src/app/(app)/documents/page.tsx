@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
-import { canUploadDocs, currentStaff } from "@/lib/auth";
-import { SHOWS, documentsList, type DocRow, type Show } from "@/lib/documents";
+import { canExport, canUploadDocs, currentStaff } from "@/lib/auth";
+import { SHOWS, aiSpendToday, documentsList, expireStuckDocuments, type DocRow, type Show } from "@/lib/documents";
 import { KIND } from "@/lib/docreader/labels";
 import { UploadBox } from "./UploadBox";
 
@@ -41,10 +41,12 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const show = (SHOWS as readonly string[]).includes(sp.show ?? "") ? (sp.show as Show) : "review";
   const me = await currentStaff();
-  const rows = await documentsList(show);
+  await expireStuckDocuments();
+  const [rows, spend] = await Promise.all([documentsList(show), me && canExport(me.role) ? aiSpendToday() : Promise.resolve(null)]);
   return (
     <div className="space-y-6">
       {me && canUploadDocs(me.role) ? <UploadBox /> : <p className="text-muted">Your role can look at documents but not upload them.</p>}
+      {spend && <p className="text-[0.82rem] text-muted">AI reading today: ${spend.spent.toFixed(2)}{spend.cap != null ? ` of the $${spend.cap} daily limit` : ""}. Reading stops for the day at the limit.</p>}
       <nav className="flex flex-wrap gap-x-6 gap-y-1 border-b border-line" aria-label="Documents">
         {SHOWS.map((s) => (
           <Link key={s} href={s === "review" ? "/documents" : `/documents?show=${s}`} aria-current={s === show ? "page" : undefined}

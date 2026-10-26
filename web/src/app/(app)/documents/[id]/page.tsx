@@ -5,10 +5,11 @@ import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
 import { Badge, Card, Skeleton } from "@/components/ui";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
-import { documentDetail } from "@/lib/documents";
+import { documentDetail, expireStuckDocuments } from "@/lib/documents";
 import { matchRead } from "@/lib/docmatch";
 import { supabaseServer } from "@/lib/supabase";
 import { MatchPanel } from "../MatchPanel";
+import { ReadAgain } from "../ReadAgain";
 import { ReviewForm } from "../ReviewForm";
 
 type P = Promise<{ id: string }>;
@@ -30,11 +31,12 @@ const rupees = (n: number) => (n < 0.01 ? "under ₹0.01" : `₹${(n * 88).toFix
 async function Body({ params }: { params: P }) {
   await connection();
   const { id } = await params;
+  await expireStuckDocuments();
   const d = await documentDetail(id);
   if (!d) notFound();
   const me = await currentStaff();
   const supabase = await supabaseServer();
-  const signed = await supabase.storage.from("documents").createSignedUrl(d.doc.storage_path, 3600);
+  const signed = await supabase.storage.from("documents").createSignedUrl(d.doc.storage_path, 900);
   const url = signed.data?.signedUrl;
   const canEdit = Boolean(me && canUploadDocs(me.role)) && d.doc.review_status === "pending";
   const matches = d.read ? await matchRead(d.read) : null;
@@ -75,9 +77,13 @@ async function Body({ params }: { params: P }) {
         {d.read ? (
           <ReviewForm key={d.doc.id + d.runs.length} id={d.doc.id} original={d.read} firstChecks={d.checks} canEdit={canEdit} />
         ) : (
-          <Card><p className="px-5 py-8 text-center text-muted">
-            {d.doc.extraction_status === "failed" ? "This document could not be read. Upload it again, or reject it." : d.doc.extraction_status === "pending" ? "Still being read. Refresh in a few seconds." : "Nothing was read."}
-          </p></Card>
+          <Card>
+            <div className="space-y-3 px-5 py-8 text-center text-muted">
+              <p>{d.doc.extraction_status === "failed" ? "This document could not be read." : d.doc.extraction_status === "pending" ? "Still being read. Refresh in a few seconds." : "Nothing was read."}</p>
+              {d.doc.extraction_status === "failed" && d.doc.review_status === "pending" && canEdit && <ReadAgain id={d.doc.id} />}
+              {d.doc.extraction_status === "failed" && <p className="text-[0.85rem]">Or reject it from the list if it is not a document that can be read.</p>}
+            </div>
+          </Card>
         )}
       </div>
     </div>

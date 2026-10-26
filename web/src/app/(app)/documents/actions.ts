@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { call, q, userMessage } from "@/lib/db";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
-import type { Read } from "@/lib/docreader/checks";
+import { checkKey, runChecks, type Read } from "@/lib/docreader/checks";
 
 export type Result = { ok: true } | { ok: false; error: string };
 
@@ -26,7 +26,7 @@ function diff(before: Read, after: Read) {
   return out;
 }
 
-export async function reviewDocument(id: string, decision: "confirmed" | "corrected" | "rejected", edited: Read | null, note: string): Promise<Result> {
+export async function reviewDocument(id: string, decision: "confirmed" | "corrected" | "rejected", edited: Read | null, note: string, acknowledged: string[] = []): Promise<Result> {
   try {
     const me = await currentStaff();
     if (!me || !canUploadDocs(me.role)) return { ok: false, error: "Your role cannot review documents" };
@@ -40,6 +40,11 @@ export async function reviewDocument(id: string, decision: "confirmed" | "correc
       if (!Array.isArray(final.lines)) return { ok: false, error: "The form is incomplete" };
       changes = diff(before, final);
       decision = changes.length > 0 ? "corrected" : "confirmed";
+      // the rules run again here on what is being confirmed; every value still flagged needs the person to say they looked at it
+      const flagged = runChecks(final).filter((c) => c.level === "amber");
+      const open = flagged.filter((c) => !acknowledged.includes(checkKey(c)));
+      if (open.length > 0) return { ok: false, error: `${open.length} flagged check${open.length === 1 ? "" : "s"} still need${open.length === 1 ? "s" : ""} you to tick "I checked this against the document".` };
+      if (flagged.length > 0) note = `${note.trim()}${note.trim() ? " | " : ""}Looked at flagged: ${flagged.map((c) => c.field).join(", ")}`;
     }
     await call(`select public.review_document($1::uuid, $2, $3::jsonb, $4::jsonb, $5)`, [id, decision, final ? JSON.stringify(final) : null, JSON.stringify(changes), note]);
   } catch (e) {

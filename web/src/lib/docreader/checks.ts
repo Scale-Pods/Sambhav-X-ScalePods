@@ -16,6 +16,9 @@ export type Read = {
 
 export type Check = { field: string; level: "amber" | "info"; message: string };
 
+/** How a flagged check is named when a person says they looked at it (the review form and the server use the same rule). */
+export const checkKey = (c: { field: string; message: string }) => `${c.field}|${c.message}`;
+
 /** Numbers as the document shows them ("1,23,456.00", "148/-") to a plain number, or null. */
 export function num(s: string | undefined | null): number | null {
   if (s == null) return null;

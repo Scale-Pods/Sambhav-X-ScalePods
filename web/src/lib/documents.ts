@@ -1,5 +1,5 @@
 import "server-only";
-import { q } from "./db";
+import { call, q } from "./db";
 import type { Check, Read } from "./docreader/checks";
 
 export type DocRow = {
@@ -8,6 +8,15 @@ export type DocRow = {
   kind: string | null; firm: boolean | null; direction: string | null; buyer: string | null; ref: string | null;
   doc_date: string | null; lines: number | null; total: string | null; amber: number | null; usd: number | null; second: boolean | null;
 };
+
+/** A document whose reading was cut off stays "pending" for ever: after 10 minutes it becomes "not read", so it can be read again or rejected. */
+export async function expireStuckDocuments() { await call(`select public.expire_stuck_documents()`).catch(() => {}); }
+
+/** What the AI has cost today (India time) against the daily limit, for the owner and administrators; null for everyone else. */
+export async function aiSpendToday() {
+  const r = await q<{ spent: string | null; cap: string | null }>(`select public.ai_spend_today() spent, (select num from public.app_limits where key = 'ai_daily_usd') cap`);
+  return r[0]?.spent == null ? null : { spent: Number(r[0].spent), cap: r[0].cap == null ? null : Number(r[0].cap) };
+}
 
 export const SHOWS = ["review", "done", "failed", "all"] as const;
 export type Show = (typeof SHOWS)[number];
