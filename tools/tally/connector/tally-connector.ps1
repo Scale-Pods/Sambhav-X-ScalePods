@@ -63,6 +63,13 @@ function Send-Rpc([string]$fn, $body) {
 }
 function Call($fn, $extra) { $b = @{ p_key = $cfg.connectorKey }; foreach ($k in $extra.Keys) { $b[$k] = $extra[$k] }; return Send-Rpc $fn $b }
 
+# Tells ScalePods where this run is, for the progress bar on the Tally page. Never allowed to break a sync: one failure switches it off for the run.
+$script:RunId = $null; $script:ProgressOff = $false
+function Progress([string]$stage, [int]$pct, [string]$detail = "") {
+    if (-not $script:RunId -or $script:ProgressOff) { return }
+    try { Call "tally_run_progress" @{ p_run = $script:RunId; p_stage = $stage; p_pct = $pct; p_detail = $detail } | Out-Null } catch { $script:ProgressOff = $true }
+}
+
 # ---------------------------------------------------------------- talking to Tally (read-only requests)
 function Read-Bytes($stream) { $ms = New-Object IO.MemoryStream; $stream.CopyTo($ms); return $ms.ToArray() }
 function Tally-Alive {
@@ -280,14 +287,14 @@ function Send-Batches([string]$fn, [string]$company, $items, [string]$label) {
 
 function Sync-Masters([string]$company) {
     $n = 0
-    Log "Ledgers..."
+    Log "Ledgers..."; Progress "Reading customers and vendors" 2
     $led = Read-Ledgers (Ask-Tally (Collection-Xml "ScalePodsLedgers" "Ledger" "GUID,Name,Parent,PartyGSTIN,GSTRegistrationType,StateName,ClosingBalance") 600)
     $n += Send-Batches "tally_ingest_ledgers" $company $led "ledgers"
-    Log "Stock items..."
+    Log "Stock items..."; Progress "Reading stock items" 4
     $stk = Read-Stock (Ask-Tally (Collection-Xml "ScalePodsItems" "StockItem" "GUID,Name,Parent,BaseUnits,ClosingBalance,ClosingValue") 600)
     $n += Send-Batches "tally_ingest_stock" $company $stk "stock items"
     foreach ($k in @(@("Bills Receivable", "receivable"), @("Bills Payable", "payable"))) {
-        Log "$($k[0])..."
+        Log "$($k[0])..."; Progress ("Reading " + $k[0].ToLower()) $(if ($k[1] -eq "receivable") { 5 } else { 6 })
         $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>$($k[0])</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
         $bills = @(Read-Bills (Ask-Tally $xml 600))
         Call "tally_ingest_bills" @{ p_company = $company; p_kind = $k[1]; p_as_of = (Get-Date -Format "yyyy-MM-dd"); p_items = $bills } | Out-Null
@@ -298,10 +305,15 @@ function Sync-Masters([string]$company) {
 
 function Sync-Vouchers([string]$company, [datetime]$from, [datetime]$to, $style) {
     $n = 0; $guids = New-Object Collections.Generic.List[string]; $d = $from
+    # progress: the blocks up to today carry the data; the one block beyond today (future-dated entries) is quick
+    $today = (Get-Date).Date; $lastReal = if ($to -lt $today) { $to } else { $today }
+    $totalBlocks = [Math]::Max(1, [int][Math]::Ceiling((($lastReal - $from).Days + 1) / [double]$ChunkDays)) + $(if ($to -gt $today) { 1 } else { 0 }); $block = 0
     while ($d -le $to) {
         $e = $d.AddDays($ChunkDays - 1); if ($e -gt $to) { $e = $to }
         # beyond today only future-dated entries can exist: one request is enough
         if ($d -gt (Get-Date).Date) { $e = $to }
+        $block++
+        Progress "Reading vouchers" ([int](7 + 91 * [Math]::Min(($block - 1), $totalBlocks) / [double]$totalBlocks)) ("{0} to {1}" -f $d.ToString("d MMM yyyy", $inv), $e.ToString("d MMM yyyy", $inv))
         $all = @(Read-Vouchers (Ask-Tally (Voucher-Xml $style $d $e) 900))
         # Tally answers with its default day when it cannot read a date: keep only what falls inside the dates we asked for
         $vs = @($all | Where-Object { $vd = Get-Day $_.vdate; $vd -ge $d -and $vd -le $e })
@@ -312,6 +324,7 @@ function Sync-Vouchers([string]$company, [datetime]$from, [datetime]$to, $style)
         }
         $d = $e.AddDays(1)
     }
+    Progress "Finishing" 99 "checking for vouchers deleted in Tally"
     # only after the whole window was read without a failure: anything we hold in this window that Tally no longer returns was deleted there
     Call "tally_close_range" @{ p_company = $company; p_from = $from.ToString("yyyy-MM-dd"); p_to = $to.ToString("yyyy-MM-dd"); p_guids = @($guids.ToArray()) } | Out-Null
     return $n
@@ -325,6 +338,7 @@ function Run-Sync([string]$fromStr, [string]$toStr, [string]$trigger) {
     if (@($names).Count -gt 1) { Log "Several companies are loaded; using: $company" }
     Log "Company: $company"
     $run = Call "tally_run_start" @{ p_company = $company; p_trigger = $trigger }
+    $script:RunId = $run; $script:ProgressOff = $false; Progress "Starting" 1
     $records = 0
     try {
         $records += Sync-Masters $company

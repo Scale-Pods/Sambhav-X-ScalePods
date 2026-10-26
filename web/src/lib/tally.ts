@@ -32,6 +32,24 @@ export async function tallyStatus(): Promise<Status> {
   return { connector: connector ?? null, company: company ?? null, counts: c, runs, request: request ?? null };
 }
 
+/**
+ * What the Tally PC is doing right now, for the progress bar. "running" is a sync that has started (the connector reports its stage and percent at every
+ * step); "waiting" is a "Sync now" request the PC has not picked up yet (it looks every 5 minutes). A run that has not reported for 3 hours is not shown as running.
+ */
+export type Live = { state: "idle" | "waiting" | "running"; pct: number; stage: string | null; detail: string | null; how: string | null; seconds: number };
+
+export async function tallyLive(): Promise<Live> {
+  const [run] = await q<{ stage: string | null; progress: number | null; detail: string | null; trigger_type: string; seconds: number }>(
+    `select stage, progress, detail, trigger_type, extract(epoch from now() - started_at)::int seconds
+       from public.tally_sync_runs where company_id = ${CO} and status = 'running' and coalesce(progress_at, started_at) > now() - interval '3 hours'
+      order by started_at desc limit 1`);
+  if (run) return { state: "running", pct: run.progress ?? 0, stage: run.stage, detail: run.detail, how: run.trigger_type, seconds: run.seconds };
+  const [req] = await q<{ seconds: number }>(
+    `select extract(epoch from now() - requested_at)::int seconds from public.tally_sync_requests where status in ('pending', 'running') and requested_at > now() - interval '1 day' order by requested_at desc limit 1`);
+  if (req) return { state: "waiting", pct: 0, stage: null, detail: null, how: "manual", seconds: req.seconds };
+  return { state: "idle", pct: 0, stage: null, detail: null, how: null, seconds: 0 };
+}
+
 // ---------------------------------------------------------------- parties (ledgers)
 export const GROUPS: Record<string, string> = { debtors: "Sundry Debtors", goods: "SUNDRY CREDITORS (FOR GOODS)", expenses: "SUNDRY CREDITORS (FOR EXPENSES)" };
 

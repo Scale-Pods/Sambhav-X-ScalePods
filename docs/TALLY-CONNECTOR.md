@@ -52,3 +52,7 @@ A Tally page: last sync and status, a Sync now button, and the comparisons Tally
 
 The Dump of invoice 730/26-27 showed where Tally keeps them. The sync now reads and stores, per voucher: `IRN`, `IRNACKNO` (irn_ack_no), `BASICSHIPPEDBY` (shipped_by), vehicle (`EWAYBILLDETAILS/TRANSPORTDETAILS/VEHICLENUMBER`, else `BASICSHIPVESSELNO`), e-way bill number and validity (`EWAYBILLDETAILS/BILLNUMBER`, `VALIDUPTO`), the buyer's order note (`INVOICEORDERLIST/BASICPURCHASEORDERNO`, e.g. "PO NO : VERBAL"), the party's GSTIN and place of supply; and per item line the HSN code (`GSTHSNNAME`). The HSN comes from the stock item master in Tally, so a wrong HSN on a line is a master-data matter, not a connector one.
 
+### Live progress (migration 25, 26 Oct 2026)
+
+The connector tells ScalePods where a run is (`tally_run_progress`: stage, percent, what it is reading) at every step: customers and vendors, stock items and bills take the first 6 %, then each block of vouchers moves the bar up to 99 %, and finishing sets 100 %. A failed progress call switches reporting off for that run and never stops the sync. The Tally page polls `/api/tally/live` every 3 seconds while a sync is waiting or running (every 15 seconds otherwise), shows the bar, and refreshes the numbers when the run ends. A "Sync now" request that the PC has not yet picked up shows a sliding bar, and after 10 minutes a hint that the PC may be off.
+

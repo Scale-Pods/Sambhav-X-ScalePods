@@ -177,3 +177,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .skeleton, .logo-breathe, .nav-progress-run { animation: none; }
 }
+
+/* the Tally sync bar while the PC has not started yet: a bar that slides back and forth */
+@keyframes sync-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(260%); }
+}
+.sync-slide { animation: sync-slide 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .sync-slide { animation: none; width: 100%; opacity: 0.4; }
+}

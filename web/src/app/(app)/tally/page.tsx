@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Badge, Card, Skeleton, Stat, StatsSkeleton, td, th } from "@/components/ui";
-import { tallyStatus } from "@/lib/tally";
+import { tallyLive, tallyStatus } from "@/lib/tally";
 import { SyncButton } from "./SyncButton";
+import { LiveProvider, ProgressStrip } from "./live";
 
 export default function TallyStatusPage() {
   return (
@@ -21,7 +22,7 @@ const n = (v: number | null | undefined) => (v ?? 0).toLocaleString("en-IN");
 
 async function Body() {
   await connection(); // "x minutes ago" depends on the clock
-  const s = await tallyStatus();
+  const [s, live] = await Promise.all([tallyStatus(), tallyLive()]);
   const alive = s.connector?.seen_min != null && s.connector.seen_min < 15;
   const state: { tone: "ok" | "warning" | "error" | "neutral"; text: string; short: string } =
     !s.connector?.last_seen_at ? { tone: "neutral", text: "Not connected yet", short: "Waiting" }
@@ -29,10 +30,11 @@ async function Body() {
     : s.connector.last_status === "tally_down" ? { tone: "error", text: "Tally is not open on the PC", short: "Tally off" }
     : s.connector.last_status === "error" ? { tone: "warning", text: "Connected, last sync had a problem", short: "Check" }
     : { tone: "ok", text: "Connected", short: "Connected" };
-  const waiting = s.request?.status === "pending" || s.request?.status === "running";
   const c = s.counts;
   return (
+    <LiveProvider initial={live}>
     <div className="space-y-6">
+      <ProgressStrip />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Connection" value={state.short} sub={s.connector?.last_seen_at ? `Last heard ${ago(s.connector.seen_min)}` : "The program is not installed on the Tally PC yet"} />
         <Stat label="Last good sync" value={s.connector?.last_sync_ok_at ? ago(s.connector.ok_min) : "None yet"} sub={s.connector?.last_sync_ok_at ? when(s.connector.last_sync_ok_at) : "Vouchers arrive with the first full sync"} />
@@ -49,7 +51,7 @@ async function Body() {
             <div><dt className="text-muted">Sync now request</dt><dd className="font-medium">{s.request ? `${s.request.status}${s.request.message ? `: ${s.request.message}` : ""} (${when(s.request.requested_at)})` : "none"}</dd></div>
           </dl>
           <div className="md:text-right">
-            <SyncButton waiting={waiting} />
+            <SyncButton />
             <p className="mt-2 max-w-[16rem] text-[0.8rem] text-muted md:ml-auto">The Tally PC looks for a request every 5 minutes. Only the owner and administrators can ask.</p>
           </div>
         </div>
@@ -64,7 +66,7 @@ async function Body() {
                 {s.runs.map((r, i) => (
                   <tr key={i}>
                     <td className={td + " whitespace-nowrap"}>{when(r.started_at)}</td>
-                    <td className={td}>{r.trigger_type === "manual" ? "Sync now" : r.trigger_type === "upload" ? "Files uploaded" : "Nightly"}</td>
+                    <td className={td}>{r.trigger_type === "manual" ? "Sync now" : r.trigger_type === "upload" ? "Files uploaded" : "Scheduled"}</td>
                     <td className={td}><Badge tone={r.status === "ok" ? "ok" : r.status === "running" ? "info" : "error"}>{r.status === "ok" ? "Done" : r.status === "running" ? "Running" : r.status === "partial" ? "Partly" : "Failed"}</Badge></td>
                     <td className={td + " num text-right"}>{r.records_in == null ? "" : n(r.records_in)}</td>
                     <td className={td + " max-w-[28rem] truncate text-muted"} title={r.error ?? ""}>{r.error}</td>
@@ -76,5 +78,6 @@ async function Body() {
         )}
       </Card>
     </div>
+    </LiveProvider>
   );
 }
