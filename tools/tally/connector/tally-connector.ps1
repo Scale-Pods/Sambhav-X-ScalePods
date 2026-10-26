@@ -64,7 +64,7 @@ function Send-Rpc([string]$fn, $body) {
 function Call($fn, $extra) { $b = @{ p_key = $cfg.connectorKey }; foreach ($k in $extra.Keys) { $b[$k] = $extra[$k] }; return Send-Rpc $fn $b }
 
 # Tells ScalePods where this run is, for the progress bar on the Tally page. Never allowed to break a sync: one failure switches it off for the run.
-$script:RunId = $null; $script:ProgressOff = $false
+$script:RunId = $null; $script:ProgressOff = $false; $script:Problems = @()
 function Progress([string]$stage, [int]$pct, [string]$detail = "") {
     if (-not $script:RunId -or $script:ProgressOff) { return }
     try { Call "tally_run_progress" @{ p_run = $script:RunId; p_stage = $stage; p_pct = $pct; p_detail = $detail } | Out-Null } catch { $script:ProgressOff = $true }
@@ -296,9 +296,12 @@ function Sync-Masters([string]$company) {
     foreach ($k in @(@("Bills Receivable", "receivable"), @("Bills Payable", "payable"))) {
         Log "$($k[0])..."; Progress ("Reading " + $k[0].ToLower()) $(if ($k[1] -eq "receivable") { 5 } else { 6 })
         $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>$($k[0])</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
-        $bills = @(Read-Bills (Ask-Tally $xml 600))
-        Call "tally_ingest_bills" @{ p_company = $company; p_kind = $k[1]; p_as_of = (Get-Date -Format "yyyy-MM-dd"); p_items = $bills } | Out-Null
-        Log "  sent $($bills.Count) $($k[1]) bills"; $n += $bills.Count
+        # a bills list that ScalePods refuses (empty or far smaller than before) must not stop the vouchers: note it and carry on
+        try {
+            $bills = @(Read-Bills (Ask-Tally $xml 600))
+            Call "tally_ingest_bills" @{ p_company = $company; p_kind = $k[1]; p_as_of = (Get-Date -Format "yyyy-MM-dd"); p_items = $bills } | Out-Null
+            Log "  sent $($bills.Count) $($k[1]) bills"; $n += $bills.Count
+        } catch { $script:Problems += "$($k[1]) bills not updated: $($_.Exception.Message)"; Log "  PROBLEM: $($k[1]) bills not updated: $($_.Exception.Message)" }
     }
     return $n
 }
@@ -338,7 +341,7 @@ function Run-Sync([string]$fromStr, [string]$toStr, [string]$trigger) {
     if (@($names).Count -gt 1) { Log "Several companies are loaded; using: $company" }
     Log "Company: $company"
     $run = Call "tally_run_start" @{ p_company = $company; p_trigger = $trigger }
-    $script:RunId = $run; $script:ProgressOff = $false; Progress "Starting" 1
+    $script:RunId = $run; $script:ProgressOff = $false; $script:Problems = @(); Progress "Starting" 1
     $records = 0
     try {
         $records += Sync-Masters $company
@@ -351,6 +354,12 @@ function Run-Sync([string]$fromStr, [string]$toStr, [string]$trigger) {
         Log ("Vouchers {0} to {1} (method {2})" -f $from.ToString("yyyy-MM-dd"), $to.ToString("yyyy-MM-dd"), $style.name)
         $records += Sync-Vouchers $company $from $to $style
         if (-not $full -and -not $fromStr) { Set-State "lastFull" (Get-Date -Format s) }
+        if ($script:Problems.Count -gt 0) {
+            $note = ($script:Problems -join "; ")
+            Call "tally_run_finish" @{ p_run = $run; p_status = "partial"; p_records = [int]$records; p_error = $note } | Out-Null
+            Log "Done with problems. $records records. $note"
+            return @{ ok = $false; message = "$records records, but: $note" }
+        }
         Call "tally_run_finish" @{ p_run = $run; p_status = "ok"; p_records = [int]$records; p_error = $null } | Out-Null
         Log "Done. $records records."
         return @{ ok = $true; message = "$records records" }
