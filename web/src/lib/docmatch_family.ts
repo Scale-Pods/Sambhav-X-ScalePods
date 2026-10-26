@@ -24,12 +24,19 @@ export type MtcMatch = {
 const LOTS = `select l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thickness_mm, l.current_status status, l.balance_kg::float8 balance_kg, l.heat_no, l.plate_no
                 from public.v_lots_current l left join public.grades g on g.id = l.grade_id`;
 
+const app_len = (s: string) => s.replace(/[^A-Za-z0-9]/g, "").length;
+
 async function lotsFor(heat: string, plate: string): Promise<LotHit[]> {
   if (plate.trim()) {
     const byPlate = await q<LotHit>(`${LOTS} where app.norm_text(l.plate_no) = app.norm_text($1) order by l.lot_no limit 4`, [plate]);
     if (byPlate.length) return byPlate;
   }
-  if (heat.trim()) return q<LotHit>(`${LOTS} where app.norm_text(l.heat_no) = app.norm_text($1) order by l.lot_no limit 6`, [heat]);
+  if (heat.trim()) {
+    const exact = await q<LotHit>(`${LOTS} where app.norm_text(l.heat_no) = app.norm_text($1) order by l.lot_no limit 6`, [heat]);
+    if (exact.length || app_len(heat) < 6) return exact;
+    // some mills (Evonith, Uttam) print the heat without the plate letter our books append: 62754SA on the certificate, 62754SAA and 62754SAB in stock
+    return q<LotHit>(`${LOTS} where app.norm_text(l.heat_no) like app.norm_text($1) || '%' and length(app.norm_text(l.heat_no)) <= length(app.norm_text($1)) + 2 order by l.lot_no limit 6`, [heat]);
+  }
   return [];
 }
 
