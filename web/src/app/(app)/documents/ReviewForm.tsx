@@ -43,7 +43,7 @@ export function ReviewForm({ id, original, firstChecks, canEdit }: { id: string;
     if (decision === "rejected" && !note.trim()) { setError("Say why you are rejecting it."); return; }
     start(async () => {
       const res = await reviewDocument(id, decision, decision === "rejected" ? null : r, note, acked);
-      if (!res.ok) setError(res.error); else router.push("/documents");
+      if (!res.ok) setError(res.error); else router.push(res.draftId ? `/drafts/${res.draftId}` : "/documents");
     });
   }
 
@@ -169,7 +169,7 @@ export function ReviewForm({ id, original, firstChecks, canEdit }: { id: string;
               </>
             )}
           </div>
-          <p className="text-[0.8rem] text-muted">Confirming records the document and your decision. It does not create an order yet.</p>
+          <p className="text-[0.8rem] text-muted">Confirming records the document and your decision. A customer order or enquiry also becomes a draft you can work from; nothing is posted anywhere.</p>
         </div>
       )}
     </div>

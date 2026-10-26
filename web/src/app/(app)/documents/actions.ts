@@ -5,7 +5,7 @@ import { call, q, userMessage } from "@/lib/db";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { checkKey, runChecks, type Read } from "@/lib/docreader/checks";
 
-export type Result = { ok: true } | { ok: false; error: string };
+export type Result = { ok: true; draftId?: string | null } | { ok: false; error: string };
 
 const HEADER = ["doc_kind", "direction", "seller_entity_named", "buyer_name", "buyer_gstin", "po_number", "document_number", "po_date", "currency",
   "payment_terms", "delivery_terms", "net_amount", "tax_amount", "total_amount"] as const;
@@ -27,6 +27,7 @@ function diff(before: Read, after: Read) {
 }
 
 export async function reviewDocument(id: string, decision: "confirmed" | "corrected" | "rejected", edited: Read | null, note: string, acknowledged: string[] = []): Promise<Result> {
+  let draftId: string | null = null;
   try {
     const me = await currentStaff();
     if (!me || !canUploadDocs(me.role)) return { ok: false, error: "Your role cannot review documents" };
@@ -46,11 +47,13 @@ export async function reviewDocument(id: string, decision: "confirmed" | "correc
       if (open.length > 0) return { ok: false, error: `${open.length} flagged check${open.length === 1 ? "" : "s"} still need${open.length === 1 ? "s" : ""} you to tick "I checked this against the document".` };
       if (flagged.length > 0) note = `${note.trim()}${note.trim() ? " | " : ""}Looked at flagged: ${flagged.map((c) => c.field).join(", ")}`;
     }
-    await call(`select public.review_document($1::uuid, $2, $3::jsonb, $4::jsonb, $5)`, [id, decision, final ? JSON.stringify(final) : null, JSON.stringify(changes), note]);
+    const r = await call<{ draft: string | null }>(`select public.review_document($1::uuid, $2, $3::jsonb, $4::jsonb, $5) as draft`, [id, decision, final ? JSON.stringify(final) : null, JSON.stringify(changes), note]);
+    draftId = r[0]?.draft ?? null; // a confirmed customer order or enquiry also becomes a draft
   } catch (e) {
     return { ok: false, error: userMessage(e) };
   }
   revalidatePath("/documents");
   revalidatePath(`/documents/${id}`);
-  return { ok: true };
+  revalidatePath("/drafts");
+  return { ok: true, draftId };
 }

@@ -16,7 +16,7 @@ export default function DocumentsPage({ searchParams }: { searchParams: SP }) {
     <>
       <PageHeader
         title="Documents"
-        hint="Upload a purchase order, handwritten note or WhatsApp screenshot. The system reads it, checks the numbers, and waits for a person to confirm. Nothing is saved to orders from here yet."
+        hint="Upload a purchase order, handwritten note or WhatsApp screenshot. The system reads it, checks the numbers, and waits for a person to confirm. A confirmed customer order or enquiry becomes a draft under Drafts; nothing is posted to orders or the books."
       />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
         <Body searchParams={searchParams} />

@@ -65,7 +65,7 @@ export function UploadBox() {
         className={"flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors " + (over ? "border-brand bg-info-soft" : "border-line bg-card")}
       >
         <p className="text-[0.97rem] font-semibold">Drop purchase orders here, or choose them</p>
-        <p className="max-w-xl text-[0.88rem] text-muted">PDF, JPG, PNG or WebP, up to 25 MB each and 30 at a time. Photos of handwritten orders and WhatsApp screenshots are fine. Nothing is saved to orders until a person confirms it.</p>
+        <p className="max-w-xl text-[0.88rem] text-muted">PDF, JPG, PNG or WebP, up to 25 MB each and 30 at a time. Photos of handwritten orders and WhatsApp screenshots are fine. Nothing becomes a draft until a person confirms it.</p>
         <div className="flex flex-wrap justify-center gap-2">
           <button type="button" onClick={() => pick.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"><FileUp className="h-4 w-4" />Choose files</button>
           <button type="button" onClick={() => cam.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium hover:bg-surface"><Camera className="h-4 w-4" />Take a photo</button>

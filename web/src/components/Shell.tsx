@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { ClipboardCheck, Factory, FileSpreadsheet, FileText, Home, Layers, PackageSearch, Search, ShieldAlert, Sparkles, Table2 } from "lucide-react";
+import { ClipboardCheck, Factory, FileSpreadsheet, FileText, Home, Layers, ListChecks, PackageSearch, Search, ShieldAlert, Sparkles, Table2 } from "lucide-react";
 import { Logo } from "./Logo";
 import { BusinessNav } from "./BusinessNav";
 import { NavLink } from "./NavLink";
@@ -43,6 +43,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <p className={group}>Control</p>
               <NavLink href="/review"><ShieldAlert className={icon} />Needs review</NavLink>
               <NavLink href="/documents"><FileText className={icon} />Documents</NavLink>
+              <NavLink href="/drafts"><ListChecks className={icon} />Drafts</NavLink>
             </div>
           </nav>
         </Suspense>

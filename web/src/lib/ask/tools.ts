@@ -254,6 +254,20 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "drafts_search",
+    who: "docs",
+    description: "Drafts: customer orders and enquiries that a person confirmed from a document and that are waiting to be worked on. By customer, PO number or status (open, dismissed).",
+    schema: { type: "object", properties: { customer: P, po_no: P, status: { type: "string", enum: ["open", "dismissed", "all"] }, limit: N } },
+    async run(i) {
+      const st = str(i.status, 10) || "open";
+      return q(
+        `select d.kind::text kind, d.status, d.customer_name, d.tally_ledger is not null as found_in_tally, d.po_no, d.doc_date::text, d.total_amount::float8 total_rs,
+                (select count(*)::int from public.draft_lines l where l.draft_id = d.id) lines, d.created_at::date::text as made
+           from public.drafts d where ($1::text = 'all' or d.status = $1) and ($2::text is null or d.customer_name ilike $2) and ($3::text is null or d.po_no ilike $3)
+          order by d.created_at desc limit ${limit(i.limit)}`, [st, like(str(i.customer)), like(str(i.po_no))]);
+    },
+  },
+  {
     name: "count_status",
     who: "docs",
     description: "The physical stock counts: recent sessions, their status and how many plates were counted or are still to check.",

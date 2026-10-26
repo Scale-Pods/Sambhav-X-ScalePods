@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Badge, Card, Skeleton } from "@/components/ui";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { documentDetail, expireStuckDocuments } from "@/lib/documents";
+import { draftOfDocument } from "@/lib/drafts";
 import { matchRead } from "@/lib/docmatch";
 import { inputsFromRead, stockFit } from "@/lib/stockfit";
 import { StockFitView } from "@/components/StockFitView";
@@ -42,6 +43,7 @@ async function Body({ params }: { params: P }) {
   const url = signed.data?.signedUrl;
   const canEdit = Boolean(me && canUploadDocs(me.role)) && d.doc.review_status === "pending";
   const matches = d.read ? await matchRead(d.read) : null;
+  const draft = await draftOfDocument(d.doc.id);
   // an order or enquiry from a customer: do we have the plates? (read-only; it reserves nothing)
   const wanted = d.read && d.read.direction === "customer_orders_from_us" ? inputsFromRead(d.read) : [];
   const fits = await Promise.all(wanted.map(async (w) => ({ line: w.line, fit: await stockFit(w.input) })));
@@ -66,6 +68,7 @@ async function Body({ params }: { params: P }) {
 
       <div>
         {d.doc.duplicate_of && <div className="mb-4 rounded-lg border border-line bg-card p-4 text-[0.92rem]"><Badge>Copy</Badge> <span className="ml-1">The same file was uploaded before. <Link className="font-medium text-brand hover:underline" href={`/documents/${d.doc.duplicate_of}`}>Open the first copy</Link>.</span></div>}
+        {draft && <div className="mb-4 rounded-lg border border-line bg-card p-4 text-[0.92rem]"><Badge tone="ok">Draft made</Badge> <span className="ml-1">This document became a {draft.kind === "order" ? "draft order" : "draft quotation"}. <Link className="font-medium text-brand hover:underline" href={`/drafts/${draft.id}`}>Open the draft</Link>.</span></div>}
         {d.review && (
           <div className="mb-4 rounded-lg border border-line bg-card p-4 text-[0.92rem]">
             <Badge tone={d.review.decision === "rejected" ? "error" : "ok"}>{d.review.decision === "rejected" ? "Rejected" : d.review.decision === "corrected" ? "Confirmed with corrections" : "Confirmed"}</Badge>
