@@ -61,13 +61,14 @@ export const TOOLS: Tool[] = [
   {
     name: "plate_lookup",
     who: "all",
-    description: "Find a plate by its heat number, plate number, test certificate number or plate (lot) number, with its status and balance.",
+    description: "Find a plate by its heat number, plate number, test certificate number or plate (lot) number, with its status, balance and any mill certificates filed for it.",
     schema: { type: "object", properties: { text: { ...P, description: "heat, plate, TC or lot number (part of it is fine)" } }, required: ["text"] },
     async run(i) {
       const t = str(i.text);
       return q(
         `select l.lot_no::int plate, g.code grade, l.thickness_mm::float8 thk, l.width_mm::float8 width, l.length_mm::float8 length, l.heat_no, l.plate_no, l.tc_no,
-                l.current_status status, l.balance_kg::float8 kg, l.balance_pieces pieces, l.receipt_date::text received, e.code company
+                l.current_status status, l.balance_kg::float8 kg, l.balance_pieces pieces, l.receipt_date::text received, e.code company,
+                (select string_agg(coalesce(c.cert_no, 'certificate'), ', ') from public.lot_certificates lc join public.certificates c on c.id = lc.certificate_id where lc.lot_id = l.id) certificates
            from public.v_lots_current l left join public.grades g on g.id = l.grade_id left join public.entities e on e.id = l.entity_id
           where l.heat_no ilike $1 or l.plate_no ilike $1 or l.tc_no ilike $1 or l.lot_no::text = $2 order by l.receipt_date desc nulls last limit 12`, [like(t), t]);
     },

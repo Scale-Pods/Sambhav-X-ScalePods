@@ -6,6 +6,10 @@ import { call, q } from "@/lib/db";
 import { supabaseServer } from "@/lib/supabase";
 import { PROMPT_VERSION, SCHEMA, SYSTEM } from "./prompt";
 import { type Check, type Read, docTypeFor, needsSecondRead, runChecks } from "./checks";
+import {
+  INVOICE_SCHEMA, INVOICE_SYSTEM, MTC_SCHEMA, MTC_SYSTEM, TRIAGE_SCHEMA, TRIAGE_SYSTEM, type FamilyRead, type InvoiceRead, type MtcRead,
+  docTypeForFamily, needsSecondReadFamily, runInvoiceChecks, runMtcChecks,
+} from "./families";
 
 // USD per million tokens (input, output)
 const MODELS = {
@@ -37,7 +41,7 @@ export async function toBlocks(bytes: Buffer, mime: string): Promise<{ blocks: A
   return { blocks: [await jpeg(bytes)], pages: 1 };
 }
 
-type Run = { read: Read; model: string; input: number; output: number; usd: number; seconds: number; stop: string };
+type Run<T = Read> = { read: T; model: string; input: number; output: number; usd: number; seconds: number; stop: string };
 
 export async function callModel(stage: "first" | "second", blocks: Anthropic.ImageBlockParam[], note: string): Promise<Run> {
   const m = MODELS[stage];
@@ -55,6 +59,88 @@ export async function callModel(stage: "first" | "second", blocks: Anthropic.Ima
   const read = JSON.parse(text.text) as Read;
   const usd = (r.usage.input_tokens * m.in + r.usage.output_tokens * m.out) / 1e6;
   return { read, model: m.id, input: r.usage.input_tokens, output: r.usage.output_tokens, usd, seconds: (Date.now() - t) / 1000, stop: r.stop_reason ?? "" };
+}
+
+/** The text layer of the first pages of a digital PDF (exact characters for identifiers); "" for scans and photos. */
+export function pdfText(bytes: Buffer, mime: string, maxChars = 7000): string {
+  if (mime !== "application/pdf") return "";
+  try {
+    const doc = mupdf.Document.openDocument(bytes, "application/pdf");
+    let out = "";
+    for (let i = 0; i < Math.min(doc.countPages(), MAX_PAGES) && out.length < maxChars; i++) out += doc.loadPage(i).toStructuredText("preserve-whitespace").asText() + "\n";
+    const text = out.replace(/[ \t]+/g, " ").trim().slice(0, maxChars);
+    // some PDFs carry a text layer of private-use glyph codes (an embedded font without a mapping): that is noise, not text, so it is not sent
+    const odd = (text.match(/[-�]/g) ?? []).length;
+    return odd > text.length * 0.2 || (text.length > 200 && (text.match(/[A-Za-z0-9]/g) ?? []).length < text.length * 0.3) ? "" : text;
+  } catch {
+    return "";
+  }
+}
+
+type Cfg = { system: string; schema: object; maxTokens: number };
+
+/** One read with its own instructions and answer shape (vendor invoices, mill certificates). The text layer, when there is one, rides along as data. */
+async function callFamily<T>(stage: "first" | "second", cfg: Cfg, blocks: Anthropic.ImageBlockParam[], note: string, text: string): Promise<Run<T>> {
+  const m = MODELS[stage];
+  const client = new Anthropic({ maxRetries: 2, timeout: 150_000 });
+  const t = Date.now();
+  const extra = text ? `Text layer taken from the PDF (it may be out of reading order; use it to copy identifiers exactly, but the pictures decide what belongs where):\n"""\n${text}\n"""\n\n` : "";
+  const r = await client.messages.create({
+    model: m.id, max_tokens: cfg.maxTokens, system: cfg.system,
+    output_config: { format: { type: "json_schema", schema: cfg.schema as Record<string, unknown> } },
+    messages: [{ role: "user", content: [...blocks, { type: "text", text: `${note}${extra}Extract the document.` }] }],
+  });
+  const out = r.content.find((b) => b.type === "text");
+  if (!out || out.type !== "text") throw new Error("The model returned no answer");
+  const usd = (r.usage.input_tokens * m.in + r.usage.output_tokens * m.out) / 1e6;
+  return { read: JSON.parse(out.text) as T, model: m.id, input: r.usage.input_tokens, output: r.usage.output_tokens, usd, seconds: (Date.now() - t) / 1000, stop: r.stop_reason ?? "" };
+}
+
+type Triage = { family: "po_or_enquiry" | "purchase_invoice" | "mill_certificate" | "other"; input: number; output: number; usd: number };
+/** What kind of document is this? One cheap look at the first page. A failure here just means the order reader is used, as before. */
+async function triage(first: Anthropic.ImageBlockParam | undefined, text: string): Promise<Triage> {
+  const none: Triage = { family: "po_or_enquiry", input: 0, output: 0, usd: 0 };
+  if (!first) return none;
+  try {
+    const m = MODELS.first;
+    const client = new Anthropic({ maxRetries: 2, timeout: 60_000 });
+    const r = await client.messages.create({
+      model: m.id, max_tokens: 100, system: TRIAGE_SYSTEM,
+      output_config: { format: { type: "json_schema", schema: TRIAGE_SCHEMA as Record<string, unknown> } },
+      messages: [{ role: "user", content: [first, { type: "text", text: `${text ? `Start of the text layer:\n${text.slice(0, 1200)}\n\n` : ""}What kind of document is this?` }] }],
+    });
+    const out = r.content.find((b) => b.type === "text");
+    const fam = out && out.type === "text" ? (JSON.parse(out.text) as { family: Triage["family"] }).family : "po_or_enquiry";
+    return { family: fam, input: r.usage.input_tokens, output: r.usage.output_tokens, usd: (r.usage.input_tokens * m.in + r.usage.output_tokens * m.out) / 1e6 };
+  } catch {
+    return none;
+  }
+}
+
+async function saveFamily(docId: string, fam: "invoice" | "mtc", stage: "first" | "second", run: Run<FamilyRead>, checks: Check[], final: boolean) {
+  await call(
+    `select public.record_extraction($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::public.doc_type, $13)`,
+    [docId, stage, run.model, `${fam}-v1-2026-10-26`, run.input, run.output, run.usd.toFixed(5), run.seconds.toFixed(1), run.stop,
+      JSON.stringify(run.read), JSON.stringify(checks), docTypeForFamily(fam), final],
+  );
+}
+
+/** Read a vendor invoice or a mill certificate: the cheap model first, the stronger one when the first read shows doubt. */
+async function readFamily(docId: string, fam: "invoice" | "mtc", blocks: Anthropic.ImageBlockParam[], note: string, text: string, tri: Triage, extra: Check[]) {
+  const cfg: Cfg = fam === "invoice" ? { system: INVOICE_SYSTEM, schema: INVOICE_SCHEMA, maxTokens: 8000 } : { system: MTC_SYSTEM, schema: MTC_SCHEMA, maxTokens: 8000 };
+  const checkOf = (r: FamilyRead) => (fam === "invoice" ? runInvoiceChecks(r as InvoiceRead) : runMtcChecks(r as MtcRead));
+  const first = await callFamily<FamilyRead>("first", cfg, blocks, note, text);
+  first.read = { ...first.read, family: fam } as FamilyRead;
+  first.input += tri.input; first.output += tri.output; first.usd += tri.usd;
+  const c1 = [...checkOf(first.read), ...extra];
+  const again = needsSecondReadFamily(first.read, c1);
+  await saveFamily(docId, fam, "first", first, c1, !again.yes);
+  if (!again.yes) return { ok: true as const, second: false, usd: first.usd };
+  const second = await callFamily<FamilyRead>("second", cfg, blocks, note, text);
+  second.read = { ...second.read, family: fam } as FamilyRead;
+  const c2 = [...checkOf(second.read), ...extra, { field: "second_read", level: "info" as const, message: `Read again by a stronger model because: ${again.why.join("; ")}.` }];
+  await saveFamily(docId, fam, "second", second, c2, true);
+  return { ok: true as const, second: true, usd: first.usd + second.usd };
 }
 
 async function save(docId: string, stage: "first" | "second", run: Run, checks: Check[], final: boolean) {
@@ -85,11 +171,19 @@ export async function readDocument(docId: string): Promise<{ ok: true; second: b
     const supabase = await supabaseServer();
     const dl = await supabase.storage.from("documents").download(d.storage_path);
     if (dl.error || !dl.data) throw new Error("The file could not be fetched from storage");
-    const { blocks, pages } = await toBlocks(Buffer.from(await dl.data.arrayBuffer()), d.mime_type);
+    const bytes = Buffer.from(await dl.data.arrayBuffer());
+    const { blocks, pages } = await toBlocks(bytes, d.mime_type);
     const note = `File name: ${d.original_filename}. ` + (pages > 1 ? `PDF with ${pages} pages; the first ${blocks.length} are shown. ` : "");
     const extra: Check[] = pages > MAX_PAGES ? [{ field: "pages", level: "info", message: `Only the first ${MAX_PAGES} of ${pages} pages were read.` }] : [];
 
+    // what kind of document is it? vendor invoices and mill certificates have their own readers; everything else is read as an order or enquiry, as before
+    const text = pdfText(bytes, d.mime_type);
+    const tri = await triage(blocks[0], text);
+    if (tri.family === "purchase_invoice") return await readFamily(docId, "invoice", blocks, note, text, tri, extra);
+    if (tri.family === "mill_certificate") return await readFamily(docId, "mtc", blocks, note, text, tri, extra);
+
     const first = await callModel("first", blocks, note);
+    first.input += tri.input; first.output += tri.output; first.usd += tri.usd;
     const c1 = [...runChecks(first.read), ...extra];
     const again = needsSecondRead(first.read, c1);
     await save(docId, "first", first, c1, !again.yes);

@@ -47,7 +47,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
               <tbody className="divide-y divide-line">
                 {rows.map((d) => (
                   <tr key={d.id} className="hover:bg-surface/60">
-                    <td className={td}><Link href={`/drafts/${d.id}`} className="font-semibold text-brand hover:underline">{d.kind === "order" ? "Order" : "Enquiry"}</Link></td>
+                    <td className={td}><Link href={`/drafts/${d.id}`} className="font-semibold text-brand hover:underline">{d.kind === "order" ? "Order" : d.kind === "purchase_invoice" ? "Purchase invoice" : "Enquiry"}</Link></td>
                     <td className={td + " max-w-[18rem]"}>
                       <span className="block truncate font-medium" title={d.customer_name ?? ""}>{d.customer_name ?? "—"}</span>
                       {d.tally_ledger ? <span className="text-[0.78rem] text-ok">in Tally</span> : <span className="text-[0.78rem] text-muted">not matched in Tally</span>}

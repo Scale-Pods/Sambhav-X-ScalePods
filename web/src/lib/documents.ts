@@ -1,6 +1,7 @@
 import "server-only";
 import { call, q } from "./db";
 import type { Check, Read } from "./docreader/checks";
+import type { FamilyRead } from "./docreader/families";
 
 export type DocRow = {
   id: string; original_filename: string; doc_type: string; mime_type: string; size_bytes: number;
@@ -30,11 +31,12 @@ export async function documentsList(show: Show): Promise<DocRow[]> {
   return q<DocRow>(`
     select d.id, d.original_filename, d.doc_type::text, d.mime_type, d.size_bytes, d.extraction_status, d.review_status, d.duplicate_of,
            d.created_at, s.full_name as uploaded_by,
-           d.extracted->>'doc_kind' as kind, (d.extracted->>'is_firm_order')::boolean as firm, d.extracted->>'direction' as direction,
-           nullif(d.extracted->>'buyer_name', '') as buyer,
-           coalesce(nullif(d.extracted->>'po_number', ''), nullif(d.extracted->>'document_number', '')) as ref,
-           nullif(d.extracted->>'po_date', '') as doc_date, jsonb_array_length(coalesce(d.extracted->'lines', '[]')) as lines,
-           coalesce(nullif(d.extracted->>'total_amount', ''), nullif(d.extracted->>'net_amount', '')) as total,
+           coalesce(d.extracted->>'doc_kind', d.extracted->>'family') as kind, (d.extracted->>'is_firm_order')::boolean as firm, d.extracted->>'direction' as direction,
+           coalesce(nullif(d.extracted->>'buyer_name', ''), nullif(d.extracted->>'vendor_name', ''), nullif(d.extracted->>'mill_name', '')) as buyer,
+           coalesce(nullif(d.extracted->>'po_number', ''), nullif(d.extracted->>'document_number', ''), nullif(d.extracted->>'invoice_no', ''), nullif(d.extracted->>'certificate_no', '')) as ref,
+           coalesce(nullif(d.extracted->>'po_date', ''), nullif(d.extracted->>'invoice_date', ''), nullif(d.extracted->>'issue_date', '')) as doc_date,
+           jsonb_array_length(coalesce(d.extracted->'lines', d.extracted->'items', '[]')) as lines,
+           coalesce(nullif(d.extracted->>'total_amount', ''), nullif(d.extracted->>'net_amount', ''), nullif(d.extracted->>'total_weight', '')) as total,
            (select count(*) from jsonb_array_elements(coalesce(r.checks, '[]')) c where c->>'level' = 'amber')::int as amber,
            (select sum(usd) from public.extraction_runs x where x.document_id = d.id)::float8 as usd,
            (select count(*) > 1 from public.extraction_runs x where x.document_id = d.id) as second
@@ -49,13 +51,13 @@ export type RunRow = { stage: string; model: string; usd: number; seconds: numbe
 export type Detail = {
   doc: { id: string; original_filename: string; mime_type: string; storage_path: string; doc_type: string; extraction_status: string; review_status: string;
          duplicate_of: string | null; created_at: string; uploaded_by: string | null; error: string | null; reviewed_by: string | null; reviewed_at: string | null };
-  read: Read | null; checks: Check[]; runs: RunRow[];
+  read: Read | FamilyRead | null; checks: Check[]; runs: RunRow[];
   review: { decision: string; note: string | null; reviewer: string; reviewed_at: string; changes: { field: string; from: string; to: string }[] } | null;
 };
 
 export async function documentDetail(id: string): Promise<Detail | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const d = await q<Detail["doc"] & { extracted: (Read & { error?: string }) | null }>(`
+  const d = await q<Detail["doc"] & { extracted: ((Read | FamilyRead) & { error?: string }) | null }>(`
     select d.id, d.original_filename, d.mime_type, d.storage_path, d.doc_type::text, d.extraction_status, d.review_status, d.duplicate_of, d.created_at,
            s.full_name as uploaded_by, rv.full_name as reviewed_by, d.reviewed_at, d.extracted, d.extracted->>'error' as error
     from public.documents d left join public.staff s on s.id = d.uploaded_by left join public.staff rv on rv.id = d.reviewed_by where d.id = $1::uuid`, [id]);
