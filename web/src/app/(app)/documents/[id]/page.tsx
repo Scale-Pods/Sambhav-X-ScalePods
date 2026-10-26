@@ -7,6 +7,8 @@ import { Badge, Card, Skeleton } from "@/components/ui";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { documentDetail, expireStuckDocuments } from "@/lib/documents";
 import { matchRead } from "@/lib/docmatch";
+import { inputsFromRead, stockFit } from "@/lib/stockfit";
+import { StockFitView } from "@/components/StockFitView";
 import { supabaseServer } from "@/lib/supabase";
 import { MatchPanel } from "../MatchPanel";
 import { ReadAgain } from "../ReadAgain";
@@ -40,6 +42,9 @@ async function Body({ params }: { params: P }) {
   const url = signed.data?.signedUrl;
   const canEdit = Boolean(me && canUploadDocs(me.role)) && d.doc.review_status === "pending";
   const matches = d.read ? await matchRead(d.read) : null;
+  // an order or enquiry from a customer: do we have the plates? (read-only; it reserves nothing)
+  const wanted = d.read && d.read.direction === "customer_orders_from_us" ? inputsFromRead(d.read) : [];
+  const fits = await Promise.all(wanted.map(async (w) => ({ line: w.line, fit: await stockFit(w.input) })));
   const usd = d.runs.reduce((a, r) => a + r.usd, 0);
 
   return (
@@ -74,6 +79,13 @@ async function Body({ params }: { params: P }) {
           </div>
         )}
         {d.read && matches && <MatchPanel read={d.read} m={matches} />}
+        {fits.length > 0 && (
+          <div className="mb-5 space-y-2 rounded-lg border border-line bg-card p-4 text-[0.9rem]">
+            <h3 className="font-display text-[0.95rem] font-bold">Do we have it in stock?</h3>
+            {fits.map((f) => <StockFitView key={f.line} fit={f.fit} title={`Line ${f.line + 1}:`} />)}
+            <p className="text-[0.78rem] text-muted">Plates of the same grade and thickness (within 0.05 mm) that are big enough, either way round. Nothing is reserved.</p>
+          </div>
+        )}
         {d.read ? (
           <ReviewForm key={d.doc.id + d.runs.length} id={d.doc.id} original={d.read} firstChecks={d.checks} canEdit={canEdit} />
         ) : (
