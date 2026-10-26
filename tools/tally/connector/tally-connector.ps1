@@ -167,7 +167,7 @@ function Read-Vouchers([string]$xml) {
             $godown = Txt $i "BATCHALLOCATIONS.LIST/GODOWNNAME"
             $amt = Num (Txt $i "AMOUNT")
             $items.Add([ordered]@{ item = (Txt $i "STOCKITEMNAME"); descr = $desc; qty = (Num $qtyTxt); unit = (Unit-Of $qtyTxt); rate = (Num $rateTxt)
-                                   amount = $amt; godown = $godown; batch = $batch })
+                                   amount = $amt; hsn = (Txt $i "GSTHSNNAME"); godown = $godown; batch = $batch })
             # the sales/purchase ledger split of an item line only counts when the voucher has no ledger lines of its own (they would be counted twice)
             if (-not $haveLedgerLines) {
                 foreach ($al in $i.SelectNodes("ACCOUNTINGALLOCATIONS.LIST")) {
@@ -184,7 +184,11 @@ function Read-Vouchers([string]$xml) {
         if ($partyHit -and [Math]::Abs($partySum) -gt 0) { $debit = [Math]::Abs($partySum) }
         $out.Add([ordered]@{ guid = $guid; alter_id = (Num (Txt $v "ALTERID")); vtype = $type; vno = (Txt $v "VOUCHERNUMBER"); vdate = $date
                              party = (Txt $v "PARTYLEDGERNAME"); amount = $debit; narration = (Txt $v "NARRATION"); cancelled = ((Txt $v "ISCANCELLED") -eq "Yes")
-                             reference = (Txt $v "REFERENCE"); irn = (Txt $v "IRN"); entered_by = (Txt $v "ENTEREDBY"); entries = $entries.ToArray(); items = $items.ToArray() })
+                             reference = (Txt $v "REFERENCE"); irn = (Txt $v "IRN"); entered_by = (Txt $v "ENTEREDBY"); entries = $entries.ToArray(); items = $items.ToArray()
+                             ack_no = (Txt $v "IRNACKNO"); shipped_by = (Txt $v "BASICSHIPPEDBY")
+                             vehicle = $(if (Txt $v "EWAYBILLDETAILS.LIST/TRANSPORTDETAILS.LIST/VEHICLENUMBER") { Txt $v "EWAYBILLDETAILS.LIST/TRANSPORTDETAILS.LIST/VEHICLENUMBER" } else { Txt $v "BASICSHIPVESSELNO" })
+                             eway_no = (Txt $v "EWAYBILLDETAILS.LIST/BILLNUMBER"); eway_until = (Txt $v "EWAYBILLDETAILS.LIST/VALIDUPTO")
+                             order_no = (Txt $v "INVOICEORDERLIST.LIST/BASICPURCHASEORDERNO"); gstin = (Txt $v "PARTYGSTIN"); pos = (Txt $v "PLACEOFSUPPLY") })
     }
     return $out
 }
@@ -205,7 +209,7 @@ function Daybook-Xml($style, [datetime]$a, [datetime]$b) {
     return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Day Book</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT><SVFROMDATE$t>$($a.ToString($style.fmt, $inv))</SVFROMDATE><SVTODATE$t>$($b.ToString($style.fmt, $inv))</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>"
 }
 function Filter-Xml($style, [datetime]$a, [datetime]$b) {
-    $fetch = "Date,GUID,AlterID,VoucherTypeName,VoucherNumber,PartyLedgerName,Narration,Reference,IsCancelled,EnteredBy,AllLedgerEntries.*,AllInventoryEntries.*"
+    $fetch = "Date,GUID,AlterID,VoucherTypeName,VoucherNumber,PartyLedgerName,Narration,Reference,IsCancelled,EnteredBy,IRN,IRNAckNo,IRNAckDate,BasicShippedBy,BasicShipVesselNo,PartyGSTIN,PlaceOfSupply,EWayBillDetails.*,InvoiceOrderList.*,AllLedgerEntries.*,AllInventoryEntries.*"
     $cond = "`$Date &gt;= `$`$Date:`"$($a.ToString($style.fmt, $inv))`" AND `$Date &lt;= `$`$Date:`"$($b.ToString($style.fmt, $inv))`""
     return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>SPVouchers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"SPVouchers`" ISMODIFY=`"No`"><TYPE>Voucher</TYPE><FETCH>$fetch</FETCH><FILTERS>SPDateRange</FILTERS></COLLECTION><SYSTEM TYPE=`"Formulae`" NAME=`"SPDateRange`">$cond</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
