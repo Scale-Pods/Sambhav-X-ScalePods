@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { Card, Skeleton, Stat, StatsSkeleton, td, th } from "@/components/ui";
+import { Card, Skeleton, Stat, StatsSkeleton, td, Th } from "@/components/ui";
 import { FilterShell, ParamSelect } from "@/components/FilterBar";
 import { PayExtras } from "@/components/PayBar";
 import { CountHBar, TonnesByMonthChart } from "@/components/charts/OrderCharts";
@@ -27,7 +27,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Vehicle", cell: (r) => <span className="font-semibold">{r.vehicle_no}</span> },
     { label: "Yard", cell: (r) => (r.plot === "D15" ? "Plot D-15" : "Plot 753") },
     { label: "Grade", cell: (r) => r.grade },
-    { label: "Invoice", cell: (r) => r.invoice_no },
+    { label: "Invoice", info: "The invoice number written in the vehicle register for this trip.", cell: (r) => r.invoice_no },
     { label: "For", cell: (r) => r.entity },
     { label: "Weight (kg)", right: true, cell: (r) => (r.weight_kg ? Math.round(Number(r.weight_kg)).toLocaleString("en-IN") : "") },
   ];
@@ -54,7 +54,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
         <Card title="Checked against the register's own monthly totals">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-line bg-surface/60"><tr><th className={th}>Month</th><th className={th + " text-right"}>Plot 753 (t)</th><th className={th + " text-right"}>Plot D-15 (t)</th><th className={th + " text-right"}>RS + SAM (t)</th></tr></thead>
+              <thead className="border-b border-line bg-surface/60"><tr><Th>Month</Th><Th right>Plot 753 (t)</Th><Th right>Plot D-15 (t)</Th><Th right>RS + SAM (t)</Th></tr></thead>
               <tbody className="divide-y divide-line">
                 {o.typed.map((r) => (
                   <tr key={r.month}><td className={td + " font-medium"}>{r.month}</td><td className={td + " num text-right"}>{t1.format(r.p753 / 1000)}</td><td className={td + " num text-right"}>{t1.format(r.d15 / 1000)}</td><td className={td + " num text-right"}>{t1.format(r.rs / 1000)}</td></tr>

@@ -10,7 +10,7 @@ export default function MailLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PageHeader
-        title="Mail and leads"
+        title="Mail and leads" help="Pending means nobody has replied yet. Urgent and Follow up come from the status in the Email Tracker sheet. Leads are enquiries from IndiaMART; buy leads are people who want to buy."
         hint="Enquiry mail, quotations and clients from your Email Tracker, and the leads from IndiaMART. A read-only copy that refreshes once a day; the Email Tracker sheet keeps doing its work for now."
       />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>

@@ -18,7 +18,7 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB"
 export default function CountPage({ searchParams }: { searchParams: SP }) {
   return (
     <>
-      <PageHeader title="Physical count" hint="The yard keeps selling while it is counted. Log what moves during the count and the system works out the true opening stock for you." />
+      <PageHeader title="Physical count" hint="The yard keeps selling while it is counted. Log what moves during the count and the system works out the true opening stock for you." help="A physical count compares what is on the floor with what the books say. Because material keeps moving during the count, the system works out what each plate weighed when the count began. Differences change the books only after a person approves them." />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
         <Body searchParams={searchParams} />
       </Suspense>

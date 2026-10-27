@@ -7,7 +7,7 @@ import { readPlateQuery } from "@/lib/plateQuery";
 import { canExport, currentStaff } from "@/lib/auth";
 import { unitLabel, weight } from "@/lib/filters";
 import { date, mm, num } from "@/lib/format";
-import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
+import { Badge, Card, PageHeader, Skeleton, td, th, Th } from "@/components/ui";
 import { FilterShell, ParamSelect } from "@/components/FilterBar";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
@@ -16,7 +16,7 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 export default function StockPage({ searchParams }: { searchParams: SP }) {
   return (
     <>
-      <PageHeader title="Plates" hint="Every plate with its heat or plate number. Filter, sort, and open any plate to see its full history." />
+      <PageHeader title="Plates" hint="Every plate with its heat or plate number. Filter, sort, and open any plate to see its full history." help="One row per plate that arrived. “Left” is what remains after sales and cuts. Open a plate to see what arrived, every sale and the certificates linked to it. A heat number is the mill’s batch number; a plate number is the number stamped on one plate." />
       <Suspense fallback={<Card><Skeleton rows={12} /></Card>}>
         <Body searchParams={searchParams} />
       </Suspense>
@@ -79,8 +79,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
           <table className="w-full">
             <thead className="border-b border-line bg-surface/60">
               <tr>
-                <th className={th}>Plate / heat no</th><th className={th}>Grade</th><th className={th + " text-right"}>Size (mm)</th>
-                <th className={th + " text-right"}>Pcs</th><th className={th + " text-right"}>Left ({unitLabel(u)})</th><th className={th}>Received</th><th className={th}>Book</th>
+                <Th>Plate / heat no</Th><Th>Grade</Th><Th right>Size (mm)</Th>
+                <Th right>Pcs</Th><th className={th + " text-right"}>Left ({unitLabel(u)})</th><Th>Received</Th><Th>Book</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">

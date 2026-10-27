@@ -8,7 +8,7 @@ export default function PaymentsLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PageHeader
-        title="Invoices and payments"
+        title="Invoices and payments" help="Figures come from the Payment Better sheets. Due date = invoice date plus the credit days. Overdue means past that date and still unpaid. The copy refreshes once a day."
         hint="Sales and purchase invoices, expenses, and who owes what, read from your Payment Better sheets and forms. A read-only copy that refreshes once a day; keep entering new bills in the forms for now."
       />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>

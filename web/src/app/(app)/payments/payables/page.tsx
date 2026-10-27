@@ -21,10 +21,10 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const link = linker("/payments/payables", sp);
   const cols: Col<PayableRow>[] = [
     { label: "Supplier", cell: (r) => <span className="font-semibold">{r.vendor}</span>, nowrap: false },
-    { label: "Company", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
-    { label: "Invoice", cell: (r) => r.invoice_no },
+    { label: "Company", info: "The business the entry belongs to: SPF is Sambhav Pipes & Fittings, Sai is Sai Steel & Engineering.", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
+    { label: "Invoice", info: "The invoice number as typed in the payment sheet.", cell: (r) => r.invoice_no },
     { label: "Date", cell: (r) => day(r.invoice_date) },
-    { label: "Due", cell: (r) => day(r.due_date) },
+    { label: "Due", info: "The payment date: the invoice date plus the credit days.", cell: (r) => day(r.due_date) },
     { label: "Bought for", cell: (r) => r.purchased_for },
     { label: "Broker", cell: (r) => r.broker },
     { label: "Invoice (₹)", right: true, cell: (r) => amount(r.amount) },
@@ -33,8 +33,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "To pay (₹)", right: true, cell: (r) => <span className="font-semibold">{amount(r.pending)}</span> },
     { label: "Late", right: true, cell: (r) => (Number(r.overdue_days) > 0 && Number(r.pending) > 0 ? <span className={Number(r.overdue_days) > 30 ? "font-semibold text-bad" : "text-warn"}>{r.overdue_days} d</span> : "") },
     { label: "Checked", cell: (r) => (r.checked ? <Badge tone="ok">Checked</Badge> : null) },
-    { label: "Bill", cell: (r) => <FileLink url={r.file_url} /> },
-    { label: "Note", cell: (r) => r.remark, nowrap: false },
+    { label: "Bill", info: "A link to the bill file (scan or PDF).", cell: (r) => <FileLink url={r.file_url} /> },
+    { label: "Note", info: "The remark written against the bill in the payment sheet.", cell: (r) => r.remark, nowrap: false },
   ];
   return (
     <>

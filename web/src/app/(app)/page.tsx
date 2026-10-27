@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { ageing, gradeOptions, heatmap, kpis, recentSales, stockByGrade, timeline, topSold } from "@/lib/analytics";
 import { parseFilter, periodLabel, rangeLabel, todayIST, unitLabel, weight, type Filter } from "@/lib/filters";
 import { date, num } from "@/lib/format";
-import { Badge, Card, PageHeader, StatsSkeleton, Skeleton, Stat, td, th, type Delta } from "@/components/ui";
+import { Badge, Card, PageHeader, StatsSkeleton, Skeleton, Stat, td, type Delta, Th } from "@/components/ui";
 import { FilterShell } from "@/components/FilterBar";
 import { AgeChart, HBarChart, Heatmap, InOutChart, StockLevelChart } from "@/components/charts/Charts";
 
@@ -13,7 +13,7 @@ type SP = Promise<Record<string, string | string[] | undefined>>;
 export default function Overview({ searchParams }: { searchParams: SP }) {
   return (
     <>
-      <PageHeader title="Stock overview" hint="What came in, what went out and what is left, worked out from every purchase and sale, never typed by hand." />
+      <PageHeader title="Stock overview" hint="What came in, what went out and what is left, worked out from every purchase and sale, never typed by hand." help="Everything here is worked out from the two stock books (WB1 and WB2): received minus sold. The arrows compare the chosen period with the period just before it. Plates are the separate pieces with material left." />
       <Suspense fallback={<><StatsSkeleton /><Card className="mt-6"><Skeleton rows={8} /></Card></>}>
         <Body searchParams={searchParams} />
       </Suspense>
@@ -91,7 +91,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-line">
-                  <tr><th className={th}>Date</th><th className={th}>Grade</th><th className={th}>Plate / heat</th><th className={th + " text-right"}>Weight</th><th className={th}>Book</th></tr>
+                  <tr><Th>Date</Th><Th>Grade</Th><Th>Plate / heat</Th><Th right>Weight</Th><Th>Book</Th></tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {recent.map((r, i) => (

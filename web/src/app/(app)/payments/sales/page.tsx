@@ -22,13 +22,13 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const cols: Col<SalesRow>[] = [
     { label: "Date", cell: (r) => day(r.invoice_date) },
     { label: "Invoice", cell: (r) => <span className="font-semibold">{r.invoice_no}{r.fy_mismatch && <span title="The date does not match the year in the invoice number" className="ml-1.5"><Badge tone="warning">check year</Badge></span>}</span> },
-    { label: "Company", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
+    { label: "Company", info: "The business the entry belongs to: SPF is Sambhav Pipes & Fittings, Sai is Sai Steel & Engineering.", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
     { label: "Customer", cell: (r) => r.client, nowrap: false },
     { label: "Salesperson", cell: (r) => r.salesperson },
     { label: "PO no.", cell: (r) => r.po_no },
     { label: "Amount (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.amount)}</span> },
-    { label: "Days", right: true, cell: (r) => r.credit_days },
-    { label: "Due", cell: (r) => day(r.due_date) },
+    { label: "Days", info: "Credit days: how many days after the invoice the payment is allowed.", right: true, cell: (r) => r.credit_days },
+    { label: "Due", info: "The payment date: the invoice date plus the credit days.", cell: (r) => day(r.due_date) },
     { label: "Transporter", cell: (r) => r.transporter },
     { label: "Made by", cell: (r) => r.made_by },
   ];

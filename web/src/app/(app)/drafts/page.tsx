@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
+import { Badge, Card, PageHeader, Skeleton, td, Th } from "@/components/ui";
 import { DRAFT_SHOWS, draftsList, type DraftShow } from "@/lib/drafts";
 
 type SP = Promise<Record<string, string | undefined>>;
@@ -10,7 +10,7 @@ const TABS: Record<DraftShow, string> = { open: "Open", dismissed: "Set aside", 
 export default function DraftsPage({ searchParams }: { searchParams: SP }) {
   return (
     <>
-      <PageHeader title="Drafts" hint="A customer order or enquiry that a person has confirmed from a document. Work from it: check stock, then raise the order or the quotation. Nothing here is posted to orders or the books." />
+      <PageHeader title="Drafts" help="A draft is a prepared copy made from a document you confirmed. It changes nothing by itself: not the stock, not Tally, not the orders sheet. Open means waiting, Set aside means you decided not to use it, Done means it was used." hint="A customer order or enquiry that a person has confirmed from a document. Work from it: check stock, then raise the order or the quotation. Nothing here is posted to orders or the books." />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
         <Body searchParams={searchParams} />
       </Suspense>
@@ -41,8 +41,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="border-b border-line">
-                <th className={th}>Draft</th><th className={th}>Customer</th><th className={th}>PO / ref</th><th className={th}>Date</th>
-                <th className={th + " text-right"}>Lines</th><th className={th + " text-right"}>Total</th><th className={th}>Status</th><th className={th}>Made</th>
+                <Th>Draft</Th><Th>Customer</Th><Th>PO / ref</Th><Th>Date</Th>
+                <Th right>Lines</Th><Th right info="The total amount in rupees, as read from the document.">Total</Th><Th info="Open: waiting to be worked on. Set aside: someone decided not to use it. Done: it has been used.">Status</Th><Th info="The date the draft was created from the confirmed document.">Made</Th>
               </tr></thead>
               <tbody className="divide-y divide-line">
                 {rows.map((d) => (
@@ -56,7 +56,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
                     <td className={td + " whitespace-nowrap"}>{d.doc_date ?? ""}</td>
                     <td className={td + " text-right"}>{d.lines}</td>
                     <td className={td + " num text-right"}>{rs(d.total_amount)}</td>
-                    <td className={td}><Badge tone={d.status === "open" ? "warning" : d.status === "promoted" ? "ok" : "neutral"}>{d.status === "open" ? "Open" : d.status === "dismissed" ? "Set aside" : "Done"}</Badge></td>
+                    <td className={td}><Badge tone={d.status === "open" ? "warning" : d.status === "promoted" ? "ok" : "neutral"} info={d.status === "open" ? "Waiting to be worked on." : d.status === "dismissed" ? "Someone decided not to use this draft." : "This draft has been used."}>{d.status === "open" ? "Open" : d.status === "dismissed" ? "Set aside" : "Done"}</Badge></td>
                     <td className={td + " whitespace-nowrap text-muted"}>{when(d.created_at)}{d.created_by ? ` · ${d.created_by.split(" ")[0]}` : ""}</td>
                   </tr>
                 ))}

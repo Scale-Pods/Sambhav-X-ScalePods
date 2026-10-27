@@ -39,8 +39,8 @@ async function Body({ params }: { params: P }) {
     { label: "Rate", right: true, cell: (r) => s(r.rate) },
     { label: "From", cell: (r) => s(r.material) },
     { label: "Plot", cell: (r) => s(r.plot) },
-    { label: "Done", cell: (r) => (r.done ? <Badge tone="ok">Sent</Badge> : <Badge tone="warning">To send</Badge>) },
-    { label: "Note", cell: (r) => s(r.instructions), nowrap: false },
+    { label: "Done", cell: (r) => (r.done ? <Badge tone="ok" info="This line has gone out.">Sent</Badge> : <Badge tone="warning" info="This line has not been sent yet.">To send</Badge>) },
+    { label: "Note", info: "The special instructions typed on the order line.", cell: (r) => s(r.instructions), nowrap: false },
   ];
   const notes = lines.map((l) => s(l.ongoing_message) || s(l.completed_note)).filter(Boolean);
 
@@ -50,7 +50,7 @@ async function Body({ params }: { params: P }) {
         <Link href="/orders/list" className="mb-2 inline-flex items-center gap-1 text-[0.85rem] font-medium text-muted hover:text-ink"><ArrowLeft className="h-3.5 w-3.5" /> All orders</Link>
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-display text-[1.7rem] font-extrabold tracking-[-0.02em]">Order {order.order_no}</h2>
-          <Badge tone={order.status === "Complete" ? "ok" : "warning"}>{order.status === "Complete" ? "Complete" : "Open"}</Badge>
+          <Badge tone={order.status === "Complete" ? "ok" : "warning"} info={order.status === "Complete" ? "Every line of this order has been sent." : "At least one line of this order has not been sent yet."}>{order.status === "Complete" ? "Complete" : "Open"}</Badge>
           <span className="text-[0.9rem] text-muted">{order.done_lines} of {order.lines} lines sent</span>
           {order.po_url && /^https?:\/\//i.test(order.po_url) && (
             <a href={order.po_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink"><ExternalLink className="h-4 w-4" /> Open the customer PO</a>

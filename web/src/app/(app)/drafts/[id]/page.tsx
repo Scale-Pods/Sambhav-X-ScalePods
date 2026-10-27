@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
-import { Badge, Card, Skeleton, td, th } from "@/components/ui";
+import { Badge, Card, Skeleton, td, Th } from "@/components/ui";
 import { StockFitView } from "@/components/StockFitView";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { draftDetail } from "@/lib/drafts";
@@ -75,7 +75,7 @@ async function Body({ params }: { params: P }) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[48rem]">
             <thead><tr className="border-b border-line">
-              <th className={th}>#</th><th className={th}>Grade</th><th className={th}>Size mm</th>{!sells && <th className={th}>HSN · heat · plate</th>}<th className={th + " text-right"}>Qty</th><th className={th + " text-right"}>Weight kg</th><th className={th + " text-right"}>Rate</th><th className={th + " text-right"}>Amount</th>
+              <Th>#</Th><Th>Grade</Th><Th>Size mm</Th>{!sells && <Th>HSN · heat · plate</Th>}<Th right>Qty</Th><Th right>Weight kg</Th><Th right>Rate</Th><Th right>Amount</Th>
             </tr></thead>
             <tbody className="divide-y divide-line">
               {d.items.map((l) => (

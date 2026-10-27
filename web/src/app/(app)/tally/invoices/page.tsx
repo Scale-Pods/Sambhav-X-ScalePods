@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Check, Minus } from "lucide-react";
-import { Badge, Card, Skeleton, td, th } from "@/components/ui";
+import { Badge, Card, Skeleton, td, Th } from "@/components/ui";
+import { PLACEHOLDER_INVOICE } from "@/lib/glossary";
 import { TRAIL_PAGE, TRAIL_SHOWS, trailList, type TrailRow, type TrailShow } from "@/lib/tallytrail";
 
 type SP = Promise<Record<string, string | undefined>>;
@@ -24,16 +25,18 @@ function Dot({ on, label }: { on: boolean; label: string }) {
 }
 
 function po(r: TrailRow) {
-  if (r.po_docs > 0) return <Badge tone="ok">PO uploaded</Badge>;
-  if (r.po_orders > 0) return <Badge tone="ok">In orders sheet</Badge>;
-  if (r.verbal) return <Badge>Verbal</Badge>;
-  return r.po_ref ? <Badge tone="warning">Not found</Badge> : <Badge>No PO noted</Badge>;
+  if (r.po_docs > 0) return <Badge tone="ok" info="A document with this PO number was uploaded and read. Open the invoice to see it.">PO uploaded</Badge>;
+  if (r.po_orders > 0) return <Badge tone="ok" info="This PO number is in the orders sheet (Dispatch FMS), so an order exists for it.">In orders sheet</Badge>;
+  if (r.verbal) return <Badge info="Tally says the order was given verbally (“PO NO : VERBAL”), so there is no PO paper to look for.">Verbal</Badge>;
+  return r.po_ref
+    ? <Badge tone="warning" info="The invoice names this PO number, but no uploaded document and no order in the orders sheet carries it. Upload the PO under Documents, or check the number typed in Tally.">Not found</Badge>
+    : <Badge info="Nothing is typed in Tally's order-number field for this invoice.">No PO noted</Badge>;
 }
 function cert(r: TrailRow) {
-  if (r.heats === 0) return <Badge>No heat no.</Badge>;
-  if (r.certs_filed > 0) return <Badge tone="ok">Filed</Badge>;
-  if (r.cert_docs > 0) return <Badge tone="info">Read, to confirm</Badge>;
-  return <Badge tone="warning">{r.heats_in_stock} of {r.heats} plates in books, none filed</Badge>;
+  if (r.heats === 0) return <Badge info="No heat number could be read from this invoice's lines, so the certificates cannot be checked.">No heat no.</Badge>;
+  if (r.certs_filed > 0) return <Badge tone="ok" info="A mill certificate is filed and linked to at least one plate on this invoice.">Filed</Badge>;
+  if (r.cert_docs > 0) return <Badge tone="info" info="A certificate with this heat number was uploaded and read, but nobody has confirmed it yet. Confirm it under Documents.">Read, to confirm</Badge>;
+  return <Badge tone="warning" info={`This invoice names ${r.heats} heat number${r.heats === 1 ? "" : "s"}. ${r.heats_in_stock} of them ${r.heats_in_stock === 1 ? "is" : "are"} in our stock book. No mill certificate is filed for any of them yet: upload the certificates under Documents.`}>{r.heats_in_stock} of {r.heats} plates in books, none filed</Badge>;
 }
 
 async function Body({ searchParams }: { searchParams: SP }) {
@@ -56,6 +59,16 @@ async function Body({ searchParams }: { searchParams: SP }) {
         Each sales invoice in Tally with the paperwork behind it, matched on the documents’ own numbers: the customer’s PO number, the heat numbers on its lines (against filed mill certificates)
         and the vehicle register. A dash means nothing was found yet, which is where to look first.
       </p>
+      <details className="max-w-3xl rounded-lg border border-line bg-card px-4 py-2.5 text-[0.88rem]">
+        <summary className="cursor-pointer font-semibold">How to read this table</summary>
+        <ul className="mt-2 list-disc space-y-1.5 pl-5 text-muted">
+          <li><b className="text-ink">Invoice</b>: the number typed in Tally. Only X, XX or XXXX is a placeholder (a draft or practice entry), marked “placeholder no.”.</li>
+          <li><b className="text-ink">Customer PO</b>: the customer's order number written on the invoice. <i>Not found</i> means we hold no PO document and no order with that number yet; <i>Verbal</i> means Tally says there was no written PO.</li>
+          <li><b className="text-ink">Certificates</b>: the mill test certificates for the plates on the invoice (found through their heat numbers). “0 of 1 plates in books, none filed” means the invoice names 1 heat number, none of those plates is in our stock book, and no certificate is filed.</li>
+          <li><b className="text-ink">Vehicle register</b>, <b className="text-ink">E-invoice</b>, <b className="text-ink">E-way</b>: a tick means it was found, a dash means not found. The vehicle register sheet stops at 29 Sep 2026, so later invoices cannot show a tick yet.</li>
+        </ul>
+        <p className="mt-2 text-muted">Hover or tap the “i” next to a heading or a label for the same explanation.</p>
+      </details>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <nav className="flex flex-wrap gap-x-6 gap-y-1 border-b border-line" aria-label="Filter">
           {TRAIL_SHOWS.map((s) => (
@@ -74,13 +87,13 @@ async function Body({ searchParams }: { searchParams: SP }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-line bg-surface/60"><tr>
-                <th className={th}>Invoice</th><th className={th}>Date</th><th className={th}>Customer</th><th className={th + " text-right"}>Amount</th>
-                <th className={th}>Customer PO</th><th className={th}>Certificates</th><th className={th}>Vehicle register</th><th className={th}>E-invoice</th><th className={th}>E-way</th>
+                <Th>Invoice</Th><Th>Date</Th><Th>Customer</Th><Th right>Amount</Th>
+                <Th>Customer PO</Th><Th>Certificates</Th><Th>Vehicle register</Th><Th>E-invoice</Th><Th>E-way</Th>
               </tr></thead>
               <tbody className="divide-y divide-line">
                 {rows.map((r) => (
                   <tr key={r.id} className="hover:bg-surface/60">
-                    <td className={td}><Link href={`/tally/invoices/${r.id}`} className="font-semibold text-brand hover:underline">{r.voucher_no}</Link></td>
+                    <td className={td}><Link href={`/tally/invoices/${r.id}`} className="font-semibold text-brand hover:underline">{r.voucher_no}</Link>{/^x+$/i.test(r.voucher_no) && <span className="ml-1.5"><Badge tone="warning" info={PLACEHOLDER_INVOICE}>placeholder no.</Badge></span>}</td>
                     <td className={td + " whitespace-nowrap"}>{dateFmt(r.date)}</td>
                     <td className={td + " max-w-[16rem] truncate"} title={r.party ?? ""}>{(r.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, "")}</td>
                     <td className={td + " num text-right"}>{rs(r.amount)}</td>

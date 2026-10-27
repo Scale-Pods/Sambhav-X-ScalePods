@@ -41,7 +41,7 @@ async function Body({ params }: { params: Promise<{ lot: string }> }) {
             <div className="text-right">
               <p className="text-[0.8rem] font-medium uppercase tracking-wide text-muted">Left in stock</p>
               <p className={"num text-[2rem] font-semibold leading-tight " + (left < -0.5 ? "text-bad" : left > 0.5 ? "text-brand-dark" : "text-muted")}>{kg(left)} <span className="text-base font-medium text-muted">kg</span></p>
-              <Badge tone={left > 0.5 ? "ok" : left < -0.5 ? "error" : "neutral"}>{left > 0.5 ? "In stock" : left < -0.5 ? "Sold more than received" : "Sold out"}</Badge>
+              <Badge tone={left > 0.5 ? "ok" : left < -0.5 ? "error" : "neutral"} info={left > 0.5 ? "Material is still left on this plate: received minus everything sold or cut." : left < -0.5 ? "The sheets record more sold from this plate than was received. One of the entries is probably wrong: see the flags below." : "Everything received has been sold or cut: nothing is left."}>{left > 0.5 ? "In stock" : left < -0.5 ? "Sold more than received" : "Sold out"}</Badge>
             </div>
           </div>
           <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-5 sm:grid-cols-4">

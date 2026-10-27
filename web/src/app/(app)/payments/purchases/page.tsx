@@ -21,19 +21,19 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const link = linker("/payments/purchases", sp);
   const cols: Col<PurchaseRow>[] = [
     { label: "Date", cell: (r) => day(r.invoice_date) },
-    { label: "Invoice", cell: (r) => <span className="font-semibold">{r.invoice_no}</span> },
-    { label: "Company", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
+    { label: "Invoice", info: "The invoice number as typed in the payment sheet.", cell: (r) => <span className="font-semibold">{r.invoice_no}</span> },
+    { label: "Company", info: "The business the entry belongs to: SPF is Sambhav Pipes & Fittings, Sai is Sai Steel & Engineering.", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
     { label: "Supplier", cell: (r) => r.vendor, nowrap: false },
     { label: "Purchased for", cell: (r) => r.purchased_for },
     { label: "Amount (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.amount)}</span> },
     { label: "Weight", right: true, cell: (r) => (r.weight ? `${amount(r.weight)} ${r.unit ?? ""}` : "") },
     { label: "Rate", right: true, cell: (r) => (r.rate ? amount(r.rate) : "") },
-    { label: "Days", right: true, cell: (r) => r.credit_days },
-    { label: "Due", cell: (r) => day(r.due_date) },
+    { label: "Days", info: "Credit days: how many days after the invoice the payment is allowed.", right: true, cell: (r) => r.credit_days },
+    { label: "Due", info: "The payment date: the invoice date plus the credit days.", cell: (r) => day(r.due_date) },
     { label: "Broker", cell: (r) => r.broker },
     { label: "Bought by", cell: (r) => r.purchased_by },
     { label: "Checked by", cell: (r) => r.checked_by },
-    { label: "Bill", cell: (r) => <FileLink url={r.file_url} /> },
+    { label: "Bill", info: "A link to the bill file (scan or PDF).", cell: (r) => <FileLink url={r.file_url} /> },
   ];
   return (
     <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]} extra={<PayExtras entity={p.entity ?? "all"} q={p.q} placeholder="Invoice, supplier, broker" />}>

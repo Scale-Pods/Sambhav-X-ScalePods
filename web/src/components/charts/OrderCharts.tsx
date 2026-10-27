@@ -1,5 +1,7 @@
 "use client";
 
+import { Th } from "@/components/ui";
+
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartCard, LegendKey } from "./ChartCard";
 import { useChartTheme } from "./theme";
@@ -13,7 +15,7 @@ const monthLabel = (k: string) => new Date(k + "T00:00:00Z").toLocaleDateString(
 function SimpleTable({ head, rows }: { head: string[]; rows: string[][] }) {
   return (
     <table className="w-full">
-      <thead className="border-b border-line bg-surface/60"><tr>{head.map((h, i) => <th key={h} className={th + (i > 0 ? " text-right" : "")}>{h}</th>)}</tr></thead>
+      <thead className="border-b border-line bg-surface/60"><tr>{head.map((h, i) => <Th key={h} right={i > 0}>{h}</Th>)}</tr></thead>
       <tbody className="divide-y divide-line">{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={td + (j > 0 ? " num text-right" : "")}>{c}</td>)}</tr>)}</tbody>
     </table>
   );

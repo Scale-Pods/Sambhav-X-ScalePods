@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
+import { Badge, Card, PageHeader, Skeleton, td, Th } from "@/components/ui";
 import { canExport, canUploadDocs, currentStaff } from "@/lib/auth";
 import { SHOWS, aiSpendToday, documentsList, expireStuckDocuments, type DocRow, type Show } from "@/lib/documents";
 import { KIND } from "@/lib/docreader/labels";
@@ -15,7 +15,7 @@ export default function DocumentsPage({ searchParams }: { searchParams: SP }) {
   return (
     <>
       <PageHeader
-        title="Documents"
+        title="Documents" help="A document goes Reading, then To review, then Confirmed (or Rejected). “Checks” counts the automatic number checks that failed. Confirming a document makes a draft; nothing else changes."
         hint="Upload a purchase order, handwritten note or WhatsApp screenshot. The system reads it, checks the numbers, and waits for a person to confirm. A confirmed customer order or enquiry becomes a draft under Drafts; nothing is posted to orders or the books."
       />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
@@ -28,12 +28,12 @@ export default function DocumentsPage({ searchParams }: { searchParams: SP }) {
 const when = (iso: string) => new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(new Date(iso));
 
 function status(d: DocRow) {
-  if (d.duplicate_of) return <Badge>Copy</Badge>;
-  if (d.review_status === "confirmed") return <Badge tone="ok">Confirmed</Badge>;
-  if (d.review_status === "rejected") return <Badge tone="error">Rejected</Badge>;
-  if (d.extraction_status === "failed") return <Badge tone="error">Not read</Badge>;
-  if (d.extraction_status === "pending") return <Badge tone="info">Reading…</Badge>;
-  return <Badge tone="warning">To review</Badge>;
+  if (d.duplicate_of) return <Badge info="The same file was uploaded before, so this entry is a duplicate. Work from the first one.">Copy</Badge>;
+  if (d.review_status === "confirmed") return <Badge tone="ok" info="A person checked what the system read and confirmed it.">Confirmed</Badge>;
+  if (d.review_status === "rejected") return <Badge tone="error" info="A person decided this document cannot be used.">Rejected</Badge>;
+  if (d.extraction_status === "failed") return <Badge tone="error" info="The system could not read this file (blurred, empty or an unsupported kind). Open it to enter the details by hand or reject it.">Not read</Badge>;
+  if (d.extraction_status === "pending") return <Badge tone="info" info="The system is still reading the file. Refresh in a minute.">Reading…</Badge>;
+  return <Badge tone="warning" info="The system has read it and checked the numbers. A person now needs to look at the details and confirm.">To review</Badge>;
 }
 
 async function Body({ searchParams }: { searchParams: SP }) {
@@ -62,8 +62,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="border-b border-line">
-                <th className={th}>File</th><th className={th}>Kind</th><th className={th}>From</th><th className={th}>Ref</th><th className={th}>Date</th>
-                <th className={th + " text-right"}>Lines</th><th className={th + " text-right"}>Checks</th><th className={th}>Status</th><th className={th}>Uploaded</th>
+                <Th>File</Th><Th info="What the document was read as: a customer PO, an enquiry, a vendor invoice or a mill certificate.">Kind</Th><Th info="The buyer, vendor or mill named on the document.">From</Th><Th info="The number on the document: PO number, invoice number or certificate number.">Ref</Th><Th>Date</Th>
+                <Th right>Lines</Th><Th right>Checks</Th><Th info="Reading: still being read. To review: waiting for a person to check and confirm. Confirmed: approved. Rejected: not usable. Not read: could not be read. Copy: the same file was uploaded before.">Status</Th><Th info="When the file was uploaded.">Uploaded</Th>
               </tr></thead>
               <tbody className="divide-y divide-line">
                 {rows.map((d) => (

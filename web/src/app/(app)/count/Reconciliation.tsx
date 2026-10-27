@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Download } from "lucide-react";
 import { reconciliation } from "@/lib/queries";
-import { Badge, Card, td, th } from "@/components/ui";
+import { Badge, Card, td, Th } from "@/components/ui";
 
 const kg = (v: number | string | null) => (v == null ? "-" : new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Number(v)));
 const signed = (v: number) => (v > 0.5 ? "+" : v < -0.5 ? "−" : "") + kg(Math.abs(v));
@@ -42,8 +42,8 @@ export async function Reconciliation({ sessionId, filter, canExport, startedLabe
           <table className="w-full">
             <thead className="border-b border-line bg-surface/60">
               <tr>
-                <th className={th}>Plate</th><th className={th}>Grade</th><th className={th + " text-right"}>Books at start</th><th className={th + " text-right"}>Counted</th>
-                <th className={th + " text-right"}>Moved before count</th><th className={th + " text-right"}>Opening (worked back)</th><th className={th + " text-right"}>Difference</th><th className={th}>Result</th>
+                <Th>Plate</Th><Th>Grade</Th><Th right>Books at start</Th><Th right info="What the people counting found on the floor.">Counted</Th>
+                <Th right>Moved before count</Th><Th right>Opening (worked back)</Th><Th right info="Counted minus what the books say. Zero is perfect; a minus means less on the floor than in the books.">Difference</Th><Th>Result</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">

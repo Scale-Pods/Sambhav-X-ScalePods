@@ -7,7 +7,7 @@ import { FilterShell } from "@/components/FilterBar";
 import { PayExtras } from "@/components/PayBar";
 import { CountHBar, OrdersByMonthChart } from "@/components/charts/OrderCharts";
 import { day } from "@/components/PayList";
-import { Card, Skeleton, Stat, StatsSkeleton, td, th } from "@/components/ui";
+import { Card, Skeleton, Stat, StatsSkeleton, td, Th } from "@/components/ui";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -51,7 +51,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
           <Card title="Open orders, oldest delivery date first">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="border-b border-line bg-surface/60"><tr><th className={th}>Order</th><th className={th}>Customer</th><th className={th}>Due</th><th className={th + " text-right"}>Lines</th></tr></thead>
+                <thead className="border-b border-line bg-surface/60"><tr><Th>Order</Th><Th>Customer</Th><Th>Due</Th><Th right>Lines</Th></tr></thead>
                 <tbody className="divide-y divide-line">
                   {o.openOldest.length === 0 && <tr><td colSpan={4} className="px-5 py-8 text-center text-muted">No open orders.</td></tr>}
                   {o.openOldest.map((r) => (

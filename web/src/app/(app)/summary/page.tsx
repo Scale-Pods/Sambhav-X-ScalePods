@@ -6,7 +6,7 @@ import { gradeOptions, summary, type SummaryRow } from "@/lib/analytics";
 import { canExport, currentStaff } from "@/lib/auth";
 import { filterParams, parseFilter, rangeLabel, todayIST, unitLabel, weight, type Unit } from "@/lib/filters";
 import { date, mm } from "@/lib/format";
-import { Card, PageHeader, Skeleton, td, th } from "@/components/ui";
+import { Card, PageHeader, Skeleton, td, th, Th } from "@/components/ui";
 import { FilterShell } from "@/components/FilterBar";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
@@ -14,7 +14,7 @@ type SP = Promise<Record<string, string | string[] | undefined>>;
 export default function SummaryPage({ searchParams }: { searchParams: SP }) {
   return (
     <>
-      <PageHeader title="Summary" hint="Grade and thickness, like your Summary sheet. Balances are calculated from every purchase and sale, never typed." />
+      <PageHeader title="Summary" hint="Grade and thickness, like your Summary sheet. Balances are calculated from every purchase and sale, never typed." help="Plates grouped by grade and thickness. The weight columns add up the plates; “Plates left” counts the separate plates that still have material." />
       <Suspense fallback={<Card><Skeleton rows={12} /></Card>}>
         <Body searchParams={searchParams} />
       </Suspense>
@@ -67,9 +67,9 @@ async function Body({ searchParams }: { searchParams: SP }) {
             <table className="w-full">
               <thead className="border-b border-line bg-surface/60">
                 <tr>
-                  <th className={th}>Grade</th><th className={th}>Thickness</th>
+                  <Th>Grade</Th><Th>Thickness</Th>
                   {cols.map(([k, l]) => <th key={k} className={th + " whitespace-nowrap text-right"}>{l} ({unitLabel(u)})</th>)}
-                  <th className={th + " text-right"}>Plates left</th>
+                  <Th right>Plates left</Th>
                 </tr>
               </thead>
               <tbody>

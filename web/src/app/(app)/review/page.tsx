@@ -8,7 +8,7 @@ import { FilterShell } from "@/components/FilterBar";
 import { kg } from "@/lib/format";
 import { canDecide, currentStaff } from "@/lib/auth";
 import { ApproveButton } from "./ApproveButton";
-import { Badge, Card, PageHeader, Skeleton, td, th } from "@/components/ui";
+import { Badge, Card, PageHeader, Skeleton, td, Th } from "@/components/ui";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -29,7 +29,7 @@ export default function ReviewPage({ searchParams }: { searchParams: SP }) {
   return (
     <>
       <PageHeader
-        title="Needs review"
+        title="Needs review" help="Serious needs action, Check should be looked at, Note is for information. Nothing is changed until a person decides, and the decision is recorded."
         hint="Things your sheets could not settle on their own. Nothing was fixed silently: each item waits for a person to correct it or approve it, and the decision is recorded."
       />
       <Suspense fallback={<Card><Skeleton rows={10} /></Card>}>
@@ -64,12 +64,12 @@ async function Body({ searchParams }: { searchParams: SP }) {
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-line bg-surface/60">
-            <tr><th className={th}>Level</th><th className={th}>What was found</th><th className={th}>Plate</th><th className={th + " text-right"}>Action</th></tr>
+            <tr><Th info="Serious needs action, Check should be looked at, Note is for information.">Level</Th><Th>What was found</Th><Th>Plate</Th><Th right>Action</Th></tr>
           </thead>
           <tbody className="divide-y divide-line">
             {rows.map((r, i) => (
               <tr key={i} className="align-top hover:bg-surface/60">
-                <td className={td + " whitespace-nowrap"}><Badge tone={SEV[r.severity]?.tone}>{SEV[r.severity]?.label}</Badge></td>
+                <td className={td + " whitespace-nowrap"}><Badge tone={SEV[r.severity]?.tone} info={r.severity === "error" ? "Serious: a figure is probably wrong and needs action." : r.severity === "warning" ? "Check: something looks odd and should be looked at." : "Note: for information, no action needed."}>{SEV[r.severity]?.label}</Badge></td>
                 <td className={td}>
                   <p className="leading-snug">{r.message}</p>
                   <p className="mt-0.5 text-[0.78rem] text-muted">{KIND[r.kind] ?? r.kind}</p>

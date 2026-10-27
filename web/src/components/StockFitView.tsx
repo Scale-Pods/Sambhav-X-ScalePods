@@ -16,8 +16,8 @@ function LotList({ lots, label }: { lots: FitLot[]; label?: string }) {
             <Link href={`/stock/${l.lot_no}`} className="font-medium text-brand hover:underline">Plate {l.lot_no}</Link>
             <span className="num">{size(l)} mm</span>
             <span className="text-muted">{kgFmt.format(l.balance_kg)} kg{l.balance_pieces ? ` · ${l.balance_pieces} pc` : ""}</span>
-            {l.part && <Badge tone="warning">part plate, cut from {l.original_length_mm}</Badge>}
-            {l.exact_size && <Badge tone="ok">exact size</Badge>}
+            {l.part && <Badge tone="warning" info="This plate has been partly cut. The length shown is what is left (worked out from its weight); it arrived this long.">part plate, cut from {l.original_length_mm}</Badge>}
+            {l.exact_size && <Badge tone="ok" info="Same thickness, width and length as asked: no cutting needed.">exact size</Badge>}
             {(l.heat_no || l.plate_no) && <span className="text-muted">{[l.heat_no && `heat ${l.heat_no}`, l.plate_no && `plate no. ${l.plate_no}`].filter(Boolean).join(" · ")}</span>}
             {l.entity && <span className="text-muted">· {l.entity}</span>}
           </li>
@@ -39,7 +39,7 @@ export function StockFitView({ fit, title }: { fit: Fit; title?: string }) {
       <div className="flex flex-wrap items-center gap-2">
         {title && <span className="text-muted">{title}</span>}
         <span className="font-medium">{want || "No details"}</span>
-        <Badge tone={tone}>{label}</Badge>
+        <Badge tone={tone} info={fit.verdict === "enough" ? "Plates of the same grade and a fitting size cover the quantity asked." : fit.verdict === "partly" ? "There are fitting plates, but not enough for the whole quantity." : fit.verdict === "none" ? "No plate of this grade fits the thickness and size asked." : "The grade or size could not be read well enough to check."}>{label}</Badge>
         {fit.grade.code && fit.grade.code !== i.grade && <span className="text-[0.8rem] text-muted">read as {fit.grade.code}</span>}
       </div>
       <p className="mt-0.5 text-[0.85rem] text-muted">{fit.why}</p>

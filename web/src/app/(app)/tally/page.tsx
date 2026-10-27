@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { Badge, Card, Skeleton, Stat, StatsSkeleton, td, th } from "@/components/ui";
+import { Badge, Card, Skeleton, Stat, StatsSkeleton, td, Th } from "@/components/ui";
 import { tallyLive, tallyStatus } from "@/lib/tally";
 import { SyncButton } from "./SyncButton";
 import { LiveProvider, ProgressStrip } from "./live";
@@ -42,7 +42,7 @@ async function Body() {
         <Stat label="Vouchers" value={n(c.vouchers)} sub={c.vouchers ? `${c.first_voucher} to ${c.last_voucher}` : "None yet: needs the first full sync"} />
       </div>
 
-      <Card title={s.company?.tally_name ?? "Company"} aside={<Badge tone={state.tone}>{state.text}</Badge>}>
+      <Card title={s.company?.tally_name ?? "Company"} aside={<Badge tone={state.tone} info="The small program on the Tally PC reports every few minutes. If nothing is heard for a while it shows as not heard from. Usual reasons: the PC is off, the Windows user is logged out, or TallyPrime is closed.">{state.text}</Badge>}>
         <div className="grid gap-6 px-5 py-5 md:grid-cols-[1fr_auto]">
           <dl className="grid gap-x-8 gap-y-2 text-[0.92rem] sm:grid-cols-2">
             <div><dt className="text-muted">Last message from the Tally PC</dt><dd className="font-medium">{s.connector?.last_message || "none"}{s.connector?.last_version ? ` (program v${s.connector.last_version})` : ""}</dd></div>
@@ -61,13 +61,13 @@ async function Body() {
         {s.runs.length === 0 ? <p className="px-5 py-8 text-center text-muted">No syncs yet.</p> : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-line bg-surface/60"><tr><th className={th}>Started</th><th className={th}>How</th><th className={th}>Result</th><th className={th + " text-right"}>Records</th><th className={th}>Problem</th></tr></thead>
+              <thead className="border-b border-line bg-surface/60"><tr><Th>Started</Th><Th>How</Th><Th info="Done: it finished properly. Running: in progress. Partly or Failed: it stopped early; the Problem column says why.">Result</Th><Th right>Records</Th><Th>Problem</Th></tr></thead>
               <tbody className="divide-y divide-line">
                 {s.runs.map((r, i) => (
                   <tr key={i}>
                     <td className={td + " whitespace-nowrap"}>{when(r.started_at)}</td>
                     <td className={td}>{r.trigger_type === "manual" ? "Sync now" : r.trigger_type === "upload" ? "Files uploaded" : "Scheduled"}</td>
-                    <td className={td}><Badge tone={r.status === "ok" ? "ok" : r.status === "running" ? "info" : "error"}>{r.status === "ok" ? "Done" : r.status === "running" ? "Running" : r.status === "partial" ? "Partly" : "Failed"}</Badge></td>
+                    <td className={td}><Badge tone={r.status === "ok" ? "ok" : r.status === "running" ? "info" : "error"} info={r.status === "ok" ? "The sync finished and the data arrived." : r.status === "running" ? "The sync is in progress." : r.status === "partial" ? "Part of the data arrived; the Problem column says what stopped it." : "The sync stopped before it finished; the Problem column says why."}>{r.status === "ok" ? "Done" : r.status === "running" ? "Running" : r.status === "partial" ? "Partly" : "Failed"}</Badge></td>
                     <td className={td + " num text-right"}>{r.records_in == null ? "" : n(r.records_in)}</td>
                     <td className={td + " max-w-[28rem] truncate text-muted"} title={r.error ?? ""}>{r.error}</td>
                   </tr>

@@ -1,5 +1,7 @@
 "use client";
 
+import { Th } from "@/components/ui";
+
 import Link from "next/link";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartCard, LegendKey } from "./ChartCard";
@@ -209,7 +211,7 @@ function Empty() {
 function SimpleTable({ head, rows }: { head: string[]; rows: string[][] }) {
   return (
     <table className="w-full">
-      <thead className="sticky top-0 border-b border-line bg-card"><tr>{head.map((h, i) => <th key={i} className={th + (i > 0 ? " text-right" : "")}>{h}</th>)}</tr></thead>
+      <thead className="sticky top-0 border-b border-line bg-card"><tr>{head.map((h, i) => <Th key={i} right={i > 0}>{h}</Th>)}</tr></thead>
       <tbody className="divide-y divide-line">
         {rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={td + (j > 0 ? " num text-right" : "")}>{c}</td>)}</tr>)}
       </tbody>

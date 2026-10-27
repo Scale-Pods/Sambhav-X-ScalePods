@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { q } from "@/lib/db";
 import { date, kg } from "@/lib/format";
-import { Badge, Card, PageHeader, Skeleton, Stat, td, th } from "@/components/ui";
+import { Badge, Card, PageHeader, Skeleton, Stat, td, th, Th } from "@/components/ui";
 
 type Line = { po_no: string; so_no: string | null; grade_raw: string | null; po_date_text: string | null; so_date_text: string | null; size_mm: string; ordered_kg: string | null; received_kg: string | null; pending_kg: string | null };
 type Weight = { weigh_date: string | null; vehicle_no: string | null; weight_kg: string | null; photo_url: string | null };
@@ -51,7 +51,7 @@ async function Body() {
               <div className="mt-2 overflow-x-auto">
                 <table className="w-full">
                   <thead className="border-b border-line">
-                    <tr><th className={th}>Size</th><th className={th + " text-right"}>Ordered (kg)</th><th className={th + " text-right"}>Received (kg)</th><th className={th + " text-right"}>Pending (kg)</th><th className={th}></th></tr>
+                    <tr><Th>Size</Th><Th right>Ordered (kg)</Th><Th right>Received (kg)</Th><Th right>Pending (kg)</Th><th className={th}></th></tr>
                   </thead>
                   <tbody className="divide-y divide-line">
                     {ls.map((l, i) => {
@@ -62,7 +62,7 @@ async function Body() {
                           <td className={td + " num text-right"}>{kg(l.ordered_kg)}</td>
                           <td className={td + " num text-right"}>{l.received_kg == null ? "-" : kg(l.received_kg)}</td>
                           <td className={td + " num text-right font-medium"}>{kg(Math.abs(p))}</td>
-                          <td className={td}>{p < 0 ? <Badge tone="warning">Over by</Badge> : p > 0 ? <Badge tone="info">To arrive</Badge> : <Badge tone="ok">Complete</Badge>}</td>
+                          <td className={td}>{p < 0 ? <Badge tone="warning" info="More has been received than was ordered.">Over by</Badge> : p > 0 ? <Badge tone="info" info="Ordered, not fully received yet.">To arrive</Badge> : <Badge tone="ok" info="Everything ordered for this size has been received.">Complete</Badge>}</td>
                         </tr>
                       );
                     })}
@@ -78,7 +78,7 @@ async function Body() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-line bg-surface/60">
-              <tr><th className={th}>Date</th><th className={th}>Vehicle</th><th className={th + " text-right"}>Weight (kg)</th><th className={th}>Photo</th></tr>
+              <tr><Th>Date</Th><Th>Vehicle</Th><Th right>Weight (kg)</Th><Th>Photo</Th></tr>
             </thead>
             <tbody className="divide-y divide-line">
               {weights.map((w, i) => (

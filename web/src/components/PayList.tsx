@@ -1,10 +1,11 @@
+import { Th } from "@/components/ui";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Download, FileText } from "lucide-react";
 import { td, th } from "./ui";
 import { isoDay } from "@/lib/money";
 
-export type Col<T> = { label: string; right?: boolean; cell: (r: T) => ReactNode; nowrap?: boolean };
+export type Col<T> = { label: string; right?: boolean; info?: ReactNode | false; cell: (r: T) => ReactNode; nowrap?: boolean };
 
 const day = (v: unknown) => {
   const iso = isoDay(v);
@@ -18,7 +19,7 @@ export function PayTable<T>({ cols, rows, empty = "Nothing matches." }: { cols: 
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead className="border-b border-line bg-surface/60">
-          <tr>{cols.map((c) => <th key={c.label} className={th + (c.right ? " text-right" : "") + " whitespace-nowrap"}>{c.label}</th>)}</tr>
+          <tr>{cols.map((c) => <Th key={c.label} right={c.right} info={c.info} className="whitespace-nowrap">{c.label}</Th>)}</tr>
         </thead>
         <tbody className="divide-y divide-line">
           {rows.length === 0 && <tr><td colSpan={cols.length} className="px-5 py-10 text-center text-muted">{empty}</td></tr>}

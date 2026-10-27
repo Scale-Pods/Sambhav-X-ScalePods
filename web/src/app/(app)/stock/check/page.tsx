@@ -12,7 +12,7 @@ const number = (s: string) => { const n = Number(s.replace(/,/g, "").trim()); re
 export default function StockCheckPage({ searchParams }: { searchParams: SP }) {
   return (
     <>
-      <PageHeader title="Stock check" hint="Someone asks for a plate: type the grade, thickness and size and see at once whether we have it. Nothing is reserved." />
+      <PageHeader title="Stock check" hint="Someone asks for a plate: type the grade, thickness and size and see at once whether we have it. Nothing is reserved." help="A plate fits if it is the same grade, its thickness is within 0.05 mm, and it is at least as wide and as long as asked (either way round). A plate that was cut counts at the length that is left. “In stock” means the stock covers the request; “Only part” means some, not all; “Not in stock” means nothing fits." />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
         <Body searchParams={searchParams} />
       </Suspense>

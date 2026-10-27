@@ -1,9 +1,11 @@
+import { Info } from "@/components/Info";
+import { PLACEHOLDER_INVOICE } from "@/lib/glossary";
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
-import { Badge, Card, Skeleton, td, th } from "@/components/ui";
+import { Badge, Card, Skeleton, td, Th } from "@/components/ui";
 import { trailDetail } from "@/lib/tallytrail";
 
 type P = Promise<{ id: string }>;
@@ -35,21 +37,22 @@ async function Body({ params }: { params: P }) {
 
   return (
     <div className="space-y-6">
-      <Card title={`Sales invoice ${v.voucher_no}`} aside={<Badge tone="info">Tally</Badge>}>
+      {/^x+$/i.test(v.voucher_no) && <div className="rounded-lg border border-warn/40 bg-warn-soft px-4 py-3 text-[0.9rem]"><b>Placeholder invoice number.</b> {PLACEHOLDER_INVOICE}</div>}
+      <Card title={`Sales invoice ${v.voucher_no}`} aside={<Badge tone="info" info="This invoice was copied from Tally. Nothing on this page changes Tally.">Tally</Badge>}>
         <dl className="grid gap-x-8 gap-y-3 px-5 py-5 text-[0.92rem] sm:grid-cols-2">
           <div><dt className="text-muted">Customer</dt><dd className="font-medium">{(v.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, "")}{v.party_gstin ? <span className="ml-2 font-normal text-muted">{v.party_gstin}</span> : null}</dd></div>
           <div><dt className="text-muted">Date and amount</dt><dd className="font-medium">{dateFmt(v.date)} · {rs(v.amount)}</dd></div>
-          <div><dt className="text-muted">Customer PO noted in Tally</dt><dd className="font-medium">{v.buyer_order_no ?? "none"}</dd></div>
-          <div><dt className="text-muted">Dispatch</dt><dd className="font-medium">{[v.shipped_by, v.vehicle_no].filter(Boolean).join(" · ") || "—"}</dd></div>
-          <div><dt className="text-muted">E-way bill</dt><dd className="font-medium">{v.eway_bill_no ?? "—"}{v.eway_valid_upto ? <span className="ml-2 font-normal text-muted">valid to {v.eway_valid_upto.slice(6, 8)}/{v.eway_valid_upto.slice(4, 6)}/{v.eway_valid_upto.slice(0, 4)}</span> : null}</dd></div>
-          <div><dt className="text-muted">E-invoice (IRN)</dt><dd className="break-all font-medium">{v.irn ? `${v.irn.slice(0, 16)}…` : "—"}{v.ack_no ? <span className="ml-2 font-normal text-muted">ack {v.ack_no}</span> : null}</dd></div>
+          <div><dt className="text-muted">Customer PO noted in Tally<Info>The order number the accountant typed in Tally{"'"}s order-number field. We use it to look for the PO document and the order.</Info></dt><dd className="font-medium">{v.buyer_order_no ?? "none"}</dd></div>
+          <div><dt className="text-muted">Dispatch<Info>Who carried the goods and the vehicle number, as typed in Tally.</Info></dt><dd className="font-medium">{[v.shipped_by, v.vehicle_no].filter(Boolean).join(" · ") || "—"}</dd></div>
+          <div><dt className="text-muted">E-way bill<Info term="e-way" /></dt><dd className="font-medium">{v.eway_bill_no ?? "—"}{v.eway_valid_upto ? <span className="ml-2 font-normal text-muted">valid to {v.eway_valid_upto.slice(6, 8)}/{v.eway_valid_upto.slice(4, 6)}/{v.eway_valid_upto.slice(0, 4)}</span> : null}</dd></div>
+          <div><dt className="text-muted">E-invoice (IRN)<Info term="e-invoice" /></dt><dd className="break-all font-medium">{v.irn ? `${v.irn.slice(0, 16)}…` : "—"}{v.ack_no ? <span className="ml-2 font-normal text-muted">ack {v.ack_no}</span> : null}</dd></div>
         </dl>
       </Card>
 
       <Card title="Lines">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem]">
-            <thead><tr className="border-b border-line"><th className={th}>#</th><th className={th}>Item</th><th className={th}>Heat no.</th><th className={th + " text-right"}>Quantity</th><th className={th + " text-right"}>Rate</th><th className={th + " text-right"}>Amount</th></tr></thead>
+            <thead><tr className="border-b border-line"><Th>#</Th><Th>Item</Th><Th>Heat no.</Th><Th right>Quantity</Th><Th right>Rate</Th><Th right>Amount</Th></tr></thead>
             <tbody className="divide-y divide-line">
               {t.items.map((i) => (
                 <tr key={i.line_no}>

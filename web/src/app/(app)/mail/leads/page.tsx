@@ -19,7 +19,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const d = await leadsList(p);
   const link = linker("/mail/leads", sp);
   const cols: Col<LeadRow>[] = [
-    { label: "Received", cell: (r) => day(r.received_at) },
+    { label: "Received", info: "The date the enquiry came in.", cell: (r) => day(r.received_at) },
     { label: "Name", cell: (r) => <span className="font-semibold">{r.name}</span> },
     { label: "Company", cell: (r) => r.company, nowrap: false },
     { label: "City", cell: (r) => [r.city, r.state].filter(Boolean).join(", ") },

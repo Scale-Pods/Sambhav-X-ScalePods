@@ -20,12 +20,12 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const d = await inboxList(p);
   const link = linker("/mail/inbox", sp);
   const cols: Col<InboxRow>[] = [
-    { label: "Received", cell: (r) => day(r.received_at) },
+    { label: "Received", info: "The date the mail arrived.", cell: (r) => day(r.received_at) },
     { label: "Subject", cell: (r) => <span className="font-semibold">{r.subject}</span>, nowrap: false },
     { label: "From", cell: (r) => r.from_name, nowrap: false },
     { label: "Email", cell: (r) => r.from_email },
-    { label: "Days", right: true, cell: (r) => r.days },
-    { label: "Status", cell: (r) => (r.status === "URGENT" ? <Badge tone="error">Urgent</Badge> : r.status === "Follow Up" ? <Badge tone="warning">Follow up</Badge> : r.status === "Replied" ? <Badge tone="ok">Replied</Badge> : <Badge tone="info">{r.status ?? "New"}</Badge>) },
+    { label: "Days", info: "How many days the mail has been waiting.", right: true, cell: (r) => r.days },
+    { label: "Status", info: "The status set in the Email Tracker sheet: Urgent, Follow up, Replied and so on.", cell: (r) => (r.status === "URGENT" ? <Badge tone="error">Urgent</Badge> : r.status === "Follow Up" ? <Badge tone="warning">Follow up</Badge> : r.status === "Replied" ? <Badge tone="ok">Replied</Badge> : <Badge tone="info">{r.status ?? "New"}</Badge>) },
     { label: "Remarks", cell: (r) => r.remarks, nowrap: false },
     { label: "Mail", cell: (r) => (r.gmail_url && /^https?:\/\//i.test(r.gmail_url) ? <a href={r.gmail_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-brand hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Open</a> : null) },
   ];

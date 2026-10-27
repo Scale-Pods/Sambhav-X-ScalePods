@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { postingPreview, postingRequests, type PostingRequest } from "@/lib/queries";
-import { Badge, Card, td, th } from "@/components/ui";
+import { Badge, Card, td, th, Th } from "@/components/ui";
 import { GroupActions, RowActions, SendForApproval } from "./PostingClient";
 
 const kg = (v: number | string | null) => (v == null ? "-" : new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Number(v)));
@@ -83,7 +83,7 @@ export async function PostResults({ sessionId, status, canSend, canDecide, me, f
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-line bg-surface/60">
-              <tr><th className={th}>Plate</th><th className={th}>Result</th><th className={th + " text-right"}>Books</th><th className={th + " text-right"}>Counted</th><th className={th + " text-right"}>Adjustment</th><th className={th}>Risk</th><th className={th}>Status</th><th className={th}></th></tr>
+              <tr><Th>Plate</Th><Th>Result</Th><Th right>Books</Th><Th right>Counted</Th><Th right>Adjustment</Th><Th>Risk</Th><Th>Status</Th><th className={th}></th></tr>
             </thead>
             <tbody className="divide-y divide-line">
               {shown.length === 0 && <tr><td colSpan={8} className="px-5 py-10 text-center text-muted">Nothing here.</td></tr>}

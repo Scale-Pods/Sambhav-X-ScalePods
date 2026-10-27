@@ -21,17 +21,17 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const link = linker("/payments/receivables", sp);
   const cols: Col<ReceivableRow>[] = [
     { label: "Customer", cell: (r) => <span className="font-semibold">{r.party}</span>, nowrap: false },
-    { label: "Company", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
-    { label: "Invoice", cell: (r) => r.invoice_no },
+    { label: "Company", info: "The business the entry belongs to: SPF is Sambhav Pipes & Fittings, Sai is Sai Steel & Engineering.", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
+    { label: "Invoice", info: "The invoice number as typed in the payment sheet.", cell: (r) => r.invoice_no },
     { label: "Date", cell: (r) => day(r.invoice_date) },
-    { label: "Due", cell: (r) => day(r.due_date) },
+    { label: "Due", info: "The payment date: the invoice date plus the credit days. Past it and unpaid means overdue.", cell: (r) => day(r.due_date) },
     { label: "PO no.", cell: (r) => r.po_no },
     { label: "Salesperson", cell: (r) => r.salesperson },
     { label: "Invoice (₹)", right: true, cell: (r) => amount(r.amount) },
     { label: "Received (₹)", right: true, cell: (r) => (Number(r.received) ? amount(r.received) : "") },
     { label: "Owed (₹)", right: true, cell: (r) => <span className="font-semibold">{amount(r.pending)}</span> },
     { label: "Late", right: true, cell: (r) => (Number(r.overdue_days) > 0 && Number(r.pending) > 0 ? <span className={Number(r.overdue_days) > 90 ? "font-semibold text-bad" : Number(r.overdue_days) > 30 ? "text-warn" : ""}>{r.overdue_days} d</span> : "") },
-    { label: "Note", cell: (r) => (r.kind ? <Badge tone={r.kind === "Blocked" ? "error" : r.kind === "Market" ? "info" : "warning"}>{r.kind}</Badge> : null) },
+    { label: "Note", info: "Blocked means the money is stuck and needs follow-up. Any other label is the sheet's own note, shown as written.", cell: (r) => (r.kind ? <Badge tone={r.kind === "Blocked" ? "error" : r.kind === "Market" ? "info" : "warning"}>{r.kind}</Badge> : null) },
   ];
   return (
     <>
