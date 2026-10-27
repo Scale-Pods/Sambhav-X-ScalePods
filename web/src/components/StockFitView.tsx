@@ -16,6 +16,7 @@ function LotList({ lots, label }: { lots: FitLot[]; label?: string }) {
             <Link href={`/stock/${l.lot_no}`} className="font-medium text-brand hover:underline">Plate {l.lot_no}</Link>
             <span className="num">{size(l)} mm</span>
             <span className="text-muted">{kgFmt.format(l.balance_kg)} kg{l.balance_pieces ? ` · ${l.balance_pieces} pc` : ""}</span>
+            {l.part && <Badge tone="warning">part plate, cut from {l.original_length_mm}</Badge>}
             {l.exact_size && <Badge tone="ok">exact size</Badge>}
             {(l.heat_no || l.plate_no) && <span className="text-muted">{[l.heat_no && `heat ${l.heat_no}`, l.plate_no && `plate no. ${l.plate_no}`].filter(Boolean).join(" · ")}</span>}
             {l.entity && <span className="text-muted">· {l.entity}</span>}

@@ -39,7 +39,7 @@ export const TOOLS: Tool[] = [
         grade: str(i.grade), thk: numv(i.thickness_mm), width: numv(i.width_mm), length: numv(i.length_mm),
         needPcs: unit === "nos" && qty ? Math.round(qty) : null, needKg: qty && unit === "kg" ? qty : qty && unit === "mt" ? qty * 1000 : null,
       });
-      const lot = (l: (typeof f.lots)[number]) => ({ plate: l.lot_no, size_mm: `${l.thickness_mm} x ${l.width_mm} x ${l.length_mm}`, kg: Math.round(l.balance_kg), pieces: l.balance_pieces, heat_no: l.heat_no, plate_no: l.plate_no, company: l.entity, exact_size: l.exact_size });
+      const lot = (l: (typeof f.lots)[number]) => ({ plate: l.lot_no, size_mm: `${l.thickness_mm} x ${l.width_mm} x ${l.length_mm}`, kg: Math.round(l.balance_kg), pieces: l.balance_pieces, heat_no: l.heat_no, plate_no: l.plate_no, company: l.entity, exact_size: l.exact_size, part_plate_cut_from_mm: l.part ? l.original_length_mm : undefined });
       return { verdict: f.verdict, summary: f.why, grade_read_as: f.grade.code, grade_candidates: f.grade.candidates, plates: f.plates, pieces: f.pieces, kg: Math.round(f.kg), best_plates: f.lots.slice(0, 6).map(lot), nearby_thickness: f.near.map(lot) };
     },
   },

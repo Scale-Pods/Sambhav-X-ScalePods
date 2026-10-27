@@ -10,6 +10,7 @@ export type FitInput = { grade: string; thk: number | null; width: number | null
 export type FitLot = {
   lot_no: number; grade: string; thickness_mm: number; width_mm: number; length_mm: number; balance_kg: number; balance_pieces: number;
   heat_no: string | null; plate_no: string | null; entity: string | null; exact_size: boolean;
+  part: boolean; original_length_mm: number; // part: a single plate that has been cut, so what is left is shorter than the plate as received
 };
 export type Fit = {
   input: FitInput;
@@ -55,7 +56,14 @@ async function resolveGrade(raw: string): Promise<{ id: string | null; code: str
   return { id: null, code: null, how: close.length ? "close" : "none", candidates: close.map((c) => c.code) };
 }
 
-const COLS = `l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thickness_mm, l.width_mm::float8 width_mm, l.length_mm::float8 length_mm,
+// A single plate that has been cut (weight left is less than the plate's own weight) is a part plate: its length now is the original length in proportion to the
+// weight left, not the length it arrived with (plate G5978002A0 arrived 12000 long, 1980 kg were cut off and sold, 9840 kg of about 10000 mm remain).
+const LOTS = `(select l0.*, case when l0.pieces_received = 1 and coalesce(l0.balance_pieces, 0) <= 1 and l0.balance_kg > 0
+                and coalesce(nullif(l0.invoice_weight_kg, 0), nullif(l0.theoretical_weight_kg, 0)) is not null
+                and l0.balance_kg < 0.97 * coalesce(nullif(l0.invoice_weight_kg, 0), nullif(l0.theoretical_weight_kg, 0))
+               then round(l0.length_mm * l0.balance_kg / coalesce(nullif(l0.invoice_weight_kg, 0), nullif(l0.theoretical_weight_kg, 0)), -1) else l0.length_mm end eff_len
+         from public.v_lots_current l0)`;
+const COLS = `l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thickness_mm, l.width_mm::float8 width_mm, l.eff_len::float8 length_mm, l.length_mm::float8 original_length_mm, (l.eff_len < l.length_mm) part,
               l.balance_kg::float8 balance_kg, coalesce(l.balance_pieces, 0)::int balance_pieces, l.heat_no, l.plate_no, e.code entity`;
 
 export async function stockFit(input: FitInput): Promise<Fit> {
@@ -66,10 +74,12 @@ export async function stockFit(input: FitInput): Promise<Fit> {
 
   const w = input.width, l = input.length;
   const sized = w != null && l != null;
-  const size = sized ? `and ((l.width_mm >= $4 and l.length_mm >= $5) or (l.width_mm >= $5 and l.length_mm >= $4))` : "";
+  // a part plate's length is worked out from its weight, so it is allowed 1% short of the wanted length (9990 left, 10000 wanted is a fit)
+  const slack = `(case when l.eff_len < l.length_mm then 0.99 else 1 end)`;
+  const size = sized ? `and ((l.width_mm >= $4 and l.eff_len >= $5 * ${slack}) or (l.width_mm >= $5 and l.eff_len >= $4 * ${slack}))` : "";
   const fits = (lo: string, hi: string) => `
-    select ${COLS}, ${sized ? "(l.width_mm = $4 and l.length_mm = $5)" : "false"} as exact_size
-      from public.v_lots_current l join public.grades g on g.id = l.grade_id left join public.entities e on e.id = l.entity_id
+    select ${COLS}, ${sized ? "(l.width_mm = $4 and abs(l.eff_len - $5) <= greatest(1, $5 * 0.01 * (case when l.eff_len < l.length_mm then 1 else 0 end)))" : "false"} as exact_size
+      from ${LOTS} l join public.grades g on g.id = l.grade_id left join public.entities e on e.id = l.entity_id
      where l.current_status = 'available' and l.balance_kg > 0 and l.grade_id = $1 and l.thickness_mm between ${lo} and ${hi} ${size}
      order by exact_size desc, l.balance_kg desc limit 200`;
   const params = sized ? [grade.id, input.thk - TOL, input.thk + TOL, w, l] : [grade.id, input.thk - TOL, input.thk + TOL];
