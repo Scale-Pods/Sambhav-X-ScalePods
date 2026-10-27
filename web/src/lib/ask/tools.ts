@@ -202,12 +202,17 @@ export const TOOLS: Tool[] = [
         for (const r of rows) { const s = await sheetRef(ctx, PAY_SOURCE[r.entity] ?? "spf_payment_better", "M Sale", r.row_no); const { row_no: _r, ...rest } = r; void _r; out.push({ ...rest, refs: s ? [s] : [] }); }
         return out;
       }
-      const rows = await q<{ first_entity: string; first_row: number } & Record<string, unknown>>(
+      const rows = await q<{ top: { e: string; r: number }[] } & Record<string, unknown>>(
         `select party, count(*)::int invoices, round(sum(pending))::bigint pending_rs, max(overdue_days) max_days_overdue, round(sum(pending) filter (where overdue_days > 0))::bigint overdue_rs,
-                (array_agg(entity order by pending desc))[1] first_entity, (array_agg(row_no order by pending desc))[1]::int first_row
+                (array_agg(jsonb_build_object('e', entity, 'r', row_no) order by pending desc))[1:4] top
            from public.v_receivables where pending > 0 ${i.only_overdue ? "and overdue_days > 0" : ""} group by party order by sum(pending) desc limit 15`);
       const out = [];
-      for (const r of rows) { const s = await sheetRef(ctx, PAY_SOURCE[r.first_entity] ?? "spf_payment_better", "M Sale", r.first_row); const { first_entity: _e, first_row: _f, ...rest } = r; void _e; void _f; out.push({ ...rest, refs: s ? [s] : [], ref_note: "the reference is this party's largest open invoice row" }); }
+      for (const r of rows) {
+        const refs: string[] = [];
+        for (const t of r.top) { const s = await sheetRef(ctx, PAY_SOURCE[t.e] ?? "spf_payment_better", "M Sale", t.r); if (s) refs.push(s); }
+        const { top: _t, ...rest } = r; void _t;
+        out.push({ ...rest, refs, ref_note: "the party's pending_rs is the sum of ALL its open invoice rows in the sheet; refs are its largest rows only. Say that the figure is a total" });
+      }
       return out;
     },
   },
@@ -226,12 +231,17 @@ export const TOOLS: Tool[] = [
         for (const r of rows) { const s = await sheetRef(ctx, PAY_SOURCE[r.entity] ?? "spf_payment_better", "M Pur", r.row_no); const { row_no: _r, ...rest } = r; void _r; out.push({ ...rest, refs: s ? [s] : [] }); }
         return out;
       }
-      const rows = await q<{ first_entity: string; first_row: number } & Record<string, unknown>>(
+      const rows = await q<{ top: { e: string; r: number }[] } & Record<string, unknown>>(
         `select vendor, count(*)::int bills, round(sum(pending))::bigint pending_rs, max(overdue_days) max_days_overdue,
-                (array_agg(entity order by pending desc))[1] first_entity, (array_agg(row_no order by pending desc))[1]::int first_row
+                (array_agg(jsonb_build_object('e', entity, 'r', row_no) order by pending desc))[1:4] top
            from public.v_payables where pending > 0 group by vendor order by sum(pending) desc limit 15`);
       const out = [];
-      for (const r of rows) { const s = await sheetRef(ctx, PAY_SOURCE[r.first_entity] ?? "spf_payment_better", "M Pur", r.first_row); const { first_entity: _e, first_row: _f, ...rest } = r; void _e; void _f; out.push({ ...rest, refs: s ? [s] : [], ref_note: "the reference is this vendor's largest open bill row" }); }
+      for (const r of rows) {
+        const refs: string[] = [];
+        for (const t of r.top) { const s = await sheetRef(ctx, PAY_SOURCE[t.e] ?? "spf_payment_better", "M Pur", t.r); if (s) refs.push(s); }
+        const { top: _t, ...rest } = r; void _t;
+        out.push({ ...rest, refs, ref_note: "pending_rs is the sum of ALL the vendor's open bills in the sheet; refs are its largest rows only. Say that the figure is a total" });
+      }
       return out;
     },
   },
@@ -327,21 +337,29 @@ export const TOOLS: Tool[] = [
       if (rows.length === 0) return { error: "No sales invoice with that number" };
       const t = await trailDetail(rows[0].id);
       if (!t) return { error: "Not found" };
-      const refs = [appRef(ctx, `Tally invoice ${t.v.voucher_no} (paperwork trail)`, `/tally/invoices/${rows[0].id}`)];
-      for (const d of t.po_docs) refs.push(appRef(ctx, `Uploaded PO ${d.file}`, `/documents/${d.id}`));
+      // each fact carries the references that show it, so an answer can cite the right place for each claim
+      const invoice_refs = [appRef(ctx, `Tally invoice ${t.v.voucher_no} (paperwork trail)`, `/tally/invoices/${rows[0].id}`)];
+      const po_documents = t.po_docs.map((d) => ({ file: d.file, review: d.review, refs: [appRef(ctx, `Uploaded PO ${d.file}`, `/documents/${d.id}`)] }));
+      const po_in_orders_sheet = [];
       for (const o of t.po_orders) {
-        refs.push(appRef(ctx, `Order ${o.order_no} in the app`, `/orders/${encodeURIComponent(o.order_no)}`));
+        const refs = [appRef(ctx, `Order ${o.order_no} in the app`, `/orders/${encodeURIComponent(o.order_no)}`)];
         if (o.po_no) { const hit = (await findSheetRows(ctx, [o.po_no], ["dispatch_fms"])).get(o.po_no.trim())?.[0]; if (hit) { const s = await sheetRef(ctx, hit.source_key, hit.tab, hit.row_no); if (s) refs.push(s); } }
+        po_in_orders_sheet.push({ order: `order ${o.order_no} (${o.client})`, refs });
       }
-      for (const h of t.heats) for (const l of h.lots.slice(0, 2)) refs.push(appRef(ctx, `Plate ${l.lot_no} in the app`, `/stock/${l.lot_no}`));
-      for (const d of t.same_numbers) refs.push(appRef(ctx, `Document ${d.file}`, `/documents/${d.id}`));
-      for (const r of t.register.slice(0, 2)) { const s = await sheetRef(ctx, "dispatch_26_27", r.month_tab, r.row_no); if (s) refs.push(s); }
+      const sheetHits = await findSheetRows(ctx, t.heats.map((h) => h.heat), STOCK_SHEETS);
+      const heats = [];
+      for (const h of t.heats) {
+        const refs = h.lots.slice(0, 2).map((l) => appRef(ctx, `Plate ${l.lot_no} in the app`, `/stock/${l.lot_no}`));
+        for (const x of (sheetHits.get(h.heat.trim()) ?? []).slice(0, 1)) { const s = await sheetRef(ctx, x.source_key, x.tab, x.row_no); if (s) refs.push(s); }
+        for (const d of h.cert_docs.slice(0, 1)) refs.push(appRef(ctx, `Certificate ${d.file}`, `/documents/${d.id}`));
+        heats.push({ heat: h.heat, plates_in_books: h.lots.length, certificates_filed: [...new Set(h.lots.flatMap((l) => l.certs))], certificate_documents_read: h.cert_docs.length, refs });
+      }
+      const vehicle_register = [];
+      for (const r of t.register) { const s = await sheetRef(ctx, "dispatch_26_27", r.month_tab, r.row_no); vehicle_register.push({ row: `${r.dispatch_date} vehicle ${r.vehicle_no}`, refs: s ? [s] : [] }); }
+      const same = t.same_numbers.map((d) => ({ file: d.file, refs: [appRef(ctx, `Document ${d.file}`, `/documents/${d.id}`)] }));
       return {
-        refs,
-        invoice: t.v.voucher_no, date: t.v.date, customer: t.v.party, amount_rs: t.v.amount, po_noted_in_tally: t.v.buyer_order_no, verbal_order: t.v.verbal,
-        po_documents: t.po_docs.map((d) => ({ file: d.file, review: d.review })), po_in_orders_sheet: t.po_orders.map((o) => `order ${o.order_no} (${o.client})`),
-        heats: t.heats.map((h) => ({ heat: h.heat, plates_in_books: h.lots.length, certificates_filed: [...new Set(h.lots.flatMap((l) => l.certs))], certificate_documents_read: h.cert_docs.length })),
-        vehicle_register: t.register.map((r) => `${r.dispatch_date} vehicle ${r.vehicle_no}`), e_way_bill: t.v.eway_bill_no, vehicle: t.v.vehicle_no, documents_with_same_irn_or_eway: t.same_numbers.map((d) => d.file),
+        invoice: t.v.voucher_no, date: t.v.date, customer: t.v.party, amount_rs: t.v.amount, po_noted_in_tally: t.v.buyer_order_no, verbal_order: t.v.verbal, refs: invoice_refs,
+        po_documents, po_in_orders_sheet, heats, vehicle_register, e_way_bill: t.v.eway_bill_no, vehicle: t.v.vehicle_no, documents_with_same_irn_or_eway: same,
         more_matches_with_this_number: rows.length - 1,
       };
     },
