@@ -29,7 +29,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from psycopg.types.json import Jsonb
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if (sys.stdout.encoding or '').lower() != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 ROOT = Path(__file__).resolve().parents[2]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly", "https://www.googleapis.com/auth/drive.readonly"]
 # tabs that hold keys, passwords or add-on settings are never copied

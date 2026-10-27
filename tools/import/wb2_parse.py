@@ -21,7 +21,8 @@ from pathlib import Path
 import openpyxl
 
 warnings.filterwarnings("ignore")
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+if (sys.stdout.encoding or '').lower() != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 DATA = Path(__file__).resolve().parents[2] / "data"
 SRC = DATA / "1_1_26-31_3_27 _ STOCK _ SPF & RS.xlsx"
@@ -57,12 +58,10 @@ def as_date(v):
     return v.date() if isinstance(v, dt.datetime) else (v if isinstance(v, dt.date) else None)
 
 
-def main() -> None:
-    wv = openpyxl.load_workbook(SRC, data_only=True)
-    wf = openpyxl.load_workbook(SRC, data_only=False)
-
+def parse(wv, wf, tabs=None):
+    """Read the grade tabs of an openpyxl-like workbook pair (values, formulas): -> lots, moves, exc."""
     lots, moves, exc = [], [], []
-    for tab, grade in TABS.items():
+    for tab, grade in (tabs or TABS).items():
         ws, wsf = wv[tab], wf[tab]
         by_plate: dict[str, dict] = {}
         carry = dict(date=None, inv=None, vno=None)
@@ -117,6 +116,14 @@ def main() -> None:
         for m in moves:
             if m["tab"] == tab and m["type"] == "sale" and m["key"] not in known:
                 exc.append((tab, m["row"], "sale of a plate that was never purchased in this tab", m["key"]))
+
+    return lots, moves, exc
+
+
+def main() -> None:
+    wv = openpyxl.load_workbook(SRC, data_only=True)
+    wf = openpyxl.load_workbook(SRC, data_only=False)
+    lots, moves, exc = parse(wv, wf)
 
     # ---- reconciliation vs the sheet's own Summary
     sm = wv["Summary"]

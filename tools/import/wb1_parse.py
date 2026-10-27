@@ -22,7 +22,8 @@ from pathlib import Path
 import openpyxl
 
 warnings.filterwarnings("ignore")
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+if (sys.stdout.encoding or '').lower() != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 DATA = Path(__file__).resolve().parents[2] / "data"
 SRC = DATA / "1_4_26 - 31_3_27 _ STOCK IMS Admin.xlsx"
@@ -105,12 +106,11 @@ def pick(block, name, which=0):
     return cols[which] if len(cols) > which else None
 
 
-def main() -> None:
-    wv = openpyxl.load_workbook(SRC, data_only=True)
-    wf = openpyxl.load_workbook(SRC, data_only=False)
+def parse(wv, wf, tabs=None):
+    """Read the grade tabs of an openpyxl-like workbook pair (values, formulas): -> lots, sales, alloc, exc, unmatched, remaining."""
     lots, sales, exc = [], [], []
 
-    for tab, grade in TABS.items():
+    for tab, grade in (tabs or TABS).items():
         ws, wsf = wv[tab], wf[tab]
         hm = None
         carry = dict(date=None, inv=None, vno=None)
@@ -199,6 +199,14 @@ def main() -> None:
             remaining[i] -= w
             alloc.append(dict(lot_index=i, tab=s["tab"], row=s["row"], date=s["date"], weight_kg=-w, pieces=-p, inv=s["inv"], vno=s["vno"],
                               buyer=s["buyer"], notes=s["notes"], plot=s["plot"], shared=len(picked) > 1))
+
+    return lots, sales, alloc, exc, unmatched, remaining
+
+
+def main() -> None:
+    wv = openpyxl.load_workbook(SRC, data_only=True)
+    wf = openpyxl.load_workbook(SRC, data_only=False)
+    lots, sales, alloc, exc, unmatched, remaining = parse(wv, wf)
 
     # ---- write
     def write(name, header, rows):
