@@ -21,7 +21,7 @@ supabase/.temp/
 supabase/.branches/
 
 # client data — never commit (repo is public)
-data/
+/data/
 client-data/
 *.xlsx
 *.xls
