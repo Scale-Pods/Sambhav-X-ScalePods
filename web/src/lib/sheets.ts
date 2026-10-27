@@ -23,7 +23,7 @@ export async function sheetSources() {
     select s.key, s.name, s.spreadsheet_id, s.active, s.tabs, s.last_synced_at, s.last_modified_at, s.last_error,
            coalesce(r.n, 0)::int rows
     from public.sheet_sources s
-    left join (select source_key, count(*) n from public.sheet_rows where deleted_at is null group by 1) r on r.source_key = s.key
+    left join (select source_key, sum(all_rows) n from public.v_sheet_tab_meta group by 1) r on r.source_key = s.key
     order by s.active desc, s.name`);
 }
 
