@@ -1,16 +1,77 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, ExternalLink, Loader2, Menu, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
+import { Bookmark, BookmarkPlus, Check, ChevronDown, Copy, Download, ExternalLink, FileText, Loader2, Menu, MessageSquarePlus, Paperclip, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { Markdown, type RefLink } from "./Markdown";
 
 type ModelKey = "fast" | "balanced";
 type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; updated_at: string };
-type Meta = { sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
+type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
 
+type Saved = { id: string; title: string; question: string; model: ModelKey; scope: string };
+type Attached = { name: string; mime: string; data: string; size: number };
+
+const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv,.tsv,.md,.json";
+const MIME_OF: Record<string, string> = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", txt: "text/plain", csv: "text/csv", tsv: "text/tab-separated-values", md: "text/markdown", json: "application/json" };
+const MAX_FILES = 3, MAX_BYTES = 3_000_000;
+
+const readFile = (f: File, text: boolean) => new Promise<string>((ok, no) => {
+  const r = new FileReader();
+  r.onerror = () => no(new Error("read"));
+  r.onload = () => ok(text ? String(r.result) : String(r.result).split(",")[1] ?? "");
+  if (text) r.readAsText(f); else r.readAsDataURL(f);
+});
+
+const download = (name: string, body: string, type: string) => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff", body], { type: type + ";charset=utf-8" }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+const fileStem = (s: string) => (s.replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "answer");
+
+const clean = (c: string) => c.replace(/\s*\[r\d+\]/gi, "").replace(/\*\*|__|`/g, "").trim();
+const csvCell = (v: string) => { const t = /^[=+@]/.test(v) || /^-[^\d.]/.test(v) ? "'" + v : v; return '"' + t.replace(/"/g, '""') + '"'; };
+const absUrl = (u: string) => (u.startsWith("/") ? window.location.origin + u : u);
+
+/** The tables of an answer as CSV (all tables, one after another). A last column holds the links to check each row, when the answer cites them. */
+function tablesCsv(md: string, refs: RefLink[] = []): string | null {
+  const by = new Map(refs.map((r) => [r.id, r]));
+  const tables: string[][][] = []; let cur: string[][] = [];
+  for (const line of md.split("\n")) {
+    const t = line.trim();
+    if (t.startsWith("|")) {
+      const cells = t.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue;
+      cur.push(cells);
+    } else if (cur.length) { tables.push(cur); cur = []; }
+  }
+  if (cur.length) tables.push(cur);
+  if (tables.length === 0) return null;
+  const hasRefs = refs.length > 0;
+  return tables.map((t) => t.map((row, i) => {
+    const links = hasRefs ? (i === 0 ? ["Check it here"] : [[...new Set([...row.join(" ").matchAll(/\[(r\d+)\]/gi)].map((m) => by.get(m[1].toLowerCase())?.url).filter(Boolean) as string[])].map(absUrl).join(" ")]) : [];
+    return [...row.map(clean), ...links].map(csvCell).join(",");
+  }).join("\r\n")).join("\r\n\r\n");
+}
+
+/** The whole chat as readable text, with the numbered sources under each answer. */
+function chatText(title: string, ms: { role: string; content: string; meta: Meta | null }[]) {
+  const out = [`# ${title}`, ""];
+  for (const m of ms) {
+    if (m.role === "user") { out.push(`You: ${m.content}`, ""); continue; }
+    const refs = m.meta?.refs ?? [];
+    const n = new Map(refs.map((r) => [r.id, r.n]));
+    out.push(m.content.replace(/\[(r\d+)\]/gi, (_x, id: string) => (n.has(id.toLowerCase()) ? `[${n.get(id.toLowerCase())}]` : "")), "");
+    if (refs.length) { out.push("Sources:"); for (const r of refs) out.push(`  [${r.n}] ${r.label} - ${absUrl(r.url)}`); out.push(""); }
+  }
+  return out.join("\n");
+}
+
 export type AskAppProps = {
+  canAttach: boolean;
   suggestions: string[];
   scopes: { value: string; label: string }[];
   models: { value: ModelKey; label: string; hint: string }[];
@@ -25,7 +86,7 @@ const LOOKED: Record<string, string> = {
 
 const cents = (usd: number) => (usd < 0.01 ? "under 1 cent" : `${Math.round(usd * 100)} cents`);
 
-export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
+export function AskApp({ canAttach, suggestions, scopes, models, spend }: AskAppProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -42,6 +103,11 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
   const [copied, setCopied] = useState<string | null>(null);
   const [today, setToday] = useState(spend?.spent ?? 0);
   const [now] = useState(() => new Date());
+  const [files, setFiles] = useState<Attached[]>([]);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Saved[]>([]);
+  const [menu, setMenu] = useState<string | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
@@ -50,6 +116,11 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
     try { const r = await fetch("/api/ask/chats", { cache: "no-store" }); if (r.ok) setChats((await r.json()) as Chat[]); } catch { /* the list stays as it was */ }
   }, []);
   useEffect(() => { void loadChats(); }, [loadChats]);
+  const loadSaved = useCallback(async () => {
+    try { const r = await fetch("/api/ask/saved", { cache: "no-store" }); if (r.ok) setSaved((await r.json()) as Saved[]); } catch { /* the list stays as it was */ }
+  }, []);
+  useEffect(() => { void loadSaved(); }, [loadSaved]);
+  useEffect(() => { if (!menu) return; const close = () => setMenu(null); window.addEventListener("click", close); return () => window.removeEventListener("click", close); }, [menu]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }); }, [messages]);
   useEffect(() => { const el = box.current; if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 200) + "px"; } }, [text]);
 
@@ -70,17 +141,18 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
   async function send(question: string, regenerate = false) {
     const qn = question.trim();
     if ((!regenerate && qn.length < 2) || busy) return;
+    const sendFiles = regenerate ? [] : files;
     const aId = "pending-" + Math.random().toString(36).slice(2);
     setMessages((ms) => {
-      const base = regenerate ? (ms.at(-1)?.role === "assistant" ? ms.slice(0, -1) : ms) : [...ms, { id: "u-" + aId, role: "user" as const, content: qn, feedback: null, meta: null }];
+      const base = regenerate ? (ms.at(-1)?.role === "assistant" ? ms.slice(0, -1) : ms) : [...ms, { id: "u-" + aId, role: "user" as const, content: qn, feedback: null, meta: sendFiles.length ? { files: sendFiles.map((f) => f.name) } : null }];
       return [...base, { id: aId, role: "assistant", content: "", feedback: null, meta: null, pending: true, status: "Thinking" }];
     });
-    setText(""); setBusy(true);
+    setText(""); setFiles([]); setFileNote(null); setBusy(true);
     const ctl = new AbortController(); abort.current = ctl;
     const patch = (p: Partial<Msg>) => setMessages((ms) => ms.map((m) => (m.id === aId || (p.id && m.id === aId) ? { ...m, ...p } : m)));
     let realId = aId;
     try {
-      const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal, body: JSON.stringify({ question: qn, chatId: activeId, model, scope, regenerate }) });
+      const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal, body: JSON.stringify({ question: qn, chatId: activeId, model, scope, regenerate, files: sendFiles.length ? sendFiles.map((f) => ({ name: f.name, mime: f.mime, data: f.data })) : undefined }) });
       if (!res.ok || !res.body) { const j = await res.json().catch(() => ({})); patch({ pending: false, error: j.error ?? "It could not be answered. Please try again." }); return; }
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
       for (;;) {
@@ -128,6 +200,55 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
     if (activeId === id) newChat();
     await loadChats();
   }
+  async function attach(list: FileList | null) {
+    if (!list) return;
+    setFileNote(null);
+    const next = [...files];
+    for (const f of Array.from(list)) {
+      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+      const mime = MIME_OF[ext];
+      if (!mime) { setFileNote(`"${f.name}": only PDF, pictures and text files (.txt .csv .md .json) can be attached. For Excel or Word, save as PDF or CSV first.`); continue; }
+      if (next.length >= MAX_FILES) { setFileNote(`Up to ${MAX_FILES} files at a time.`); break; }
+      if (next.reduce((n, x) => n + x.size, 0) + f.size > MAX_BYTES) { setFileNote("The files together can be 3 MB at most."); break; }
+      try { next.push({ name: f.name, mime, size: f.size, data: await readFile(f, mime.startsWith("text/") || mime === "application/json") }); } catch { setFileNote(`"${f.name}" could not be read.`); }
+    }
+    setFiles(next);
+    if (picker.current) picker.current.value = "";
+  }
+
+  async function saveQuestion(m: Msg) {
+    const title = window.prompt("Name for this saved question", m.content.slice(0, 60));
+    if (title === null) return;
+    const r = await fetch("/api/ask/saved", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, question: m.content, model, scope }) });
+    if (!r.ok) window.alert(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "It could not be saved.");
+    await loadSaved();
+  }
+  async function removeSaved(id: string) {
+    await fetch(`/api/ask/saved/${id}`, { method: "DELETE" }).catch(() => {});
+    await loadSaved();
+  }
+  function runSaved(s: Saved) { if (busy) return; setModel(s.model); setScope(s.scope); setDrawer(false); void send(s.question); }
+
+  const questionFor = (m: Msg) => { const i = messages.findIndex((x) => x.id === m.id); return messages.slice(0, i).findLast((x) => x.role === "user")?.content ?? ""; };
+  function exportCsv(m: Msg) { const csv = tablesCsv(m.content, m.meta?.refs); if (csv) download(`${fileStem(questionFor(m))}.csv`, csv, "text/csv"); }
+  function exportText(m: Msg) { download(`${fileStem(questionFor(m))}.txt`, chatText(questionFor(m), [{ role: "user", content: questionFor(m), meta: null }, m]), "text/plain"); }
+  function exportChat() { const title = chats.find((c) => c.id === activeId)?.title ?? "Ask chat"; download(`${fileStem(title)}.txt`, chatText(title, messages.filter((x) => !x.pending)), "text/plain"); }
+  function printAnswer(m: Msg) {
+    const el = document.querySelector(`[data-answer="${m.id}"]`);
+    if (!el) return;
+    const c = el.cloneNode(true) as HTMLElement;
+    c.querySelectorAll(".no-print").forEach((n) => n.remove());
+    const w = window.open("", "_blank");
+    if (!w) { window.alert("Allow pop-ups for this site to print or save as PDF."); return; }
+    const q = document.createElement("p"); q.className = "q"; q.textContent = questionFor(m);
+    const when = new Intl.DateTimeFormat("en-IN", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(new Date());
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><base href="${window.location.origin}/"><title>${fileStem(questionFor(m))}</title><style>
+      body{font:14px/1.5 -apple-system,Segoe UI,Arial,sans-serif;color:#111;margin:28px}h1{font-size:15px;margin:0 0 2px}.q{font-size:16px;font-weight:600;margin:10px 0 14px}.foot{margin-top:18px;font-size:11px;color:#666}
+      table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #bbb;padding:4px 8px;text-align:left;vertical-align:top}th{background:#f1f1f1}a{color:#0b5cad}ol{padding-left:18px}
+      details{display:none}</style></head><body><h1>Sambhav Pipes &amp; Fittings: from the Ask box</h1><div>${when}</div>${q.outerHTML}${c.innerHTML}<p class="foot">Answers come from the company's records and can still be wrong: check the linked sources.</p></body></html>`);
+    w.document.close(); w.focus(); window.setTimeout(() => w.print(), 400);
+  }
+
   function copy(m: Msg) { void navigator.clipboard?.writeText(m.content); setCopied(m.id); window.setTimeout(() => setCopied(null), 1400); }
 
   const groups = useMemo(() => {
@@ -154,6 +275,19 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
       <button type="button" onClick={newChat} className="mx-3 mt-3 inline-flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 text-[0.92rem] font-medium hover:border-brand hover:text-brand"><MessageSquarePlus className="h-4 w-4" />New chat</button>
       <div className="relative mx-3 mt-3"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
         <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search chats" className="w-full rounded-md border border-line bg-field py-1.5 pl-8 pr-2 text-[0.85rem]" aria-label="Search chats" /></div>
+      {saved.length > 0 && (
+        <div className="mx-3 mt-3 rounded-lg border border-line">
+          <p className="flex items-center gap-1.5 px-2.5 pt-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted"><Bookmark className="h-3 w-3" />Saved questions</p>
+          <ul className="max-h-36 overflow-y-auto px-1 pb-1.5 pt-1">
+            {saved.map((q) => (
+              <li key={q.id} className="group/sv flex items-center gap-1 rounded px-1.5 py-1 hover:bg-surface">
+                <button type="button" onClick={() => runSaved(q)} disabled={busy} className="min-w-0 flex-1 truncate text-left text-[0.84rem] disabled:opacity-50" title={q.question}>{q.title}</button>
+                <button type="button" onClick={() => void removeSaved(q.id)} className="shrink-0 rounded p-0.5 text-muted opacity-0 hover:text-bad group-hover/sv:opacity-100 focus:opacity-100" aria-label={`Remove saved question ${q.title}`}><X className="h-3.5 w-3.5" /></button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <nav className="nav-scroll mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="Past chats">
         {groups.length === 0 && <p className="px-3 py-4 text-[0.85rem] text-muted">{chats.length === 0 ? "Your chats will be listed here." : "No chat matches."}</p>}
         {groups.map((g) => (
@@ -204,6 +338,7 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
           <button type="button" onClick={() => setDrawer(true)} className="rounded p-1.5 text-muted hover:text-ink lg:hidden" aria-label="Chats"><Menu className="h-5 w-5" /></button>
           <h1 className="min-w-0 flex-1 truncate font-display text-[1.02rem] font-bold">{chats.find((c) => c.id === activeId)?.title ?? "New chat"}</h1>
           {spend && chatCost > 0 && <span className="shrink-0 text-[0.78rem] text-muted">this chat {cents(chatCost)}</span>}
+          {messages.some((m) => !m.pending && m.content) && <button type="button" onClick={exportChat} className="shrink-0 rounded p-1.5 text-muted hover:text-ink" aria-label="Download this chat as text" title="Download this chat"><Download className="h-4 w-4" /></button>}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8" aria-live="polite">
@@ -213,17 +348,24 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
               <h2 className="font-display text-[1.6rem] font-extrabold tracking-[-0.02em]">How can I help?</h2>
               <p className="mt-1.5 text-[0.95rem] text-muted">Ask about stock, orders, money, mail or Tally. I look the answer up in your records and show where it came from. I only read: I cannot change anything.</p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {saved.slice(0, 4).map((q) => <button key={q.id} type="button" onClick={() => runSaved(q)} className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand-soft px-3.5 py-1.5 text-[0.86rem] hover:border-brand hover:text-brand" title={q.question}><Bookmark className="h-3 w-3" />{q.title}</button>)}
                 {suggestions.map((s) => <button key={s} type="button" onClick={() => void send(s)} className="rounded-full border border-line bg-card px-3.5 py-1.5 text-[0.86rem] hover:border-brand hover:text-brand">{s}</button>)}
               </div>
             </div>
           )}
           <div className="mx-auto max-w-3xl space-y-6">
             {messages.map((m) => m.role === "user" ? (
-              <div key={m.id} className="flex justify-end"><p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand-soft px-4 py-2.5 text-[0.95rem]">{m.content}</p></div>
+              <div key={m.id} className="group/q flex items-start justify-end gap-1">
+                {<button type="button" onClick={() => void saveQuestion(m)} className="mt-2 rounded p-1 text-muted opacity-0 hover:text-brand focus:opacity-100 group-hover/q:opacity-100" aria-label="Save this question" title="Save this question"><BookmarkPlus className="h-4 w-4" /></button>}
+                <div className="max-w-[85%]">
+                  {m.meta?.files && m.meta.files.length > 0 && <div className="mb-1 flex flex-wrap justify-end gap-1.5">{m.meta.files.map((f, i) => <span key={i} className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-0.5 text-[0.76rem] text-muted"><FileText className="h-3 w-3" />{f}</span>)}</div>}
+                  <p className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand-soft px-4 py-2.5 text-[0.95rem]">{m.content}</p>
+                </div>
+              </div>
             ) : (
-              <div key={m.id} className="group/ans">
-                {m.pending && !m.content && <p className="flex items-center gap-2 text-[0.92rem] text-muted"><Loader2 className="h-4 w-4 animate-spin" />{m.status ?? "Thinking"}…</p>}
-                {m.pending && m.content && m.status && <p className="mb-1 flex items-center gap-2 text-[0.8rem] text-muted"><Loader2 className="h-3.5 w-3.5 animate-spin" />{m.status}…</p>}
+              <div key={m.id} className="group/ans" data-answer={m.id}>
+                {m.pending && !m.content && <p className="no-print flex items-center gap-2 text-[0.92rem] text-muted"><Loader2 className="h-4 w-4 animate-spin" />{m.status ?? "Thinking"}…</p>}
+                {m.pending && m.content && m.status && <p className="no-print mb-1 flex items-center gap-2 text-[0.8rem] text-muted"><Loader2 className="h-3.5 w-3.5 animate-spin" />{m.status}…</p>}
                 {m.content && <Markdown text={m.content} refs={m.pending ? undefined : m.meta?.refs ?? []} />}
                 {m.error && <p className="text-[0.92rem] text-bad">{m.error}</p>}
                 {!m.pending && !m.error && m.meta && (
@@ -257,16 +399,26 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
                   </div>
                 )}
                 {!m.pending && m.content && (
-                  <div className="mt-1.5 flex items-center gap-0.5 text-muted">
+                  <div className="no-print mt-1.5 flex items-center gap-0.5 text-muted">
                     <button type="button" onClick={() => copy(m)} className="rounded p-1.5 hover:bg-surface hover:text-ink" aria-label="Copy the answer">{copied === m.id ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}</button>
                     {!m.id.startsWith("pending-") && <>
                       <button type="button" onClick={() => void feedback(m, 1)} className={"rounded p-1.5 hover:bg-surface hover:text-ink " + (m.feedback === 1 ? "text-ok" : "")} aria-label="Good answer" aria-pressed={m.feedback === 1}><ThumbsUp className="h-4 w-4" /></button>
                       <button type="button" onClick={() => void feedback(m, -1)} className={"rounded p-1.5 hover:bg-surface hover:text-ink " + (m.feedback === -1 ? "text-bad" : "")} aria-label="Not a good answer" aria-pressed={m.feedback === -1}><ThumbsDown className="h-4 w-4" /></button></>}
-                    {m === lastAssistant && !busy && <button type="button" onClick={() => void send("", true)} className="rounded p-1.5 hover:bg-surface hover:text-ink" aria-label="Answer again"><RefreshCw className="h-4 w-4" /></button>}
+                    <span className="relative">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setMenu(menu === m.id ? null : m.id); }} className="rounded p-1.5 hover:bg-surface hover:text-ink" aria-label="Download or print this answer" aria-expanded={menu === m.id}><Download className="h-4 w-4" /></button>
+                      {menu === m.id && (
+                        <div className="absolute bottom-full left-0 z-20 mb-1 w-52 rounded-lg border border-line bg-card py-1 text-[0.84rem] text-ink shadow-lg" role="menu" onClick={(e) => e.stopPropagation()}>
+                          {/^\s*\|/m.test(m.content) && <button type="button" role="menuitem" onClick={() => { exportCsv(m); setMenu(null); }} className="block w-full px-3 py-1.5 text-left hover:bg-surface">Table as CSV (Excel)</button>}
+                          <button type="button" role="menuitem" onClick={() => { printAnswer(m); setMenu(null); }} className="block w-full px-3 py-1.5 text-left hover:bg-surface">Print or save as PDF</button>
+                          <button type="button" role="menuitem" onClick={() => { exportText(m); setMenu(null); }} className="block w-full px-3 py-1.5 text-left hover:bg-surface">Text with sources</button>
+                        </div>
+                      )}
+                    </span>
+                    {m === lastAssistant && !busy && !messages.findLast((x) => x.role === "user")?.meta?.files?.length && <button type="button" onClick={() => void send("", true)} className="rounded p-1.5 hover:bg-surface hover:text-ink" aria-label="Answer again"><RefreshCw className="h-4 w-4" /></button>}
                   </div>
                 )}
                 {m === lastAssistant && !busy && m.meta?.follow_ups && m.meta.follow_ups.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">{m.meta.follow_ups.map((f) => <button key={f} type="button" onClick={() => void send(f)} className="rounded-full border border-line px-3 py-1 text-[0.82rem] hover:border-brand hover:text-brand">{f}</button>)}</div>
+                  <div className="no-print mt-2 flex flex-wrap gap-2">{m.meta.follow_ups.map((f) => <button key={f} type="button" onClick={() => void send(f)} className="rounded-full border border-line px-3 py-1 text-[0.82rem] hover:border-brand hover:text-brand">{f}</button>)}</div>
                 )}
               </div>
             ))}
@@ -278,9 +430,17 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
           <form onSubmit={(e) => { e.preventDefault(); void send(text); }} className="mx-auto max-w-3xl rounded-xl border border-line bg-field p-2 focus-within:border-brand">
             <textarea ref={box} value={text} onChange={(e) => setText(e.target.value)} rows={1} maxLength={600} disabled={busy}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(text); } }}
-              placeholder="Ask anything, e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?" aria-label="Your question"
+              placeholder={files.length ? "What should I do with the file? e.g. Do we have stock for this PO?" : "Ask anything, e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?"} aria-label="Your question"
               className="max-h-[200px] w-full resize-none bg-transparent px-2 py-1.5 text-[0.95rem] outline-none" />
+            {files.length > 0 && <div className="flex flex-wrap gap-1.5 px-1 pb-1">{files.map((f, i) => (
+              <span key={i} className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-0.5 text-[0.78rem]"><FileText className="h-3 w-3 text-muted" />{f.name}<span className="text-muted">({Math.max(1, Math.round(f.size / 1024))} KB)</span>
+                <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="rounded text-muted hover:text-bad" aria-label={`Remove ${f.name}`}><X className="h-3 w-3" /></button></span>))}</div>}
+            {fileNote && <p className="px-1 pb-1 text-[0.78rem] text-bad">{fileNote}</p>}
             <div className="mt-1 flex flex-wrap items-center gap-2 px-1">
+              {canAttach && <>
+                <input ref={picker} type="file" accept={ACCEPT} multiple className="hidden" onChange={(e) => void attach(e.target.files)} aria-label="Attach files" />
+                <button type="button" onClick={() => picker.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md border border-line bg-card px-2 py-1 text-[0.82rem] text-muted hover:text-ink disabled:opacity-50" title="Attach a PDF, picture or text file (up to 3 files, 3 MB). It is read for this question only and not stored."><Paperclip className="h-3.5 w-3.5" /><span className="sr-only sm:not-sr-only">Attach</span></button>
+              </>}
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Model</span>
                 <select value={model} onChange={(e) => setModel(e.target.value as ModelKey)} disabled={busy} className="rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Model" title={models.find((m) => m.value === model)?.hint}>
                   {models.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select></label>

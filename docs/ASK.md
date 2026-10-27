@@ -33,3 +33,14 @@ Every record a lookup returns carries a reference id (r1, r2 ...). The model cit
 - Tab ids (`gid`) come from the daily sheet sync (`sheet_sources.tabs`). Plates and heat numbers are found in the live stock sheets by their number (trigram index on the row text), so a link points at the live row, not at the 8 Oct import.
 - Stock answers also say when the stock book was loaded; the sheets keep changing in between, and the stock book is not re-derived from them yet.
 - Code: `web/src/lib/ask/refs.ts` (reference book, `sheetRef`, `findSheetRows`, `citeRefs`), `tools.ts` (each lookup adds refs), `Markdown.tsx` and `AskApp.tsx` (display).
+
+## Export, attachments and saved questions (29 Oct 2026)
+
+- **Download an answer** (the download icon under it): its table as CSV for Excel (with a last column of links to check each row; cells that start with `=`, `+`, `@` are protected), print or save as PDF (opens a clean page and the browser's print dialog), or text with the numbered sources. The download icon at the top of the chat saves the whole chat as text.
+- **Attach files** (the paperclip; owner, administrators, approvers, accounts, sales, office): up to 3 files, 3 MB together. PDF, pictures (png, jpg, webp, gif) and text files (txt, csv, tsv, md, json). The model reads the file for that question and checks it against the records ("do we have stock for this PO?"). The file itself is NOT stored: only its name stays on the question. Excel and Word are not read yet (save as PDF or CSV). A question with a file cannot be re-answered with the circular arrow (the file is gone); attach it again. File contents are treated as data, never as instructions. Cost: a one-page PO on the Fast model was about half a cent.
+- **Saved questions** (the bookmark beside a question you asked): your own list (up to 50) with the model and "Look in" you used; shown in the left column and on the empty screen; one click asks it again. Private to the person (`ask_saved`, migration 37).
+- Code: `web/src/app/(app)/ask/AskApp.tsx` (all three), `api/ask/route.ts` (files checked: kind, count, size), `lib/ask/engine.ts` (`userContent`), `api/ask/saved/**`.
+
+## Stock refresh from the live sheets (28 Oct 2026)
+
+`python tools/import/stock_refresh.py` (dry run) and `--commit`. Reads WB1 and WB2 live with typed values, runs the same parsers as the first load, matches each plate to the database by heat/plate number + grade + size, and ADDS only plates and sale lines the database does not have. It never changes or deletes: plates missing from the sheet, differing weights and unread tabs (MIX GRADE, MANGANESE PLATE, Corten) are only listed (`data/stock-refresh-report.csv`). Plates without a receipt date are skipped and noted in `exceptions`, as in the first load. First run on 28 Oct: 83 plates and 174 sale lines added (WB1 1,251 → 1,302 plates, WB2 582 → 614). Run it whenever the stock sheets have changed a lot; a button in the app and a schedule can follow.

@@ -29,6 +29,7 @@ async function Body() {
   return (
     <>
       <AskApp
+        canAttach={docs}
         suggestions={admin ? [...ADMIN, ...STOCK] : STOCK}
         scopes={allowed.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))}
         models={(Object.keys(MODELS) as (keyof typeof MODELS)[]).map((k) => ({ value: k, label: MODELS[k].label, hint: MODELS[k].hint }))}
