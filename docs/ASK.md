@@ -23,3 +23,13 @@ Laid out like Claude: a left panel of the person's own past chats (search, pin, 
 - **Per answer:** copy, thumbs up/down, answer again, "Looked at" (the lookups used and their row counts), follow-up questions.
 - **Administrators:** today's spend against the daily limit and the cost of the current chat; `/ask/log` lists every question (who, lookups, model, cost, time) and the answers marked not good (`ask_feedback_log()`).
 - **Not yet:** attaching a file, export to CSV, saved shared questions, scheduled questions, actions.
+
+## Checking an answer: references (28 Oct 2026)
+
+Every record a lookup returns carries a reference id (r1, r2 ...). The model cites them after each fact (`[r3]`); the server keeps only ids a lookup really handed out (an invented id is dropped) and numbers them in order of first use. The screen shows each as a small numbered link in the text and a "Check it here" list under the answer.
+
+- **Sheet rows** open the Google sheet at the exact tab and row (`#gid=<tab>&range=A<row>:Z<row>`), with the row's own text as a preview. Only the owner and administrators get these (the sheets are theirs to read).
+- **App pages** (plate, order, Tally invoice trail, document, draft, party search) open the screen in the app. Everyone gets these.
+- Tab ids (`gid`) come from the daily sheet sync (`sheet_sources.tabs`). Plates and heat numbers are found in the live stock sheets by their number (trigram index on the row text), so a link points at the live row, not at the 8 Oct import.
+- Stock answers also say when the stock book was loaded; the sheets keep changing in between, and the stock book is not re-derived from them yet.
+- Code: `web/src/lib/ask/refs.ts` (reference book, `sheetRef`, `findSheetRows`, `citeRefs`), `tools.ts` (each lookup adds refs), `Markdown.tsx` and `AskApp.tsx` (display).

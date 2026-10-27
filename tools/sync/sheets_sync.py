@@ -55,15 +55,15 @@ def google():
 
 
 def read_sheet(sheets, spreadsheet_id: str, skip: set[str]) -> tuple[dict[str, list[tuple[int, list[str], dict]]], list[dict]]:
-    """(tab -> [(row_no, cells, links)] for the non-empty rows, [{title, hidden}] in the sheet's own tab order)."""
-    fields = "sheets(properties(title,index,hidden),data(startRow,rowData(values(formattedValue,hyperlink))))"
+    """(tab -> [(row_no, cells, links)] for the non-empty rows, [{title, hidden, gid}] in the sheet's own tab order (gid lets a link open the exact tab))."""
+    fields = "sheets(properties(sheetId,title,index,hidden),data(startRow,rowData(values(formattedValue,hyperlink))))"
     meta = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id, includeGridData=True, fields=fields).execute(num_retries=3)
     out, order = {}, []
     for sh in sorted(meta["sheets"], key=lambda x: x["properties"].get("index", 0)):
         title = sh["properties"]["title"]
         if title in skip:
             continue
-        order.append({"title": title, "hidden": bool(sh["properties"].get("hidden"))})
+        order.append({"title": title, "hidden": bool(sh["properties"].get("hidden")), "gid": sh["properties"].get("sheetId")})
         rows = []
         for grid in sh.get("data", []):
             start = grid.get("startRow", 0)

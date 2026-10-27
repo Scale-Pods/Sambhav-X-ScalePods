@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, Loader2, Menu, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Copy, ExternalLink, Loader2, Menu, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui";
-import { Markdown } from "./Markdown";
+import { Markdown, type RefLink } from "./Markdown";
 
 type ModelKey = "fast" | "balanced";
 type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; updated_at: string };
-type Meta = { sources?: string[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
+type Meta = { sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
 
 export type AskAppProps = {
@@ -91,7 +91,7 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
         while ((nl = buf.indexOf("\n")) >= 0) {
           const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
           if (!line) continue;
-          const e = JSON.parse(line) as { type: string; text?: string; chatId?: string; messageId?: string; error?: string; result?: { answer: string; sources: string[]; follow_ups: string[]; confidence: string; used: { name: string; rows: number | null }[]; usd: number; model: string } };
+          const e = JSON.parse(line) as { type: string; text?: string; chatId?: string; messageId?: string; error?: string; result?: { answer: string; sources: string[]; refs?: RefLink[]; follow_ups: string[]; confidence: string; used: { name: string; rows: number | null }[]; usd: number; model: string } };
           if (e.type === "meta" && e.chatId) { setActiveId(e.chatId); void loadChats(); }
           else if (e.type === "status") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, status: e.text } : m)));
           else if (e.type === "delta") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: m.content + (e.text ?? ""), status: undefined } : m)));
@@ -99,7 +99,7 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
           else if (e.type === "saved" && e.messageId) { const old = realId; realId = e.messageId; setMessages((ms) => ms.map((m) => (m.id === old ? { ...m, id: e.messageId! } : m))); }
           else if (e.type === "done" && e.result) {
             const r = e.result;
-            setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: r.answer, pending: false, status: undefined, meta: { sources: r.sources, follow_ups: r.follow_ups, confidence: r.confidence, used: r.used, usd: r.usd, model: r.model } } : m)));
+            setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: r.answer, pending: false, status: undefined, meta: { sources: r.sources, refs: r.refs, follow_ups: r.follow_ups, confidence: r.confidence, used: r.used, usd: r.usd, model: r.model } } : m)));
             setChatCost((c) => c + r.usd); setToday((t) => t + r.usd);
           } else if (e.type === "error") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, pending: false, status: undefined, error: e.error } : m)));
         }
@@ -224,15 +224,31 @@ export function AskApp({ suggestions, scopes, models, spend }: AskAppProps) {
               <div key={m.id} className="group/ans">
                 {m.pending && !m.content && <p className="flex items-center gap-2 text-[0.92rem] text-muted"><Loader2 className="h-4 w-4 animate-spin" />{m.status ?? "Thinking"}…</p>}
                 {m.pending && m.content && m.status && <p className="mb-1 flex items-center gap-2 text-[0.8rem] text-muted"><Loader2 className="h-3.5 w-3.5 animate-spin" />{m.status}…</p>}
-                {m.content && <Markdown text={m.content} />}
+                {m.content && <Markdown text={m.content} refs={m.pending ? undefined : m.meta?.refs ?? []} />}
                 {m.error && <p className="text-[0.92rem] text-bad">{m.error}</p>}
                 {!m.pending && !m.error && m.meta && (
                   <div className="mt-2 space-y-2">
                     <div className="flex flex-wrap items-center gap-1.5 text-[0.78rem] text-muted">
                       {m.meta.confidence === "not_found" && <Badge tone="warning">Nothing found</Badge>}
                       {m.meta.confidence === "partly" && <Badge tone="info">Partly answered</Badge>}
-                      {m.meta.sources && m.meta.sources.length > 0 && <span>From: {m.meta.sources.join(" · ")}</span>}
+                      {(!m.meta.refs || m.meta.refs.length === 0) && m.meta.sources && m.meta.sources.length > 0 && <span>From: {m.meta.sources.join(" · ")}</span>}
                     </div>
+                    {m.meta.refs && m.meta.refs.length > 0 && (
+                      <div className="rounded-lg border border-line bg-surface/50 px-3 py-2">
+                        <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted">Check it here</p>
+                        <ol className="mt-1 space-y-1">
+                          {m.meta.refs.map((r) => (
+                            <li key={r.id} className="flex items-start gap-2 text-[0.82rem]">
+                              <span className="mt-0.5 inline-flex h-[1.1rem] min-w-[1.1rem] shrink-0 items-center justify-center rounded-full bg-brand-soft px-1 text-[0.68rem] font-semibold text-brand">{r.n}</span>
+                              <span className="min-w-0">
+                                <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-brand hover:underline">{r.label}<ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" /></a>
+                                {r.note && <span className="block truncate text-muted" title={r.note}>{r.note}</span>}
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                     {m.meta.used && m.meta.used.length > 0 && (
                       <details className="text-[0.78rem] text-muted"><summary className="inline-flex cursor-pointer items-center gap-1 hover:text-ink">Looked at <ChevronDown className="h-3 w-3" /></summary>
                         <ul className="mt-1 space-y-0.5 pl-1">{m.meta.used.map((u, i) => <li key={i}>{LOOKED[u.name] ?? u.name}{u.rows != null ? `: ${u.rows} row${u.rows === 1 ? "" : "s"}` : ""}</li>)}</ul>

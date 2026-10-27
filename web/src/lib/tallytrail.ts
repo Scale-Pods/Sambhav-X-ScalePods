@@ -71,7 +71,7 @@ export type Trail = {
   po_docs: { id: string; file: string; po: string | null; buyer: string | null; review: string }[];
   po_orders: { order_no: string; client: string | null; po_no: string | null; order_date: string | null; status: string }[];
   heats: { heat: string; lots: { lot_no: number; plate_no: string | null; status: string; certs: string[] }[]; cert_docs: { id: string; file: string; cert_no: string | null; review: string }[] }[];
-  register: { dispatch_date: string; invoice_no: string; vehicle_no: string | null; weight_kg: number | null; grade: string | null }[];
+  register: { dispatch_date: string; invoice_no: string; vehicle_no: string | null; weight_kg: number | null; grade: string | null; row_no: number; month_tab: string }[];
   same_numbers: { id: string; file: string; by: string }[];
 };
 
@@ -95,21 +95,23 @@ export async function trailDetail(id: string): Promise<Trail | null> {
       where length(app.norm_text(po_no)) >= 4 and (app.norm_text(po_no) = app.norm_text($1) or app.norm_text(po_no) like '%' || app.norm_text($1) || '%' or app.norm_text($1) like '%' || app.norm_text(po_no) || '%')
       order by order_date desc nulls last limit 5`, [v.po_ref]) : [];
 
-  const heats: Trail["heats"] = [];
-  for (const h of [...new Set(items.map((i) => i.heat).filter(Boolean))].slice(0, 20)) {
-    const lots = await q<{ lot_no: number; plate_no: string | null; status: string; certs: string[] | null }>(
-      `select l.lot_no::int lot_no, l.plate_no, l.current_status status,
-              (select array_agg(coalesce(c.cert_no, 'certificate')) from public.lot_certificates lc join public.certificates c on c.id = lc.certificate_id where lc.lot_id = l.id) certs
-         from public.v_lots_current l where app.norm_text(l.heat_no) = app.norm_text($1) order by l.lot_no limit 6`, [h]);
-    const cert_docs = await q<{ id: string; file: string; cert_no: string | null; review: string }>(
-      `select distinct d.id, d.original_filename file, nullif(d.extracted->>'certificate_no', '') cert_no, d.review_status review
-         from public.documents d, jsonb_array_elements(coalesce(d.extracted->'items', '[]')) it
-        where d.extracted->>'family' = 'mtc' and app.norm_text(it->>'heat_no') = app.norm_text($1) limit 4`, [h]);
-    heats.push({ heat: h, lots: lots.map((l) => ({ ...l, certs: l.certs ?? [] })), cert_docs });
-  }
+  // each heat is looked up on its own, side by side (one after another it is a dozen round trips)
+  const heats: Trail["heats"] = await Promise.all([...new Set(items.map((i) => i.heat).filter(Boolean))].slice(0, 20).map(async (h) => {
+    const [lots, cert_docs] = await Promise.all([
+      q<{ lot_no: number; plate_no: string | null; status: string; certs: string[] | null }>(
+        `select l.lot_no::int lot_no, l.plate_no, l.current_status status,
+                (select array_agg(coalesce(c.cert_no, 'certificate')) from public.lot_certificates lc join public.certificates c on c.id = lc.certificate_id where lc.lot_id = l.id) certs
+           from public.v_lots_current l where app.norm_text(l.heat_no) = app.norm_text($1) order by l.lot_no limit 6`, [h]),
+      q<{ id: string; file: string; cert_no: string | null; review: string }>(
+        `select distinct d.id, d.original_filename file, nullif(d.extracted->>'certificate_no', '') cert_no, d.review_status review
+           from public.documents d, jsonb_array_elements(coalesce(d.extracted->'items', '[]')) it
+          where d.extracted->>'family' = 'mtc' and app.norm_text(it->>'heat_no') = app.norm_text($1) limit 4`, [h]),
+    ]);
+    return { heat: h, lots: lots.map((l) => ({ ...l, certs: l.certs ?? [] })), cert_docs };
+  }));
 
   const register = await q<Trail["register"][number]>(
-    `select dispatch_date::text dispatch_date, invoice_no, vehicle_no, weight_kg::float8 weight_kg, grade from public.v_vehicle_register
+    `select dispatch_date::text dispatch_date, invoice_no, vehicle_no, weight_kg::float8 weight_kg, grade, row_no::int row_no, month_tab from public.v_vehicle_register
       where app.norm_text(invoice_no) = app.norm_text(split_part($1, '/', 1)) and dispatch_date between $2::date - 3 and $2::date + 10 order by dispatch_date limit 4`, [v.voucher_no, v.date]);
 
   const same = (v.irn || v.eway_bill_no)

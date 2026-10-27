@@ -6,7 +6,7 @@ import { q } from "../db";
 export type ChatRow = { id: string; title: string; pinned: boolean; model: "fast" | "balanced"; scope: string; updated_at: string };
 export type MessageRow = {
   id: string; role: "user" | "assistant"; content: string; feedback: number | null; created_at: string;
-  meta: { sources?: string[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string } | null;
+  meta: { sources?: string[]; refs?: { id: string; n: number; label: string; url: string; kind: "sheet" | "app"; note?: string }[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string } | null;
 };
 
 export const listChats = () =>
