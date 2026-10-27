@@ -312,9 +312,21 @@ export const TOOLS: Tool[] = [
   },
 ];
 
-/** Which lookups a role may use. The database's own row rules apply on top, so a mistake here still cannot open more than the person may read. */
-export function toolsFor(role: string | undefined): Tool[] {
-  return TOOLS.filter((t) => t.who === "all" || (t.who === "docs" && canUploadDocs(role)) || (t.who === "admin" && canExport(role)));
+export const SCOPES = ["all", "stock", "orders", "money", "mail", "tally", "documents", "sheets"] as const;
+export type Scope = (typeof SCOPES)[number];
+export const SCOPE_LABEL: Record<Scope, string> = { all: "Everything", stock: "Stock", orders: "Orders and dispatch", money: "Money", mail: "Mail and leads", tally: "Tally", documents: "Documents", sheets: "Sheets" };
+// the "Look in" choice narrows which lookups the model may use: faster, cheaper and it cannot wander
+const SCOPE_OF: Record<string, Scope> = {
+  stock_check: "stock", stock_summary: "stock", plate_lookup: "stock", overview: "all",
+  orders_search: "orders", order_detail: "orders", dispatch_search: "orders",
+  receivables: "money", payables: "money", invoices_search: "money", payments_search: "money",
+  leads_mail_quotes: "mail", tally_voucher: "tally", tally_party: "tally", invoice_trail: "tally",
+  documents_search: "documents", drafts_search: "documents", count_status: "documents", sheet_search: "sheets",
+};
+
+/** Which lookups a role may use, within the chosen "Look in". The database's own row rules apply on top, so a mistake here still cannot open more than the person may read. */
+export function toolsFor(role: string | undefined, scope: Scope = "all"): Tool[] {
+  return TOOLS.filter((t) => (t.who === "all" || (t.who === "docs" && canUploadDocs(role)) || (t.who === "admin" && canExport(role))) && (scope === "all" || SCOPE_OF[t.name] === scope));
 }
 
 /** A lookup's result as text for the AI, cut to a safe size. The text is data, never instructions. */

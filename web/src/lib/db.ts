@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { cache } from "react";
 import { connection } from "next/server";
 import { Pool, type PoolClient } from "pg";
@@ -34,8 +35,15 @@ export async function ping(): Promise<boolean> {
 
 export type Tx = Pick<PoolClient, "query">;
 
+// A streamed answer keeps working after the request handler has returned, when the session cookie can no longer be read. The handler reads the verified
+// person once, up front, and runs the rest as that person with runAs.
+const asUser = new AsyncLocalStorage<string>();
+export const runAs = <T,>(userId: string, fn: () => Promise<T>) => asUser.run(userId, fn);
+
 /** The signed-in person's id from the verified session cookie, or null. */
 export const currentUserId = cache(async (): Promise<string | null> => {
+  const forced = asUser.getStore();
+  if (forced) return forced;
   await connection(); // everything here is per person: render at request time, never in the prerendered shell
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getClaims();
