@@ -41,20 +41,23 @@ async function Body({ params }: { params: P }) {
   await expireStuckDocuments();
   const d = await documentDetail(id);
   if (!d) notFound();
-  const me = await currentStaff();
   const supabase = await supabaseServer();
-  const signed = await supabase.storage.from("documents").createSignedUrl(d.doc.storage_path, 900);
-  const url = signed.data?.signedUrl;
-  const canEdit = Boolean(me && canUploadDocs(me.role)) && d.doc.review_status === "pending";
   // a vendor invoice or a mill certificate has its own form and its own matches; everything else is an order or enquiry
   const family = d.read && isFamilyRead(d.read) ? d.read : null;
   const order = d.read && !isFamilyRead(d.read) ? d.read : null;
-  const matches = order ? await matchRead(order) : null;
-  const familyMatch = family ? (family.family === "invoice" ? await matchInvoice(family, d.doc.id) : await matchMtc(family, d.doc.id)) : null;
-  const draft = await draftOfDocument(d.doc.id);
   // an order or enquiry from a customer: do we have the plates? (read-only; it reserves nothing)
   const wanted = order && order.direction === "customer_orders_from_us" ? inputsFromRead(order) : [];
-  const fits = await Promise.all(wanted.map(async (w) => ({ line: w.line, fit: await stockFit(w.input) })));
+  // everything the page needs is asked at the same time (one after another it was a dozen round trips to the database)
+  const [me, signed, matches, familyMatch, draft, fits] = await Promise.all([
+    currentStaff(),
+    supabase.storage.from("documents").createSignedUrl(d.doc.storage_path, 900),
+    order ? matchRead(order) : Promise.resolve(null),
+    family ? (family.family === "invoice" ? matchInvoice(family, d.doc.id) : matchMtc(family, d.doc.id)) : Promise.resolve(null),
+    draftOfDocument(d.doc.id),
+    Promise.all(wanted.map(async (w) => ({ line: w.line, fit: await stockFit(w.input) }))),
+  ]);
+  const url = signed.data?.signedUrl;
+  const canEdit = Boolean(me && canUploadDocs(me.role)) && d.doc.review_status === "pending";
   const usd = d.runs.reduce((a, r) => a + r.usd, 0);
 
   return (
