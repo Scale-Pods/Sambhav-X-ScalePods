@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, Search } from "lucide-react";
 import type { SheetRow, TabData } from "@/lib/sheets";
 
@@ -34,6 +34,7 @@ export function SheetGrid({ sheetKey, tabs, initialTab, initialSearch, initial }
   const [data, setData] = useState<TabData>(initial);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const why = useRef(""); // what went wrong with the last fetch, shown to the person and written to the server log by the route
 
   const fetchTab = useCallback((t: string, p: number, s: string): Promise<TabData | null> => {
     const id = idOf(t, p, s);
@@ -42,10 +43,17 @@ export function SheetGrid({ sheetKey, tabs, initialTab, initialSearch, initial }
     const running = inflight.get(id);
     if (running) return running;
     const url = `/api/sheets/data?key=${encodeURIComponent(sheetKey)}&tab=${encodeURIComponent(t)}&page=${p}${s ? `&q=${encodeURIComponent(s)}` : ""}`;
-    const job = fetch(url)
-      .then((r) => (r.ok ? (r.json() as Promise<TabData>) : null))
+    const get = (): Promise<TabData | null> => fetch(url, { credentials: "same-origin" })
+      .then((r) => {
+        if (r.ok && (r.headers.get("content-type") ?? "").includes("json")) return r.json() as Promise<TabData>;
+        why.current = r.ok ? "the reply was not data (signed out?)" : r.status === 401 ? "signed out: reload the page and sign in again" : `server said ${r.status}`;
+        return null;
+      })
+      .catch((e: unknown) => { why.current = "network: " + (e instanceof Error ? e.message : "failed"); return null; });
+    // one automatic second try after a short pause: a brief hiccup should not need a click
+    const job = get()
+      .then((d) => d ?? new Promise<TabData | null>((ok) => window.setTimeout(() => ok(get()), 700)))
       .then((d) => { if (d) cache.set(id, d); return d; })
-      .catch(() => null)
       .finally(() => inflight.delete(id));
     inflight.set(id, job);
     return job;
@@ -59,7 +67,7 @@ export function SheetGrid({ sheetKey, tabs, initialTab, initialSearch, initial }
     // ignore the answer if the person has already moved on
     if (!hit) {
       setBusy(false);
-      if (d) setData(d); else setFailed(true);
+      if (d) setData(d); else { setFailed(true); setData({ header: null, frozen: [], rows: [], total: 0, page: 1, pages: 1, size: data.size, width: data.width }); }
     }
     const u = new URLSearchParams({ tab: t });
     if (s) u.set("q", s);
@@ -93,7 +101,7 @@ export function SheetGrid({ sheetKey, tabs, initialTab, initialSearch, initial }
       <div className="overflow-hidden rounded-lg border border-line bg-card shadow-[0_1px_2px_rgba(24,34,45,0.04)]">
         <div className="relative max-h-[68vh] overflow-auto">
           {busy && <div className="sticky left-0 top-0 z-40 flex h-0 items-start"><span className="m-3 rounded-md bg-ink px-3 py-1.5 text-[0.8rem] font-medium text-surface shadow">Loading {tab}…</span></div>}
-          {failed && <p className="sticky left-0 px-5 py-4 text-[0.9rem] text-bad">This tab could not be loaded. Click it again to retry.</p>}
+          {failed && <p className="sticky left-0 px-5 py-4 text-[0.9rem] text-bad">This tab could not be loaded ({why.current || "unknown reason"}). Click it again to retry.</p>}
           <table className={"border-separate border-spacing-0 text-[0.84rem] transition-opacity " + (busy ? "opacity-40" : "")}>
             <thead>
               <tr>
