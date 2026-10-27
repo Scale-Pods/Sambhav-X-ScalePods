@@ -91,11 +91,22 @@ export class NotSignedIn extends Error {
   }
 }
 
+/** Slow database work is written to the server log (Vercel runtime logs) with how long it took, so a slow page can be traced to the query. */
+async function timed<T>(what: string, run: () => Promise<T>): Promise<T> {
+  const t0 = Date.now();
+  try {
+    return await run();
+  } finally {
+    const ms = Date.now() - t0;
+    if (ms >= 400) console.warn(`[slow-db] ${ms} ms ${what.replace(/\s+/g, " ").slice(0, 110)}`);
+  }
+}
+
 /** Read as the signed-in person. */
 export async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
   const id = await currentUserId();
   if (!id) throw new NotSignedIn();
-  return inTx(id, true, async (tx) => (await tx.query(sql, params)).rows as T[]);
+  return timed(sql, () => inTx(id, true, async (tx) => (await tx.query(sql, params)).rows as T[]));
 }
 
 /** Several reads as the signed-in person in one transaction on one connection. An overview page asks 10-14 questions; sent together they
@@ -118,7 +129,7 @@ export async function qTx<T>(fn: (q: <R = Record<string, unknown>>(sql: string, 
 export async function call<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
   const id = await currentUserId();
   if (!id) throw new NotSignedIn();
-  return inTx(id, false, async (tx) => (await tx.query(sql, params)).rows as T[]);
+  return timed(sql, () => inTx(id, false, async (tx) => (await tx.query(sql, params)).rows as T[]));
 }
 
 /** A message that is safe to show: only our own "raise exception" texts and permission errors, never raw database detail. */

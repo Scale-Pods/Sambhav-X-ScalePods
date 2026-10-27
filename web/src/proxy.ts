@@ -16,7 +16,9 @@ export async function proxy(request: NextRequest) {
     },
   });
 
+  const t0 = Date.now();
   const { data } = await supabase.auth.getClaims();
+  if (Date.now() - t0 >= 300) console.warn(`[slow-auth] ${Date.now() - t0} ms getClaims ${request.nextUrl.pathname}`);
   const signedIn = Boolean(data?.claims?.sub);
   const onLogin = request.nextUrl.pathname === "/login";
 
