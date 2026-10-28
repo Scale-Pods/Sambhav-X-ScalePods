@@ -20,6 +20,13 @@ const nextConfig: NextConfig = {
       ],
     }];
   },
+  // the Digital Brain used to live at /ask: old links and bookmarks keep working
+  async redirects() {
+    return [
+      { source: "/ask", destination: "/digital-brain", permanent: true },
+      { source: "/ask/:path*", destination: "/digital-brain/:path*", permanent: true },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

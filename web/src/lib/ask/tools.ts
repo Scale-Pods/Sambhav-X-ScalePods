@@ -95,7 +95,7 @@ const PAGES: AppPage[] = [
   { path: "/tally/invoices", title: "Invoices and paperwork", what: "Tally sales invoices with PO, certificates, vehicle, e-invoice", who: "admin" },
   { path: "/sheets", title: "Sheet view", what: "the Google Sheets copies, tab by tab", who: "admin" },
   { path: "/review", title: "Needs review", what: "things the sheets could not settle", who: "admin" },
-  { path: "/ask", title: "Digital Brain", what: "the full question workspace with history, files and saved questions", who: "all" },
+  { path: "/digital-brain", title: "Digital Brain", what: "the full question workspace with history, files and saved questions", who: "all" },
 ];
 
 export const TOOLS: Tool[] = [

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Check, Clock, Copy, ExternalLink, FileText, Loader2, PackageSearch, Plus, Receipt, RefreshCw, Search, SendHorizonal, Sparkles, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
-import { Markdown, type RefLink } from "@/app/(app)/ask/Markdown";
+import { Markdown, type RefLink } from "@/app/(app)/digital-brain/Markdown";
 
 type Hit = { kind: "plate" | "invoice" | "order"; label: string; sub: string; href: string };
 type Meta = { refs?: RefLink[]; follow_ups?: string[]; confidence?: string; usd?: number; model?: string } | null;
@@ -245,7 +245,7 @@ export function TopSearch({ admin }: { admin: boolean }) {
               <span className="ml-auto flex items-center">
                 <button type="button" onClick={() => setView(view === "history" ? "chat" : "history")} className={"rounded p-1.5 hover:bg-surface " + (view === "history" ? "text-brand" : "text-muted hover:text-ink")} aria-label="Past questions" title="Past questions"><Clock className="h-4 w-4" /></button>
                 <button type="button" onClick={fresh} disabled={busy} className="rounded p-1.5 text-muted hover:bg-surface hover:text-ink disabled:opacity-40" aria-label="New question" title="New conversation"><Plus className="h-4 w-4" /></button>
-                {chatId && <Link href={`/ask?chat=${chatId}`} onClick={() => setOpen(false)} className="rounded p-1.5 text-muted hover:bg-surface hover:text-ink" aria-label="Open in Digital Brain" title="Continue in Digital Brain"><ExternalLink className="h-4 w-4" /></Link>}
+                {chatId && <Link href={`/digital-brain?chat=${chatId}`} onClick={() => setOpen(false)} className="rounded p-1.5 text-muted hover:bg-surface hover:text-ink" aria-label="Open in Digital Brain" title="Continue in Digital Brain"><ExternalLink className="h-4 w-4" /></Link>}
                 <button type="button" onClick={() => setOpen(false)} className="rounded p-1.5 text-muted hover:bg-surface hover:text-ink" aria-label="Close"><X className="h-4 w-4" /></button>
               </span>
             </header>

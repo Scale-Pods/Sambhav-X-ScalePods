@@ -1,4 +1,4 @@
-# Digital Brain (formerly "Ask": the question box over the business records; the page address is still /ask)
+# Digital Brain (formerly "Ask": the question box over the business records; the page address is /digital-brain; /ask redirects there)
 
 A person types a question in plain words; the answer comes from the system's own records.
 
@@ -39,7 +39,7 @@ Every record a lookup returns carries a reference id (r1, r2 ...). The model cit
 - **Download an answer** (the download icon under it): its table as CSV for Excel (with a last column of links to check each row; cells that start with `=`, `+`, `@` are protected), print or save as PDF (opens a clean page and the browser's print dialog), or text with the numbered sources. The download icon at the top of the chat saves the whole chat as text.
 - **Attach files** (the paperclip; owner, administrators, approvers, accounts, sales, office): up to 3 files, 3 MB together. PDF, pictures (png, jpg, webp, gif) and text files (txt, csv, tsv, md, json). The model reads the file for that question and checks it against the records ("do we have stock for this PO?"). The file itself is NOT stored: only its name stays on the question. Excel and Word are not read yet (save as PDF or CSV). A question with a file cannot be re-answered with the circular arrow (the file is gone); attach it again. File contents are treated as data, never as instructions. Cost: a one-page PO on the Fast model was about half a cent.
 - **Saved questions** (the bookmark beside a question you asked): your own list (up to 50) with the model and "Look in" you used; shown in the left column and on the empty screen; one click asks it again. Private to the person (`ask_saved`, migration 37).
-- Code: `web/src/app/(app)/ask/AskApp.tsx` (all three), `api/ask/route.ts` (files checked: kind, count, size), `lib/ask/engine.ts` (`userContent`), `api/ask/saved/**`.
+- Code: `web/src/app/(app)/digital-brain/AskApp.tsx` (all three), `api/ask/route.ts` (files checked: kind, count, size), `lib/ask/engine.ts` (`userContent`), `api/ask/saved/**`.
 
 ## Stock refresh from the live sheets (28 Oct 2026)
 

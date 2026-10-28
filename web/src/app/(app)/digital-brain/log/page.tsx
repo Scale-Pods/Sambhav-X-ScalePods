@@ -9,7 +9,7 @@ import { q } from "@/lib/db";
 export default function AskLogPage() {
   return (
     <>
-      <Link href="/ask" className="mb-4 inline-flex items-center gap-1.5 text-[0.9rem] font-medium text-muted hover:text-ink"><ArrowLeft className="h-4 w-4" />Back to Digital Brain</Link>
+      <Link href="/digital-brain" className="mb-4 inline-flex items-center gap-1.5 text-[0.9rem] font-medium text-muted hover:text-ink"><ArrowLeft className="h-4 w-4" />Back to Digital Brain</Link>
       <PageHeader title="Questions asked" hint="Every question the Digital Brain has answered: who asked, which records it looked at, how long it took and what it cost. Only the owner and administrators see this page." />
       <Suspense fallback={<Card><Skeleton rows={10} /></Card>}>
         <Body />

@@ -40,7 +40,7 @@ async function Body({ searchParams }: { searchParams: Promise<Record<string, str
         models={(Object.keys(MODELS) as (keyof typeof MODELS)[]).map((k) => ({ value: k, label: MODELS[k].label, hint: MODELS[k].hint }))}
         spend={spend}
       />
-      {admin && <p className="mt-3 text-[0.82rem] text-muted"><Link href="/ask/log" className="font-medium text-brand hover:underline">See every question that was asked, what it used and what it cost →</Link></p>}
+      {admin && <p className="mt-3 text-[0.82rem] text-muted"><Link href="/digital-brain/log" className="font-medium text-brand hover:underline">See every question that was asked, what it used and what it cost →</Link></p>}
     </>
   );
 }
