@@ -62,7 +62,7 @@ async function addNotes(book: RefBook, refs: RefView[]) {
   } catch { /* the link works without the preview */ }
 }
 
-export type ToolCtx = { refs: RefBook; admin: boolean };
+export type ToolCtx = { refs: RefBook; admin: boolean; docs?: boolean };
 
 type SheetInfo = { name: string; id: string; gids: Record<string, number> };
 let cache: { at: number; map: Map<string, SheetInfo> } | null = null;

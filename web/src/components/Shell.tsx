@@ -7,6 +7,7 @@ import { NavLink } from "./NavLink";
 import { NavProgress } from "./NavProgress";
 import { PeriodPill } from "./PeriodPill";
 import { ThemeToggle } from "./ThemeToggle";
+import { TopSearchGate } from "./TopSearchGate";
 import { UserChip } from "./UserChip";
 import { ViewToggle } from "./ViewToggle";
 
@@ -59,14 +60,14 @@ export function Shell({ children }: { children: ReactNode }) {
           <Link href="/" className="w-28 shrink-0 sm:w-40 lg:hidden">
             <Logo />
           </Link>
-          <form action="/stock" className="relative ml-auto w-full max-w-md lg:ml-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              name="q"
-              placeholder="Search a plate number, heat number or grade"
-              className="w-full rounded-md border border-line bg-field py-2 pl-9 pr-3 text-[0.95rem] placeholder:text-muted/80"
-            />
-          </form>
+          <Suspense fallback={
+            <form action="/stock" className="relative ml-auto w-full max-w-md lg:ml-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input name="q" placeholder="Search a plate, heat number or invoice, or ask a question" className="w-full rounded-md border border-line bg-field py-2 pl-9 pr-3 text-[0.95rem] placeholder:text-muted/80" />
+            </form>
+          }>
+            <TopSearchGate />
+          </Suspense>
           <div className="ml-auto hidden items-center gap-3 sm:flex">
             <Suspense fallback={null}><PeriodPill /></Suspense>
           </div>

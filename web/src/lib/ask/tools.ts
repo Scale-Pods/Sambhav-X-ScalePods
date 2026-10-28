@@ -62,6 +62,42 @@ async function lotRefs(ctx: ToolCtx, lots: LotLike[]) {
   return out;
 }
 
+
+type AppPage = { path: string; title: string; what: string; who: Who };
+const PAGES: AppPage[] = [
+  { path: "/", title: "Stock overview", what: "stock now, received and sold in a period, charts", who: "all" },
+  { path: "/summary", title: "Summary", what: "stock by grade and thickness", who: "all" },
+  { path: "/stock", title: "Plates", what: "every plate with heat and plate number, filters, plate history", who: "all" },
+  { path: "/stock/check", title: "Stock check", what: "do we have this plate: type grade and size", who: "all" },
+  { path: "/count", title: "Physical count", what: "count the yard and settle differences", who: "all" },
+  { path: "/mill-orders", title: "Mill orders", what: "what was ordered from the mills and what has arrived; vehicle weights", who: "all" },
+  { path: "/documents", title: "Documents", what: "upload a PO, enquiry, vendor invoice or mill certificate to be read and confirmed", who: "docs" },
+  { path: "/drafts", title: "Drafts", what: "orders and enquiries confirmed from documents, waiting to be worked on", who: "docs" },
+  { path: "/orders", title: "Orders and dispatch", what: "customer orders, open and late orders", who: "admin" },
+  { path: "/orders/list", title: "Order list", what: "every order with status and delivery date", who: "admin" },
+  { path: "/orders/vehicles", title: "Vehicle register", what: "trips and tonnes sent by month and plot", who: "admin" },
+  { path: "/quotations", title: "Quotations", what: "quotation builder (coming soon)", who: "admin" },
+  { path: "/mail", title: "Mail and leads", what: "mail waiting, quotes with no follow-up, IndiaMART leads", who: "admin" },
+  { path: "/mail/inbox", title: "Mail inbox", what: "mails waiting for a reply", who: "admin" },
+  { path: "/mail/quotations", title: "Quotations sent", what: "quotations and their follow-up", who: "admin" },
+  { path: "/mail/leads", title: "IndiaMART leads", what: "enquiries from IndiaMART", who: "admin" },
+  { path: "/mail/clients", title: "Clients", what: "client list from the email tracker", who: "admin" },
+  { path: "/payments", title: "Invoices and payments", what: "what customers owe, what we owe, sales and purchases", who: "admin" },
+  { path: "/payments/receivables", title: "Who owes us", what: "customer invoices not yet paid, overdue", who: "admin" },
+  { path: "/payments/payables", title: "What we owe", what: "vendor bills not yet paid", who: "admin" },
+  { path: "/payments/sales", title: "Sales invoices", what: "sales invoices from the payment sheets", who: "admin" },
+  { path: "/payments/purchases", title: "Purchase invoices", what: "purchase bills from the payment sheets", who: "admin" },
+  { path: "/payments/expenses", title: "Expenses", what: "expenses entered through the form", who: "admin" },
+  { path: "/tally", title: "Tally status", what: "is Tally connected, last sync", who: "admin" },
+  { path: "/tally/parties", title: "Customers and vendors (Tally)", what: "Tally ledgers and balances", who: "admin" },
+  { path: "/tally/receivables", title: "Debtors vs sheets", what: "Tally debtors compared with the payment sheets", who: "admin" },
+  { path: "/tally/payables", title: "Creditors vs sheets", what: "Tally creditors compared with the payment sheets", who: "admin" },
+  { path: "/tally/invoices", title: "Invoices and paperwork", what: "Tally sales invoices with PO, certificates, vehicle, e-invoice", who: "admin" },
+  { path: "/sheets", title: "Sheet view", what: "the Google Sheets copies, tab by tab", who: "admin" },
+  { path: "/review", title: "Needs review", what: "things the sheets could not settle", who: "admin" },
+  { path: "/ask", title: "Digital Brain", what: "the full question workspace with history, files and saved questions", who: "all" },
+];
+
 export const TOOLS: Tool[] = [
   {
     name: "stock_check",
@@ -365,6 +401,27 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "paperwork_gaps",
+    who: "admin",
+    description: "Tally sales invoices that are missing paperwork, in one list: no customer PO (kind = no_po), no mill certificate (no_certificate) or not in the vehicle register (no_dispatch), newest first, with the total count. Use this for 'which invoices have no PO / no certificate' instead of checking invoices one by one.",
+    schema: { type: "object", properties: { kind: { type: "string", enum: ["no_po", "no_certificate", "no_dispatch"] }, limit: N }, required: ["kind"] },
+    async run(i, ctx) {
+      const show = str(i.kind) === "no_certificate" ? "nocert" : str(i.kind) === "no_dispatch" ? "nodispatch" : "nopo";
+      const rows = await trailList(show, "", 1);
+      const n = limit(i.limit, 12, 15);
+      return {
+        total_invoices: rows[0]?.total ?? 0,
+        note: "newest first; invoice numbers made only of X are placeholders (drafts), not real invoices",
+        shown: rows.slice(0, n).map((r) => ({
+          invoice: r.voucher_no, placeholder_number: /^x+$/i.test(r.voucher_no), date: r.date, customer: (r.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, ""), amount_rs: r.amount,
+          po_noted_in_tally: r.po_ref, verbal_order: r.verbal, heat_numbers: r.heats, certificates_filed: r.certs_filed,
+          refs: [appRef(ctx, `Tally invoice ${r.voucher_no} · ${(r.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, "")}`, `/tally/invoices/${r.id}`)],
+        })),
+        refs: [appRef(ctx, "Tally invoices and paperwork", `/tally/invoices?show=${show}`)],
+      };
+    },
+  },
+  {
     name: "tally_party",
     who: "admin",
     description: "A customer or vendor in Tally: the ledger balance (positive = they owe us, negative = we owe them), GSTIN, and the open bills.",
@@ -422,6 +479,19 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "go_to",
+    who: "all",
+    description: "Find the page of this app that fits what the person wants to open or see (\"take me to debtors\", \"where is the physical count\", \"vehicle register\"). Returns pages with links.",
+    schema: { type: "object", properties: { topic: { ...P, description: "what they want to open, in a few words" } }, required: ["topic"] },
+    async run(i, ctx) {
+      const words = str(i.topic, 60).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+      const allowed = PAGES.filter((p) => p.who === "all" || (p.who === "docs" && (ctx.docs || ctx.admin)) || (p.who === "admin" && ctx.admin));
+      const scored = allowed.map((p) => ({ p, n: words.filter((w) => `${p.title} ${p.what} ${p.path}`.toLowerCase().includes(w)).length })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 5);
+      const hits = scored.length ? scored.map((x) => x.p) : allowed.slice(0, 0);
+      return hits.length ? hits.map((p) => ({ page: p.title, what: p.what, refs: [appRef(ctx, p.title, p.path)] })) : { note: "No page matches; say so and suggest the Overview or Digital Brain.", pages: allowed.map((p) => p.title) };
+    },
+  },
+  {
     name: "sheet_search",
     who: "admin",
     description: "Last resort: search any text across all the copied Google sheets (every tab). Use only when no other lookup fits. Returns the sheet, tab, row number and the row's cells.",
@@ -444,13 +514,13 @@ const SCOPE_OF: Record<string, Scope> = {
   stock_check: "stock", stock_summary: "stock", plate_lookup: "stock", overview: "all",
   orders_search: "orders", order_detail: "orders", dispatch_search: "orders",
   receivables: "money", payables: "money", invoices_search: "money", payments_search: "money",
-  leads_mail_quotes: "mail", tally_voucher: "tally", tally_party: "tally", invoice_trail: "tally",
-  documents_search: "documents", drafts_search: "documents", count_status: "documents", sheet_search: "sheets",
+  leads_mail_quotes: "mail", tally_voucher: "tally", tally_party: "tally", invoice_trail: "tally", paperwork_gaps: "tally",
+  documents_search: "documents", drafts_search: "documents", count_status: "documents", sheet_search: "sheets", go_to: "all",
 };
 
 /** Which lookups a role may use, within the chosen "Look in". The database's own row rules apply on top, so a mistake here still cannot open more than the person may read. */
 export function toolsFor(role: string | undefined, scope: Scope = "all"): Tool[] {
-  return TOOLS.filter((t) => (t.who === "all" || (t.who === "docs" && canUploadDocs(role)) || (t.who === "admin" && canExport(role))) && (scope === "all" || SCOPE_OF[t.name] === scope));
+  return TOOLS.filter((t) => t.name === "go_to" || (t.who === "all" || (t.who === "docs" && canUploadDocs(role)) || (t.who === "admin" && canExport(role))) && (scope === "all" || SCOPE_OF[t.name] === scope));
 }
 
 /** A lookup's result as text for the AI, cut to a safe size. The text is data, never instructions. */

@@ -10,10 +10,10 @@ import { AskApp } from "./AskApp";
 
 export const metadata = { title: "Digital Brain · Sambhav Stock" };
 
-export default function AskPage() {
+export default function AskPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   return (
     <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
-      <Body />
+      <Body searchParams={searchParams} />
     </Suspense>
   );
 }
@@ -21,8 +21,10 @@ export default function AskPage() {
 const STOCK = ["Do we have SA 387 GR 22 CL2, 50 mm, 2500 × 12000?", "How much SA 516 Gr 70 do we have in stock?", "Find the plate with heat number 65534SC"];
 const ADMIN = ["Give me the overview", "Which customers owe us the most?", "Which orders are open?", "Show the Tally invoice 730/26-27", "Any new leads this week?"];
 
-async function Body() {
+async function Body({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await connection();
+  const sp = await searchParams;
+  const initialChat = /^[0-9a-f-]{36}$/i.test(sp.chat ?? "") ? sp.chat! : null;
   const me = await currentStaff().catch(() => null);
   const admin = canExport(me?.role);
   const docs = canUploadDocs(me?.role);
@@ -32,6 +34,7 @@ async function Body() {
     <>
       <AskApp
         canAttach={docs}
+        initialChat={initialChat}
         suggestions={admin ? [...ADMIN, ...STOCK] : STOCK}
         scopes={allowed.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))}
         models={(Object.keys(MODELS) as (keyof typeof MODELS)[]).map((k) => ({ value: k, label: MODELS[k].label, hint: MODELS[k].hint }))}

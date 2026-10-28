@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui";
 import { Markdown, type RefLink } from "./Markdown";
 
 type ModelKey = "fast" | "balanced";
-type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; updated_at: string };
+type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; origin?: string; updated_at: string };
 type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
 
@@ -72,6 +72,7 @@ function chatText(title: string, ms: { role: string; content: string; meta: Meta
 
 export type AskAppProps = {
   canAttach: boolean;
+  initialChat?: string | null;
   suggestions: string[];
   scopes: { value: string; label: string }[];
   models: { value: ModelKey; label: string; hint: string }[];
@@ -86,7 +87,7 @@ const LOOKED: Record<string, string> = {
 
 const cents = (usd: number) => (usd < 0.01 ? "under 1 cent" : `${Math.round(usd * 100)} cents`);
 
-export function AskApp({ canAttach, suggestions, scopes, models, spend }: AskAppProps) {
+export function AskApp({ canAttach, initialChat, suggestions, scopes, models, spend }: AskAppProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -116,6 +117,19 @@ export function AskApp({ canAttach, suggestions, scopes, models, spend }: AskApp
     try { const r = await fetch("/api/ask/chats", { cache: "no-store" }); if (r.ok) setChats((await r.json()) as Chat[]); } catch { /* the list stays as it was */ }
   }, []);
   useEffect(() => { void loadChats(); }, [loadChats]);
+  // a chat opened from AI mode ("Continue in Digital Brain")
+  const opened = useRef(false);
+  useEffect(() => { if (initialChat && !opened.current) { opened.current = true; void openChat(initialChat); } }, [initialChat]); // eslint-disable-line react-hooks/exhaustive-deps
+  // searching inside the words of past questions and answers, not only their titles
+  const [inside, setInside] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const t = filter.trim();
+    if (t.length < 3) { setInside(new Set()); return; }
+    const id = window.setTimeout(async () => {
+      try { const r = await fetch(`/api/ask/chats?q=${encodeURIComponent(t)}`, { cache: "no-store" }); if (r.ok) setInside(new Set(((await r.json()) as Chat[]).map((c) => c.id))); } catch { /* titles only */ }
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [filter]);
   const loadSaved = useCallback(async () => {
     try { const r = await fetch("/api/ask/saved", { cache: "no-store" }); if (r.ok) setSaved((await r.json()) as Saved[]); } catch { /* the list stays as it was */ }
   }, []);
@@ -253,7 +267,7 @@ export function AskApp({ canAttach, suggestions, scopes, models, spend }: AskApp
 
   const groups = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const list = chats.filter((c) => !q || c.title.toLowerCase().includes(q));
+    const list = chats.filter((c) => !q || c.title.toLowerCase().includes(q) || inside.has(c.id));
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const out: { label: string; items: Chat[] }[] = [];
     const add = (label: string, items: Chat[]) => { if (items.length) out.push({ label, items }); };
@@ -265,7 +279,7 @@ export function AskApp({ canAttach, suggestions, scopes, models, spend }: AskApp
     add("Previous 7 days", rest.filter((c) => { const a = age(c); return a >= 1 && a < 7 && new Date(c.updated_at).getTime() < start - 86400000 + 1; }));
     add("Older", rest.filter((c) => age(c) >= 7));
     return out;
-  }, [chats, filter, now]);
+  }, [chats, filter, now, inside]);
 
   const lastAssistant = messages.findLast((m) => m.role === "assistant");
   const empty = messages.length === 0 && !loadingChat;
@@ -300,7 +314,7 @@ export function AskApp({ canAttach, suggestions, scopes, models, spend }: AskApp
                     onKeyDown={(e) => { if (e.key === "Enter") { void patchChat(c.id, { title: draftTitle }); setEditing(null); } if (e.key === "Escape") setEditing(null); }}
                     onBlur={() => { if (draftTitle.trim() && draftTitle !== c.title) void patchChat(c.id, { title: draftTitle }); setEditing(null); }} />
                 ) : (
-                  <button type="button" onClick={() => void openChat(c.id)} className="min-w-0 flex-1 truncate text-left text-[0.88rem]" title={c.title}>{c.title}</button>
+                  <button type="button" onClick={() => void openChat(c.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.88rem]" title={c.title}>{c.origin === "ai_mode" && <span className="shrink-0 rounded bg-brand-soft px-1 text-[0.62rem] font-semibold uppercase text-brand">AI</span>}<span className="truncate">{c.title}</span></button>
                 )}
                 {editing !== c.id && (
                   <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

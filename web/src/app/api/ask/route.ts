@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { call, currentUserId, q, runAs } from "@/lib/db";
-import { FILE_LIMITS, MODELS, runAsk, type AskEvent, type AskFile, type ModelKey } from "@/lib/ask/engine";
+import { FILE_LIMITS, MODELS, runAsk, type AskEvent, type AskFile, type ModelKey, type PageCtx } from "@/lib/ask/engine";
 import { recentMessages } from "@/lib/ask/chats";
 import { SCOPES, type Scope } from "@/lib/ask/tools";
 
@@ -33,11 +33,20 @@ function readFiles(v: unknown): AskFile[] | "bad" {
   return out;
 }
 
+/** The page AI mode was opened on, kept small and plain. */
+function readPage(v: unknown): PageCtx | undefined {
+  const x = v as { path?: unknown; title?: unknown; params?: unknown } | null;
+  if (!x || typeof x.path !== "string" || !x.path.startsWith("/") || x.path.length > 200) return undefined;
+  const params: Record<string, string> = {};
+  if (x.params && typeof x.params === "object") for (const [k, val] of Object.entries(x.params as Record<string, unknown>).slice(0, 10)) if (typeof val === "string" && k.length <= 30) params[k] = val.slice(0, 80);
+  return { path: x.path, title: typeof x.title === "string" ? x.title.slice(0, 80) : x.path, params };
+}
+
 export async function POST(req: NextRequest) {
   const me = await currentStaff().catch(() => null);
   const uid = await currentUserId().catch(() => null);
   if (!me || !uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  const body = (await req.json().catch(() => null)) as { question?: unknown; chatId?: unknown; model?: unknown; scope?: unknown; regenerate?: unknown; files?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { question?: unknown; chatId?: unknown; model?: unknown; scope?: unknown; regenerate?: unknown; files?: unknown; mode?: unknown; page?: unknown } | null;
   const model: ModelKey = typeof body?.model === "string" && body.model in MODELS ? (body.model as ModelKey) : "balanced";
   const scope: Scope = typeof body?.scope === "string" && (SCOPES as readonly string[]).includes(body.scope) ? (body.scope as Scope) : "all";
   const chatIn = typeof body?.chatId === "string" && /^[0-9a-f-]{36}$/i.test(body.chatId) ? body.chatId : null;
@@ -45,6 +54,8 @@ export async function POST(req: NextRequest) {
   let question = typeof body?.question === "string" ? body.question.trim() : "";
   if (!regenerate && (question.length < 2 || question.length > 600)) return NextResponse.json({ error: "Ask a question of up to 600 characters." }, { status: 400 });
 
+  const quick = body?.mode === "quick";
+  const page = quick ? readPage(body?.page) : undefined;
   const files = readFiles(body?.files);
   if (files === "bad") return NextResponse.json({ error: `Attach up to ${FILE_LIMITS.count} files (PDF, picture or text), 3 MB in all.` }, { status: 400 });
   if (files.length > 0 && !canUploadDocs(me.role)) return NextResponse.json({ error: "Your account cannot attach files." }, { status: 403 });
@@ -56,7 +67,7 @@ export async function POST(req: NextRequest) {
   try {
     let chatId = chatIn;
     if (!chatId) {
-      chatId = (await call<{ id: string }>(`select public.ask_new_chat($1, $2, $3) id`, [question.slice(0, 60), model, scope]))[0].id;
+      chatId = (await call<{ id: string }>(`select public.ask_new_chat($1, $2, $3, $4) id`, [question.slice(0, 60), model, scope, quick ? "ai_mode" : "brain"]))[0].id;
     } else {
       await call(`select public.ask_update_chat($1::uuid, null, null, $2, $3)`, [chatId, model, scope]);
     }
@@ -82,7 +93,7 @@ export async function POST(req: NextRequest) {
         send({ type: "meta", chatId: finalChat });
         try {
           await runAs(uid, async () => {
-            const res = await runAsk({ files, question, history, role: me.role, model, scope, chatId: finalChat }, (e) => { if (e.type !== "done") send(e); });
+            const res = await runAsk({ mode: quick ? "quick" : undefined, page, files, question, history, role: me.role, model, scope, chatId: finalChat }, (e) => { if (e.type !== "done") send(e); });
             if (res) {
               const meta = { sources: res.sources, refs: res.refs, follow_ups: res.follow_ups, confidence: res.confidence, used: res.used.map((u) => ({ name: u.name, rows: u.rows })), usd: res.usd, model: res.model };
               const saved = await call<{ id: string }>(`select public.ask_add_message($1::uuid, 'assistant', $2, $3::jsonb) id`, [finalChat, res.answer, JSON.stringify(meta)]);
