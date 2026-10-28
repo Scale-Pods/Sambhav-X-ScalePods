@@ -21,7 +21,14 @@ const pool =
     connectionString,
     max: Number(process.env.DB_POOL_MAX ?? 6),
     ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+    // never wait for ever: a connection that cannot be had in 8 s, or a query that runs over 25 s, fails with an error the page can show.
+    // Idle connections are dropped after 10 s so a connection that went stale while the server slept is never reused.
+    connectionTimeoutMillis: 8_000,
+    idleTimeoutMillis: 10_000,
+    statement_timeout: 25_000,
+    keepAlive: true,
   }));
+g.__pool.on("error", (e) => console.warn(`[db-pool] idle connection error: ${e.message}`));
 
 /** Can the database be reached at all? For the uptime check (/api/health): no sign-in needed, nothing is read. */
 export async function ping(): Promise<boolean> {
