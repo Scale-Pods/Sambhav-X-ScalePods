@@ -15,6 +15,7 @@ export function SidebarShell({ logo, children }: { logo: ReactNode; children: Re
   const [pinned, setPinned] = useState(true); // open for good (false: folded)
   const [hover, setHover] = useState(false);
   const leave = useRef<number | null>(null);
+  const side = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
@@ -27,12 +28,23 @@ export function SidebarShell({ logo, children }: { logo: ReactNode; children: Re
     setPinned(next); setHover(false);
     try { window.localStorage.setItem(KEY, next ? "1" : "0"); } catch { /* the choice is just not remembered */ }
   };
+  // while it is open over the page, close it as soon as the pointer is anywhere else (a missed mouse-leave must never leave it stuck open)
+  useEffect(() => {
+    if (!hover) return;
+    const move = (e: MouseEvent) => { if (side.current && !side.current.contains(e.target as Node)) setHover(false); };
+    const out = () => setHover(false);
+    window.addEventListener("mousemove", move);
+    document.documentElement.addEventListener("mouseleave", out);
+    window.addEventListener("blur", out);
+    return () => { window.removeEventListener("mousemove", move); document.documentElement.removeEventListener("mouseleave", out); window.removeEventListener("blur", out); };
+  }, [hover]);
   const rail = !pinned && !hover;
 
   return (
     <div className="relative hidden shrink-0 transition-[width] duration-200 lg:block" style={{ width: pinned ? "16rem" : "4.5rem" }}>
-      <div className="sticky top-0 h-screen">
+      <div className="sticky top-0 z-40 h-screen">
         <aside
+          ref={side}
           data-rail={rail ? "true" : "false"}
           onMouseEnter={() => { if (leave.current) window.clearTimeout(leave.current); if (!pinned) setHover(true); }}
           onMouseLeave={() => { leave.current = window.setTimeout(() => setHover(false), 160); }}

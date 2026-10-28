@@ -108,6 +108,16 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
   const [railOpen, setRailOpen] = useState(true);
   const [railHover, setRailHover] = useState(false);
   const railLeave = useRef<number | null>(null);
+  const railEl = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!railHover) return;
+    const move = (e: MouseEvent) => { if (railEl.current && !railEl.current.contains(e.target as Node)) setRailHover(false); };
+    const out = () => setRailHover(false);
+    window.addEventListener("mousemove", move);
+    document.documentElement.addEventListener("mouseleave", out);
+    window.addEventListener("blur", out);
+    return () => { window.removeEventListener("mousemove", move); document.documentElement.removeEventListener("mouseleave", out); window.removeEventListener("blur", out); };
+  }, [railHover]);
   useEffect(() => {
     try { const v = window.localStorage.getItem("brain-rail-open"); setRailOpen(v === null ? window.innerWidth >= 1536 : v === "1"); } catch { setRailOpen(window.innerWidth >= 1536); }
   }, []);
@@ -356,6 +366,7 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
     <div className="flex h-[calc(100dvh-8.5rem)] min-h-[30rem] overflow-hidden rounded-lg border border-line bg-card">
       <div className="relative hidden shrink-0 transition-[width] duration-200 lg:block" style={{ width: railOpen ? "17rem" : "3.25rem" }}>
         <aside
+          ref={railEl}
           onMouseEnter={() => { if (railLeave.current) window.clearTimeout(railLeave.current); if (!railOpen) setRailHover(true); }}
           onMouseLeave={() => { railLeave.current = window.setTimeout(() => setRailHover(false), 160); }}
           className={"absolute inset-y-0 left-0 z-20 border-r border-line bg-card transition-[width] duration-200 " + (compact ? "w-[3.25rem]" : "w-[17rem]") + (!railOpen && railHover ? " shadow-xl" : "")}
