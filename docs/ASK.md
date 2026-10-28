@@ -1,4 +1,4 @@
-# Ask (question box over the business records)
+# Digital Brain (formerly "Ask": the question box over the business records; the page address is still /ask)
 
 A person types a question in plain words; the answer comes from the system's own records.
 

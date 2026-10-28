@@ -345,8 +345,8 @@ export function AskApp({ canAttach, suggestions, scopes, models, spend }: AskApp
           {loadingChat && <p className="flex items-center gap-2 text-muted"><Loader2 className="h-4 w-4 animate-spin" />Opening the chat…</p>}
           {empty && (
             <div className="mx-auto mt-6 max-w-2xl text-center sm:mt-14">
-              <h2 className="font-display text-[1.6rem] font-extrabold tracking-[-0.02em]">How can I help?</h2>
-              <p className="mt-1.5 text-[0.95rem] text-muted">Ask about stock, orders, money, mail or Tally. I look the answer up in your records and show where it came from. I only read: I cannot change anything.</p>
+              <h2 className="font-display text-[1.6rem] font-extrabold tracking-[-0.02em]">Digital Brain</h2>
+              <p className="mt-1.5 text-[0.95rem] text-muted">Ask anything about stock, orders, money, mail or Tally. I look the answer up in your records and show where it came from. I only read: I cannot change anything.</p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
                 {saved.slice(0, 4).map((q) => <button key={q.id} type="button" onClick={() => runSaved(q)} className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand-soft px-3.5 py-1.5 text-[0.86rem] hover:border-brand hover:text-brand" title={q.question}><Bookmark className="h-3 w-3" />{q.title}</button>)}
                 {suggestions.map((s) => <button key={s} type="button" onClick={() => void send(s)} className="rounded-full border border-line bg-card px-3.5 py-1.5 text-[0.86rem] hover:border-brand hover:text-brand">{s}</button>)}

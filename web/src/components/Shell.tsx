@@ -27,7 +27,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <div className="flex flex-col gap-1">
               <p className={group}>Stock</p>
               <NavLink href="/"><Home className={icon} />Overview</NavLink>
-              <NavLink href="/ask"><Sparkles className={icon} />Ask</NavLink>
+              <NavLink href="/ask"><Sparkles className={icon} />Digital Brain</NavLink>
               <NavLink href="/summary"><Table2 className={icon} />Summary</NavLink>
               <NavLink href="/stock"><Layers className={icon} />Plates</NavLink>
               <NavLink href="/stock/check"><PackageSearch className={icon} />Stock check</NavLink>

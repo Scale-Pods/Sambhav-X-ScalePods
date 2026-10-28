@@ -8,6 +8,8 @@ import { spendToday } from "@/lib/ask/chats";
 import { SCOPE_LABEL, SCOPES } from "@/lib/ask/tools";
 import { AskApp } from "./AskApp";
 
+export const metadata = { title: "Digital Brain · Sambhav Stock" };
+
 export default function AskPage() {
   return (
     <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
