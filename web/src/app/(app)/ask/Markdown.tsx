@@ -21,7 +21,7 @@ function withLinks(text: string, refs?: RefLink[]) {
 export function Markdown({ text, refs }: { text: string; refs?: RefLink[] }) {
   const by = new Map((refs ?? []).map((r) => [r.id, r]));
   return (
-    <div className="ask-md text-[0.97rem] leading-relaxed">
+    <div className="ask-md text-[0.92rem] leading-relaxed 2xl:text-[0.97rem]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

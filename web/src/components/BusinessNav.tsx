@@ -3,7 +3,7 @@ import { canExport, currentStaff } from "@/lib/auth";
 import { NavLink } from "./NavLink";
 
 const icon = "h-[1.15rem] w-[1.15rem] shrink-0";
-const group = "px-3 pb-1.5 font-display text-[0.68rem] font-bold uppercase tracking-[0.14em] text-steel-muted";
+const group = "px-3 pb-1.5 font-display text-[0.68rem] font-bold uppercase tracking-[0.14em] text-steel-muted group-data-[rail=true]/side:hidden";
 
 /** The Business section of the sidebar. Orders, mail, leads and payments hold prices, customers and phone numbers, so only people who may open them see them. */
 export async function BusinessNav() {

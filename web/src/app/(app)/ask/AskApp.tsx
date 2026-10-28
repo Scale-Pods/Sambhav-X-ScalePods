@@ -104,6 +104,15 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
   const [copied, setCopied] = useState<string | null>(null);
   const [today, setToday] = useState(spend?.spent ?? 0);
   const [now] = useState(() => new Date());
+  // the chats column folds to a strip of icons and opens when pointed at, like the main menu; the choice is remembered
+  const [railOpen, setRailOpen] = useState(true);
+  const [railHover, setRailHover] = useState(false);
+  const railLeave = useRef<number | null>(null);
+  useEffect(() => {
+    try { const v = window.localStorage.getItem("brain-rail-open"); setRailOpen(v === null ? window.innerWidth >= 1536 : v === "1"); } catch { setRailOpen(window.innerWidth >= 1536); }
+  }, []);
+  const toggleRail = () => { const next = !railOpen; setRailOpen(next); setRailHover(false); try { window.localStorage.setItem("brain-rail-open", next ? "1" : "0"); } catch { /* not remembered */ } };
+  const compact = !railOpen && !railHover;
   const [files, setFiles] = useState<Attached[]>([]);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved[]>([]);
@@ -284,8 +293,14 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
   const lastAssistant = messages.findLast((m) => m.role === "assistant");
   const empty = messages.length === 0 && !loadingChat;
 
-  const sidebar = (
+  const renderSidebar = (desktop: boolean) => (
     <div className="flex h-full min-h-0 flex-col">
+      {desktop && (
+        <div className="flex items-center gap-2 px-3 pt-3">
+          <button type="button" onClick={toggleRail} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted hover:bg-surface hover:text-ink" aria-label={railOpen ? "Fold the chat list" : "Keep the chat list open"} title={railOpen ? "Fold the chat list" : "Keep the chat list open"} aria-expanded={railOpen}><Menu className="h-5 w-5" /></button>
+          <span className="text-[0.74rem] font-semibold uppercase tracking-[0.12em] text-muted">Chats</span>
+        </div>
+      )}
       <button type="button" onClick={newChat} className="mx-3 mt-3 inline-flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 text-[0.92rem] font-medium hover:border-brand hover:text-brand"><MessageSquarePlus className="h-4 w-4" />New chat</button>
       <div className="relative mx-3 mt-3"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
         <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search chats" className="w-full rounded-md border border-line bg-field py-1.5 pl-8 pr-2 text-[0.85rem]" aria-label="Search chats" /></div>
@@ -339,11 +354,25 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
 
   return (
     <div className="flex h-[calc(100dvh-8.5rem)] min-h-[30rem] overflow-hidden rounded-lg border border-line bg-card">
-      <aside className="hidden w-72 shrink-0 border-r border-line bg-card lg:block">{sidebar}</aside>
+      <div className="relative hidden shrink-0 transition-[width] duration-200 lg:block" style={{ width: railOpen ? "17rem" : "3.25rem" }}>
+        <aside
+          onMouseEnter={() => { if (railLeave.current) window.clearTimeout(railLeave.current); if (!railOpen) setRailHover(true); }}
+          onMouseLeave={() => { railLeave.current = window.setTimeout(() => setRailHover(false), 160); }}
+          className={"absolute inset-y-0 left-0 z-20 border-r border-line bg-card transition-[width] duration-200 " + (compact ? "w-[3.25rem]" : "w-[17rem]") + (!railOpen && railHover ? " shadow-xl" : "")}
+        >
+          {compact ? (
+            <div className="flex h-full flex-col items-center gap-1 py-3">
+              <button type="button" onClick={toggleRail} className="grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-surface hover:text-ink" aria-label="Keep the chat list open" title="Keep the chat list open"><Menu className="h-5 w-5" /></button>
+              <button type="button" onClick={newChat} className="grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-surface hover:text-ink" aria-label="New chat" title="New chat"><MessageSquarePlus className="h-5 w-5" /></button>
+              <button type="button" onClick={() => setRailHover(true)} className="grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-surface hover:text-ink" aria-label="Past chats" title="Past chats"><Search className="h-5 w-5" /></button>
+            </div>
+          ) : renderSidebar(true)}
+        </aside>
+      </div>
       {drawer && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Chats">
           <button type="button" className="absolute inset-0 bg-black/40" onClick={() => setDrawer(false)} aria-label="Close" />
-          <div className="absolute inset-y-0 left-0 w-[85%] max-w-xs bg-card shadow-xl"><button type="button" onClick={() => setDrawer(false)} className="absolute right-2 top-2 rounded p-1 text-muted" aria-label="Close"><X className="h-4 w-4" /></button>{sidebar}</div>
+          <div className="absolute inset-y-0 left-0 w-[85%] max-w-xs bg-card shadow-xl"><button type="button" onClick={() => setDrawer(false)} className="absolute right-2 top-2 rounded p-1 text-muted" aria-label="Close"><X className="h-4 w-4" /></button>{renderSidebar(false)}</div>
         </div>
       )}
 
@@ -355,7 +384,7 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
           {messages.some((m) => !m.pending && m.content) && <button type="button" onClick={exportChat} className="shrink-0 rounded p-1.5 text-muted hover:text-ink" aria-label="Download this chat as text" title="Download this chat"><Download className="h-4 w-4" /></button>}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8" aria-live="polite">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 2xl:px-10" aria-live="polite">
           {loadingChat && <p className="flex items-center gap-2 text-muted"><Loader2 className="h-4 w-4 animate-spin" />Opening the chat…</p>}
           {empty && (
             <div className="mx-auto mt-6 max-w-2xl text-center sm:mt-14">
@@ -367,13 +396,13 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
               </div>
             </div>
           )}
-          <div className="mx-auto max-w-3xl space-y-6">
+          <div className="mx-auto max-w-4xl space-y-5 2xl:space-y-6">
             {messages.map((m) => m.role === "user" ? (
               <div key={m.id} className="group/q flex items-start justify-end gap-1">
                 {<button type="button" onClick={() => void saveQuestion(m)} className="mt-2 rounded p-1 text-muted opacity-0 hover:text-brand focus:opacity-100 group-hover/q:opacity-100" aria-label="Save this question" title="Save this question"><BookmarkPlus className="h-4 w-4" /></button>}
                 <div className="max-w-[85%]">
                   {m.meta?.files && m.meta.files.length > 0 && <div className="mb-1 flex flex-wrap justify-end gap-1.5">{m.meta.files.map((f, i) => <span key={i} className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-0.5 text-[0.76rem] text-muted"><FileText className="h-3 w-3" />{f}</span>)}</div>}
-                  <p className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand-soft px-4 py-2.5 text-[0.95rem]">{m.content}</p>
+                  <p className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand-soft px-4 py-2 text-[0.9rem] 2xl:py-2.5 2xl:text-[0.95rem]">{m.content}</p>
                 </div>
               </div>
             ) : (
@@ -440,8 +469,8 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
           </div>
         </div>
 
-        <div className="border-t border-line px-4 py-3 sm:px-8">
-          <form onSubmit={(e) => { e.preventDefault(); void send(text); }} className="mx-auto max-w-3xl rounded-xl border border-line bg-field p-2 focus-within:border-brand">
+        <div className="border-t border-line px-4 py-2.5 sm:px-6 2xl:px-10 2xl:py-3">
+          <form onSubmit={(e) => { e.preventDefault(); void send(text); }} className="mx-auto max-w-4xl rounded-xl border border-line bg-field p-1.5 focus-within:border-brand 2xl:p-2">
             <textarea ref={box} value={text} onChange={(e) => setText(e.target.value)} rows={1} maxLength={600} disabled={busy}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(text); } }}
               placeholder={files.length ? "What should I do with the file? e.g. Do we have stock for this PO?" : "Ask anything, e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?"} aria-label="Your question"
@@ -461,13 +490,13 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Look in</span>
                 <select value={scope} onChange={(e) => setScope(e.target.value)} disabled={busy} className="rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Look in">
                   {scopes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
-              <span className="hidden text-[0.74rem] text-muted md:inline">{models.find((m) => m.value === model)?.hint}</span>
+              <span className="hidden text-[0.74rem] text-muted 2xl:inline">{models.find((m) => m.value === model)?.hint}</span>
               {busy
                 ? <button type="button" onClick={() => abort.current?.abort()} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-surface"><Square className="h-3.5 w-3.5" />Stop</button>
                 : <button type="submit" disabled={text.trim().length < 2} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"><SendHorizonal className="h-4 w-4" />Ask</button>}
             </div>
           </form>
-          <p className="mx-auto mt-1.5 max-w-3xl text-center text-[0.72rem] text-muted">Answers come from your records and can still be wrong. Check anything important. Enter sends, Shift+Enter adds a line.</p>
+          <p className="mx-auto mt-1 hidden max-w-4xl text-center text-[0.72rem] text-muted sm:block">Answers come from your records and can still be wrong. Check anything important. Enter sends, Shift+Enter adds a line.</p>
         </div>
       </section>
     </div>

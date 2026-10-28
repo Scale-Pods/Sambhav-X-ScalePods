@@ -5,6 +5,7 @@ import { Logo } from "./Logo";
 import { BusinessNav } from "./BusinessNav";
 import { NavLink } from "./NavLink";
 import { NavProgress } from "./NavProgress";
+import { SidebarShell } from "./SidebarShell";
 import { PeriodPill } from "./PeriodPill";
 import { ThemeToggle } from "./ThemeToggle";
 import { TopSearchGate } from "./TopSearchGate";
@@ -12,19 +13,15 @@ import { UserChip } from "./UserChip";
 import { ViewToggle } from "./ViewToggle";
 
 const icon = "h-[1.15rem] w-[1.15rem] shrink-0";
-const group = "px-3 pb-1.5 font-display text-[0.68rem] font-bold uppercase tracking-[0.14em] text-steel-muted";
+const group = "px-3 pb-1.5 font-display text-[0.68rem] font-bold uppercase tracking-[0.14em] text-steel-muted group-data-[rail=true]/side:hidden";
 
 export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <Suspense fallback={null}><NavProgress /></Suspense>
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-steel px-4 py-5 lg:flex">
-        <Link href="/" className="mb-8 block px-1">
-          <Logo variant="dark" priority />
-        </Link>
-
+      <SidebarShell logo={<Logo variant="dark" priority />}>
         <Suspense fallback={<div className="flex-1" />}>
-          <nav className="nav-scroll -mr-2 flex flex-1 flex-col gap-6 overflow-y-auto pr-2">
+          <nav className="nav-scroll -mr-2 flex flex-1 flex-col gap-6 overflow-y-auto pr-2 group-data-[rail=true]/side:mr-0 group-data-[rail=true]/side:pr-0">
             <div className="flex flex-col gap-1">
               <p className={group}>Stock</p>
               <NavLink href="/"><Home className={icon} />Overview</NavLink>
@@ -48,12 +45,11 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </nav>
         </Suspense>
-
-        <div className="mt-4 border-l-2 border-accent bg-white/[0.04] px-3 py-2.5 text-[0.78rem] leading-snug text-steel-ink">
+        <div className="mt-4 group-data-[rail=true]/side:hidden border-l-2 border-accent bg-white/[0.04] px-3 py-2.5 text-[0.78rem] leading-snug text-steel-ink">
           <p className="font-semibold text-white">Practice data</p>
           <p className="mt-0.5 text-steel-muted">Loaded from your WB1 and WB2 sheets. Nothing here changes your sheets.</p>
         </div>
-      </aside>
+      </SidebarShell>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center gap-2 sm:gap-3 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-8">

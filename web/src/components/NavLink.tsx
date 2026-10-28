@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { FILTER_KEYS } from "@/lib/filters";
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 
 const CARRY = ["/", "/summary", "/stock", "/review"];
 
@@ -14,17 +14,20 @@ export function NavLink({ href, children, soon }: { href: string; children: Reac
   const carry = CARRY.includes(href) && CARRY.includes(path) ? FILTER_KEYS.filter((k) => sp.get(k)).map((k) => [k, sp.get(k)!] as [string, string]) : [];
   const to = carry.length ? `${href}?${new URLSearchParams(carry)}` : href;
   const active = href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
+  const items = Children.toArray(children);
+  const label = items.filter((c) => typeof c === "string").join("");
   return (
     <Link
       href={to}
       aria-current={active ? "page" : undefined}
+      title={label || undefined}
       className={
-        "group flex items-center gap-3 rounded-md px-3 py-2 text-[0.95rem] font-medium transition-colors " +
+        "group flex items-center gap-3 rounded-md px-3 py-2 text-[0.95rem] font-medium transition-colors group-data-[rail=true]/side:justify-center group-data-[rail=true]/side:px-0 " +
         (active ? "bg-accent text-white shadow-[0_2px_10px_rgba(242,101,34,0.35)]" : "text-steel-ink hover:bg-white/[0.06] hover:text-white")
       }
     >
-      {children}
-      {soon && <span className="ml-auto rounded-sm bg-white/[0.07] px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-steel-muted">Soon</span>}
+      {items.map((c, i) => (typeof c === "string" ? <span key={i} className="truncate group-data-[rail=true]/side:hidden">{c}</span> : c))}
+      {soon && <span className="ml-auto group-data-[rail=true]/side:hidden rounded-sm bg-white/[0.07] px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-steel-muted">Soon</span>}
     </Link>
   );
 }
