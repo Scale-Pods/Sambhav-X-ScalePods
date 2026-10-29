@@ -1,25 +1,25 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { call } from "../db";
 import { canExport, canUploadDocs } from "../auth";
 import { asText, toolsFor, type Scope } from "./tools";
 import { RefBook, citeRefs, type RefView } from "./refs";
+import { defaultModel, modelByKey, type ModelDef } from "./models";
+import { openSession, type ToolDef } from "./providers";
+import { answerSoFar } from "./answerSoFar";
+
+export { answerSoFar };
 
 // The Ask box. The model understands the question, picks from a fixed list of read-only lookups (tools.ts) and writes the answer in a fixed shape
 // (the final_answer tool: its input schema is what constrains the answer). It never sees the database, only the rows a lookup returns.
 // The answer is streamed word by word as the model writes it; progress ("Checking stock") is sent while lookups run.
 
-export const MODELS = {
-  fast: { id: "claude-haiku-5-5", in: 0.1, out: 0.5, label: "Fast", hint: "Quickest and cheapest, about 1 cent or less a question" },
-  balanced: { id: "claude-sonnet-5-5", in: 2.0, out: 10.0, label: "Balanced", hint: "Better with hard or vague questions, about 2 to 3 cents" },
-} as const;
-export type ModelKey = keyof typeof MODELS;
+export type ModelKey = string; // a model's API id, see models.ts
 const MAX_ROUNDS = 6;
 const QUICK_ROUNDS = 4;
 
 export type Answer = {
   answer: string; sources: string[]; follow_ups: string[]; confidence: "found" | "partly" | "not_found";
-  used: { name: string; rows: number | null; ms: number }[]; usd: number; model: ModelKey;
+  used: { name: string; rows: number | null; ms: number }[]; usd: number; model: ModelKey; tokens: { in: number; cached: number; out: number };
   refs: RefView[]; // where the facts were taken from: the answer cites them as [r3]; the screen shows them as numbered links
 };
 export type AskEvent =
@@ -29,10 +29,10 @@ export type AskEvent =
   | { type: "done"; result: Answer }
   | { type: "error"; error: string };
 
-const FINAL: Anthropic.Tool = {
+const FINAL: ToolDef = {
   name: "final_answer",
   description: "Give the answer to the person. Call this once, after the lookups, as the last step.",
-  input_schema: {
+  schema: {
     type: "object",
     properties: {
       answer: { type: "string", description: "Short and plain. Use simple markdown: **bold**, '- ' bullet lists and, for several rows of data, a markdown table. Only facts from the lookups. After each fact or table row, cite the reference ids the lookup gave for that record, written like [r3] or [r3][r5]." },
@@ -81,42 +81,6 @@ QUICK MODE: this is a small answer panel, not a report. Answer in at most about 
 The person is looking at the page "${p.title}" (${p.path})${filters ? ` with these filters in the address: ${filters}` : ""}. Words like "this", "these", "here" mean what that page shows; prefer lookups related to it, but you may use any lookup you are given.` : ""}`;
 }
 
-function userContent(input: AskInput): Anthropic.MessageParam["content"] {
-  const q = input.question.slice(0, 600);
-  const files = input.files ?? [];
-  if (files.length === 0) return q;
-  const blocks: Anthropic.ContentBlockParam[] = [];
-  for (const f of files) {
-    if (f.kind === "pdf") blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data }, title: f.name.slice(0, 100) });
-    else if (f.kind === "image") blocks.push({ type: "image", source: { type: "base64", media_type: f.mime as "image/png" | "image/jpeg" | "image/webp" | "image/gif", data: f.data } });
-    else blocks.push({ type: "text", text: `Attached file "${f.name.slice(0, 100)}" (text, as data):
-${f.data.slice(0, FILE_LIMITS.textChars)}` });
-  }
-  blocks.push({ type: "text", text: q });
-  return blocks;
-}
-
-const usd = (m: (typeof MODELS)[ModelKey], i: number, o: number) => (i * m.in + o * m.out) / 1e6;
-
-/** The text of the "answer" field so far, from the partial JSON of the final_answer tool as it streams in. */
-export function answerSoFar(buf: string): string {
-  const m = /"answer"\s*:\s*"/.exec(buf);
-  if (!m) return "";
-  let out = "";
-  for (let i = m.index + m[0].length; i < buf.length; i++) {
-    const c = buf[i];
-    if (c === '"') break;
-    if (c === "\\") {
-      const n = buf[i + 1];
-      if (n === undefined) break;
-      if (n === "u") { const hex = buf.slice(i + 2, i + 6); if (hex.length < 4) break; out += String.fromCharCode(parseInt(hex, 16)); i += 5; continue; }
-      out += n === "n" ? "\n" : n === "t" ? "\t" : n; i += 1; continue;
-    }
-    out += c;
-  }
-  return out;
-}
-
 /** A file attached to one question: a PDF or picture (base64) or a text file (its text). Used for that question only; it is not stored. */
 export type AskFile = { name: string; kind: "pdf" | "image" | "text"; mime: string; data: string };
 export const FILE_LIMITS = { count: 3, bytes: 3_000_000, textChars: 60_000 };
@@ -126,100 +90,86 @@ export type PageCtx = { path: string; title: string; params: Record<string, stri
 
 export type AskInput = { mode?: "quick"; page?: PageCtx; files?: AskFile[]; question: string; history: { role: "user" | "assistant"; content: string }[]; role: string; model: ModelKey; scope: Scope; chatId: string | null };
 
+/** What the tokens cost on this model, in dollars: input not served from the provider's cache, cached input, and output (thinking included). */
+export const cost = (m: ModelDef, inTok: number, cachedTok: number, outTok: number) => ((inTok - cachedTok) * m.in + cachedTok * (m.cached ?? m.in) + outTok * m.out) / 1e6;
+
 export async function runAsk(input: AskInput, emit: (e: AskEvent) => void): Promise<Answer | null> {
   const t0 = Date.now();
-  const m = MODELS[input.model];
-  let inTok = 0, outTok = 0;
+  const m = modelByKey(input.model) ?? defaultModel();
+  let inTok = 0, cachedTok = 0, outTok = 0;
   const used: Answer["used"] = [];
+  const spent = () => cost(m, inTok, cachedTok, outTok);
   const log = (answer: string | null, error: string | null) =>
     call(`select public.record_ask2($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10)`,
-      [input.question, answer, JSON.stringify(used), inTok, outTok, usd(m, inTok, outTok).toFixed(5), ((Date.now() - t0) / 1000).toFixed(1), error, input.model, input.chatId]).catch(() => {});
+      [input.question, answer, JSON.stringify(used), inTok, outTok, spent().toFixed(5), ((Date.now() - t0) / 1000).toFixed(1), error, m.key, input.chatId]).catch(() => {});
   try {
     const book = new RefBook();
     const ctx = { refs: book, admin: canExport(input.role), docs: canUploadDocs(input.role) };
     const maxRounds = input.mode === "quick" ? QUICK_ROUNDS : MAX_ROUNDS;
     const tools = toolsFor(input.role, input.scope);
     const byName = new Map(tools.map((t) => [t.name, t]));
-    const anth: Anthropic.Tool[] = [...tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema as Anthropic.Tool.InputSchema })), FINAL];
-    const client = new Anthropic({ maxRetries: 2, timeout: 60_000 });
     const today = new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeZone: "Asia/Kolkata" }).format(new Date());
-    const messages: Anthropic.MessageParam[] = [
-      ...input.history.slice(-6).map((h) => ({ role: h.role, content: h.content.slice(0, 1500) })),
-      { role: "user" as const, content: userContent(input) },
-    ];
+    const session = openSession(m, {
+      system: system(today, input.role, input), final: FINAL, textLimit: FILE_LIMITS.textChars,
+      tools: tools.map((t) => ({ name: t.name, description: t.description, schema: t.schema as Record<string, unknown> })),
+      maxTokens: input.mode === "quick" ? 1000 : 1800,
+      history: input.history.slice(-6).map((h) => ({ role: h.role, content: h.content.slice(0, 1500) })),
+      question: input.question.slice(0, 600), files: input.files ?? [],
+    });
+    const done = async (answer: string, extra: Partial<Answer>): Promise<Answer> => {
+      const cited = await citeRefs(answer, book);
+      const res: Answer = { answer: cited.answer, refs: cited.refs, sources: [], follow_ups: [], confidence: "partly", used, usd: spent(), model: m.key, tokens: { in: inTok, cached: cachedTok, out: outTok }, ...extra };
+      await log(res.answer, null);
+      emit({ type: "done", result: res });
+      return res;
+    };
 
     for (let round = 0; round <= maxRounds; round++) {
       const last = round === maxRounds;
       emit({ type: "status", text: round === 0 ? "Thinking" : "Reading what came back" });
-      const stream = client.messages.stream({
-        model: m.id, max_tokens: input.mode === "quick" ? 1000 : 1800, system: system(today, input.role, input), tools: anth, messages,
-        ...(last ? { tool_choice: { type: "tool" as const, name: "final_answer" } } : {}),
+      const r = await session.round(last, {
+        onTool: (name) => emit({ type: "status", text: STATUS[name] ?? "Looking it up" }),
+        onDelta: (text) => emit({ type: "delta", text }),
       });
-      let finalIdx = -1, buf = "", sent = 0;
-      for await (const ev of stream) {
-        if (ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
-          if (ev.content_block.name === "final_answer") { finalIdx = ev.index; buf = ""; sent = 0; }
-          else emit({ type: "status", text: STATUS[ev.content_block.name] ?? "Looking it up" });
-        } else if (ev.type === "content_block_delta" && ev.delta.type === "input_json_delta" && ev.index === finalIdx) {
-          buf += ev.delta.partial_json;
-          const t = answerSoFar(buf);
-          if (t.length > sent) { emit({ type: "delta", text: t.slice(sent) }); sent = t.length; }
-        } else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
-          emit({ type: "delta", text: ev.delta.text }); sent += ev.delta.text.length;
-        }
-      }
-      const r = await stream.finalMessage();
-      inTok += r.usage.input_tokens; outTok += r.usage.output_tokens;
-      messages.push({ role: "assistant", content: r.content });
-      const uses = r.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-      const fin = uses.find((u) => u.name === "final_answer");
-      const others = uses.filter((u) => u.name !== "final_answer");
+      inTok += r.inTok; cachedTok += r.cachedTok; outTok += r.outTok;
+      const fin = r.calls.find((c) => c.name === FINAL.name);
+      const others = r.calls.filter((c) => c.name !== FINAL.name);
 
       if (fin && others.length === 0) {
         const f = fin.input as Partial<Answer>;
-        const cited = await citeRefs(String(f.answer ?? "").slice(0, 4000) || (input.mode === "quick" ? "That needs a longer look than AI mode gives. Open it in Digital Brain (the arrow at the top of this panel) to go deeper." : "I could not put an answer together."), book);
-        const res: Answer = {
-          answer: cited.answer, refs: cited.refs,
+        return done(String(f.answer ?? "").slice(0, 4000) || (input.mode === "quick" ? "That needs a longer look than AI mode gives. Open it in Digital Brain (the arrow at the top of this panel) to go deeper." : "I could not put an answer together."), {
           sources: Array.isArray(f.sources) ? f.sources.map(String).slice(0, 6) : [], follow_ups: Array.isArray(f.follow_ups) ? f.follow_ups.map(String).slice(0, 3) : [],
-          confidence: f.confidence === "found" || f.confidence === "partly" ? f.confidence : "not_found", used, usd: usd(m, inTok, outTok), model: input.model,
-        };
-        await log(res.answer, null);
-        emit({ type: "done", result: res });
-        return res;
+          confidence: f.confidence === "found" || f.confidence === "partly" ? f.confidence : "not_found",
+        });
       }
-      if (uses.length === 0) { // it answered in plain text: accept that
-        const text = r.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("\n").trim() || "I could not put an answer together.";
-        const cited = await citeRefs(text, book);
-        const res: Answer = { answer: cited.answer, refs: cited.refs, sources: [], follow_ups: [], confidence: "partly", used, usd: usd(m, inTok, outTok), model: input.model };
-        await log(text, null);
-        emit({ type: "done", result: res });
-        return res;
-      }
+      if (r.calls.length === 0) return done(r.text || "I could not put an answer together.", {}); // it answered in plain text: accept that
       if (fin) emit({ type: "reset" }); // it started to answer before the lookups came back: what it wrote so far is discarded
 
-      const results: Anthropic.ToolResultBlockParam[] = [];
-      for (const u of uses) {
-        if (u.name === "final_answer") { results.push({ type: "tool_result", tool_use_id: u.id, content: "Wait for the lookup results first, then call final_answer.", is_error: true }); continue; }
-        const tool = byName.get(u.name);
+      const results = [];
+      for (const c of r.calls) {
+        if (c.name === FINAL.name) { results.push({ id: c.id, content: "Wait for the lookup results first, then call final_answer.", isError: true }); continue; }
+        const tool = byName.get(c.name);
         const t = Date.now();
-        if (!tool) { results.push({ type: "tool_result", tool_use_id: u.id, content: "That lookup is not available here.", is_error: true }); continue; }
+        if (!tool) { results.push({ id: c.id, content: "That lookup is not available here.", isError: true }); continue; }
         try {
-          const out = await tool.run((u.input ?? {}) as Record<string, unknown>, ctx);
-          used.push({ name: u.name, rows: Array.isArray(out) ? out.length : null, ms: Date.now() - t });
-          results.push({ type: "tool_result", tool_use_id: u.id, content: asText(out) });
+          const out = await tool.run(c.input, ctx);
+          used.push({ name: c.name, rows: Array.isArray(out) ? out.length : null, ms: Date.now() - t });
+          results.push({ id: c.id, content: asText(out) });
         } catch {
-          used.push({ name: u.name, rows: null, ms: Date.now() - t });
-          results.push({ type: "tool_result", tool_use_id: u.id, content: "The lookup failed. Try different words or say you could not check.", is_error: true });
+          used.push({ name: c.name, rows: null, ms: Date.now() - t });
+          results.push({ id: c.id, content: "The lookup failed. Try different words or say you could not check.", isError: true });
         }
       }
-      messages.push({ role: "user", content: results });
+      session.addResults(results);
     }
     await log(null, "too many rounds");
     emit({ type: "error", error: "That took too many steps. Try a simpler question." });
     return null;
   } catch (e) {
-    await log(null, e instanceof Error ? e.message : "failed");
-    emit({ type: "error", error: "The question could not be answered right now. Please try again." });
+    const msg = e instanceof Error ? e.message : "failed";
+    console.error(`[ask] ${m.key} failed: ${msg.slice(0, 300)}`);
+    await log(null, msg);
+    emit({ type: "error", error: /api key|authentication|401|incorrect/i.test(msg) ? `The ${m.provider === "openai" ? "OpenAI" : "Anthropic"} key for ${m.name} is missing or not accepted. Choose another model or ask the administrator.` : "The question could not be answered right now. Please try again." });
     return null;
   }
 }

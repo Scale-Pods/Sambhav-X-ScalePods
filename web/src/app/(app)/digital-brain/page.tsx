@@ -3,7 +3,8 @@ import { connection } from "next/server";
 import Link from "next/link";
 import { Card, Skeleton } from "@/components/ui";
 import { canExport, canUploadDocs, currentStaff } from "@/lib/auth";
-import { MODELS } from "@/lib/ask/engine";
+import { MODEL_LIST, defaultModel, label, typicalUsd } from "@/lib/ask/models";
+import { providerReady } from "@/lib/ask/providers";
 import { spendToday } from "@/lib/ask/chats";
 import { SCOPE_LABEL, SCOPES } from "@/lib/ask/tools";
 import { AskApp } from "./AskApp";
@@ -37,7 +38,11 @@ async function Body({ searchParams }: { searchParams: Promise<Record<string, str
         initialChat={initialChat}
         suggestions={admin ? [...ADMIN, ...STOCK] : STOCK}
         scopes={allowed.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))}
-        models={(Object.keys(MODELS) as (keyof typeof MODELS)[]).map((k) => ({ value: k, label: MODELS[k].label, hint: MODELS[k].hint }))}
+        models={MODEL_LIST.map((m) => {
+          const rs = typicalUsd(m) * 88;
+          return { value: m.key, label: label(m), provider: m.provider, ready: providerReady(m.provider), hint: `${m.note} About ₹${rs < 1 ? rs.toFixed(2) : rs.toFixed(1)} a question ($${m.in} in / $${m.out} out per 1M tokens).` };
+        })}
+        defaultModel={defaultModel().key}
         spend={spend}
       />
       {admin && <p className="mt-3 text-[0.82rem] text-muted"><Link href="/digital-brain/log" className="font-medium text-brand hover:underline">See every question that was asked, what it used and what it cost →</Link></p>}

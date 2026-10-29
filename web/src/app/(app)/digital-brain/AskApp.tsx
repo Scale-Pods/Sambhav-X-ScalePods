@@ -5,7 +5,7 @@ import { Bookmark, BookmarkPlus, Check, ChevronDown, Copy, Download, ExternalLin
 import { Badge } from "@/components/ui";
 import { Markdown, type RefLink } from "./Markdown";
 
-type ModelKey = "fast" | "balanced";
+type ModelKey = string; // a model's API id (lib/ask/models.ts)
 type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; origin?: string; updated_at: string };
 type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
@@ -75,7 +75,8 @@ export type AskAppProps = {
   initialChat?: string | null;
   suggestions: string[];
   scopes: { value: string; label: string }[];
-  models: { value: ModelKey; label: string; hint: string }[];
+  models: { value: ModelKey; label: string; hint: string; provider: "anthropic" | "openai"; ready: boolean }[];
+  defaultModel: ModelKey;
   spend: { spent: number; cap: number | null } | null;
 };
 
@@ -87,14 +88,14 @@ const LOOKED: Record<string, string> = {
 
 const cents = (usd: number) => (usd < 0.01 ? "under 1 cent" : `${Math.round(usd * 100)} cents`);
 
-export function AskApp({ canAttach, initialChat, suggestions, scopes, models, spend }: AskAppProps) {
+export function AskApp({ canAttach, initialChat, suggestions, scopes, models, defaultModel, spend }: AskAppProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [chatCost, setChatCost] = useState(0);
   const [loadingChat, setLoadingChat] = useState(false);
   const [text, setText] = useState("");
-  const [model, setModel] = useState<ModelKey>("balanced");
+  const [model, setModel] = useState<ModelKey>(defaultModel);
   const [scope, setScope] = useState("all");
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState(false);
@@ -165,7 +166,7 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
       if (!r.ok) throw new Error();
       const j = (await r.json()) as { chat: Chat; messages: Msg[]; usd: number };
       setMessages(j.messages.map((m) => ({ ...m, meta: m.meta ?? null })));
-      setModel(j.chat.model); setScope(j.chat.scope); setChatCost(j.usd);
+      setModel(models.some((x) => x.value === j.chat.model) ? j.chat.model : defaultModel); setScope(j.chat.scope); setChatCost(j.usd);
     } catch { setMessages([]); }
     setLoadingChat(false);
   }
@@ -496,8 +497,12 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, sp
                 <button type="button" onClick={() => picker.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md border border-line bg-card px-2 py-1 text-[0.82rem] text-muted hover:text-ink disabled:opacity-50" title="Attach a PDF, picture or text file (up to 3 files, 3 MB). It is read for this question only and not stored."><Paperclip className="h-3.5 w-3.5" /><span className="sr-only sm:not-sr-only">Attach</span></button>
               </>}
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Model</span>
-                <select value={model} onChange={(e) => setModel(e.target.value as ModelKey)} disabled={busy} className="rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Model" title={models.find((m) => m.value === model)?.hint}>
-                  {models.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select></label>
+                <select value={model} onChange={(e) => setModel(e.target.value)} disabled={busy} className="max-w-[13rem] rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Model" title={models.find((m) => m.value === model)?.hint}>
+                  {(["anthropic", "openai"] as const).map((pv) => (
+                    <optgroup key={pv} label={pv === "anthropic" ? "Anthropic (Claude)" : "OpenAI"}>
+                      {models.filter((m) => m.provider === pv).map((m) => <option key={m.value} value={m.value} disabled={!m.ready}>{m.label}{m.ready ? "" : " - key not set"}</option>)}
+                    </optgroup>
+                  ))}</select></label>
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Look in</span>
                 <select value={scope} onChange={(e) => setScope(e.target.value)} disabled={busy} className="rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Look in">
                   {scopes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>

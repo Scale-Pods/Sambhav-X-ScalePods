@@ -3,7 +3,7 @@ import { q } from "../db";
 
 // Each person's own chats (migration 36). Reads only; writes are the database functions. Row rules show a person nothing but their own.
 
-export type ChatRow = { id: string; title: string; pinned: boolean; model: "fast" | "balanced"; scope: string; origin: "brain" | "ai_mode"; updated_at: string };
+export type ChatRow = { id: string; title: string; pinned: boolean; model: string; scope: string; origin: "brain" | "ai_mode"; updated_at: string };
 export type MessageRow = {
   id: string; role: "user" | "assistant"; content: string; feedback: number | null; created_at: string;
   meta: { files?: string[]; sources?: string[]; refs?: { id: string; n: number; label: string; url: string; kind: "sheet" | "app"; note?: string }[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string } | null;

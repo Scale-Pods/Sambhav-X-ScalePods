@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { call, currentUserId, q, runAs } from "@/lib/db";
-import { FILE_LIMITS, MODELS, runAsk, type AskEvent, type AskFile, type ModelKey, type PageCtx } from "@/lib/ask/engine";
+import { FILE_LIMITS, runAsk, type AskEvent, type AskFile, type PageCtx } from "@/lib/ask/engine";
+import { AI_MODE_KEY, THINK_HARDER_KEY, defaultModel, modelByKey } from "@/lib/ask/models";
+import { providerReady } from "@/lib/ask/providers";
 import { recentMessages } from "@/lib/ask/chats";
 import { SCOPES, type Scope } from "@/lib/ask/tools";
 
@@ -47,7 +49,11 @@ export async function POST(req: NextRequest) {
   const uid = await currentUserId().catch(() => null);
   if (!me || !uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const body = (await req.json().catch(() => null)) as { question?: unknown; chatId?: unknown; model?: unknown; scope?: unknown; regenerate?: unknown; files?: unknown; mode?: unknown; page?: unknown } | null;
-  const model: ModelKey = typeof body?.model === "string" && body.model in MODELS ? (body.model as ModelKey) : "balanced";
+  // AI mode asks for "ai_mode" (its usual model) or "think_harder" (the stronger one); the Digital Brain names a model from the list
+  const asked = body?.mode === "quick" ? (body?.model === "think_harder" ? THINK_HARDER_KEY : body?.model === "ai_mode" ? AI_MODE_KEY : body?.model) : body?.model;
+  const chosen = modelByKey(asked) ?? (body?.mode === "quick" ? modelByKey(AI_MODE_KEY) : null) ?? defaultModel();
+  const model = chosen.key;
+  if (!providerReady(chosen.provider)) return NextResponse.json({ error: `${chosen.name} needs the ${chosen.provider === "openai" ? "OpenAI" : "Anthropic"} key, which is not set on this server. Pick another model.` }, { status: 400 });
   const scope: Scope = typeof body?.scope === "string" && (SCOPES as readonly string[]).includes(body.scope) ? (body.scope as Scope) : "all";
   const chatIn = typeof body?.chatId === "string" && /^[0-9a-f-]{36}$/i.test(body.chatId) ? body.chatId : null;
   const regenerate = body?.regenerate === true && chatIn !== null;

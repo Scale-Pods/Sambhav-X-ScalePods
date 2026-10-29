@@ -38,7 +38,7 @@ const looksLikeQuestion = (v: string) => /\?\s*$/.test(v.trim()) || QUESTION.tes
 const ICON = { plate: PackageSearch, invoice: Receipt, order: FileText } as const;
 
 /** The search bar in the top of every page: instant exact matches as you type, plus AI mode, a quick answer panel that knows which page you are on. */
-export function TopSearch({ admin }: { admin: boolean }) {
+export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: string }) {
   const router = useRouter();
   const path = usePathname();
   const sp = useSearchParams();
@@ -105,7 +105,7 @@ export function TopSearch({ admin }: { admin: boolean }) {
     return { path, title: pageRef.current.title, params };
   }
 
-  async function ask(question: string, opts: { regenerate?: boolean; model?: "fast" | "balanced" } = {}) {
+  async function ask(question: string, opts: { regenerate?: boolean; model?: "ai_mode" | "think_harder" } = {}) {
     const text = question.trim();
     if ((!opts.regenerate && text.length < 2) || busy) return;
     const aId = "p-" + Math.random().toString(36).slice(2);
@@ -121,7 +121,7 @@ export function TopSearch({ admin }: { admin: boolean }) {
     try {
       const res = await fetch("/api/ask", {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal,
-        body: JSON.stringify({ question: text, chatId, model: opts.model ?? "fast", scope: pageRef.current.scope, mode: "quick", page: context(), regenerate: opts.regenerate === true }),
+        body: JSON.stringify({ question: text, chatId, model: opts.model ?? "ai_mode", scope: pageRef.current.scope, mode: "quick", page: context(), regenerate: opts.regenerate === true }),
       });
       if (!res.ok || !res.body) { const j = await res.json().catch(() => ({})); set((m) => ({ ...m, pending: false, status: undefined, error: (j as { error?: string }).error ?? "It could not be answered. Please try again." })); return; }
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
@@ -302,8 +302,8 @@ export function TopSearch({ admin }: { admin: boolean }) {
                             {!m.id.startsWith("p-") && <>
                               <button type="button" onClick={() => void feedback(m, 1)} className={"rounded p-1.5 hover:bg-surface hover:text-ink " + (m.feedback === 1 ? "text-ok" : "")} aria-label="Good answer" aria-pressed={m.feedback === 1}><ThumbsUp className="h-4 w-4" /></button>
                               <button type="button" onClick={() => void feedback(m, -1)} className={"rounded p-1.5 hover:bg-surface hover:text-ink " + (m.feedback === -1 ? "text-bad" : "")} aria-label="Not a good answer" aria-pressed={m.feedback === -1}><ThumbsDown className="h-4 w-4" /></button></>}
-                            {idx === messages.length - 1 && !busy && m.meta?.model !== "balanced" && (
-                              <button type="button" onClick={() => void ask("", { regenerate: true, model: "balanced" })} className="ml-1 inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[0.76rem] hover:border-brand hover:text-brand" title="Ask the same question again with the stronger model. It takes a little longer and costs about 2 to 3 cents."><RefreshCw className="h-3 w-3" />Think harder</button>
+                            {idx === messages.length - 1 && !busy && m.meta?.model !== thinkKey && (
+                              <button type="button" onClick={() => void ask("", { regenerate: true, model: "think_harder" })} className="ml-1 inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[0.76rem] hover:border-brand hover:text-brand" title="Ask the same question again with the stronger model. It takes a little longer and costs about 2 to 3 cents."><RefreshCw className="h-3 w-3" />Think harder</button>
                             )}
                           </div>
                         )}

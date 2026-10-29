@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (question.length < 2 || question.length > 600) return NextResponse.json({ error: "Nothing to save." }, { status: 400 });
   try {
     const r = await call<{ id: string }>(`select public.ask_save_question($1, $2, $3, $4) id`, [
-      typeof b?.title === "string" ? b.title : "", question, typeof b?.model === "string" ? b.model : "balanced", typeof b?.scope === "string" ? b.scope : "all",
+      typeof b?.title === "string" ? b.title : "", question, typeof b?.model === "string" ? b.model : "claude-haiku-5-5", typeof b?.scope === "string" ? b.scope : "all",
     ]);
     return NextResponse.json({ id: r[0].id });
   } catch (e) {
