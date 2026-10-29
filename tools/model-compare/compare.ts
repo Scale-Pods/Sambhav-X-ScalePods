@@ -3,7 +3,7 @@ import { runAsk } from "../../web/src/lib/ask/engine";
 import { MODEL_LIST, modelByKey } from "../../web/src/lib/ask/models";
 
 // The same questions, asked of each model through the real engine and the real data. Reads its settings from the environment:
-//   LIMIT=2 (only the first 2 questions)   MODELS=claude-haiku-5-5,gpt-6-luna   (default: every model whose key is set)   QUICK=1 (ask as AI mode does)   OUT=path of the results file
+//   MAX_USD=0.5 (hard stop)   LIMIT=2 (only the first 2 questions)   MODELS=claude-haiku-5-5,gpt-6-luna   (default: every model whose key is set)   QUICK=1 (ask as AI mode does)   OUT=path of the results file
 const QUESTIONS: { q: string; scope: string; page?: { path: string; title: string; params: Record<string, string> } }[] = [
   { q: "Do we have 40 mm SA 387 Gr 22 Cl2 plates, 1250 wide and 6000 long?", scope: "stock" },
   { q: "Who are our top 3 customers by money they owe us, and how much?", scope: "money" },
@@ -17,6 +17,8 @@ const QUESTIONS: { q: string; scope: string; page?: { path: string; title: strin
 const have = (p: string) => Boolean(p === "anthropic" ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY);
 const wanted = (process.env.MODELS ? process.env.MODELS.split(",") : MODEL_LIST.filter((m) => have(m.provider)).map((m) => m.key)).map((k) => modelByKey(k.trim())!).filter(Boolean);
 const rows: Record<string, unknown>[] = [];
+const cap = Number(process.env.MAX_USD) || Infinity; // stop asking as soon as the money spent in this run passes this many dollars
+let spentAll = 0;
 for (const m of wanted) {
   if (!have(m.provider)) { console.log(`skip ${m.key}: no ${m.provider} key`); continue; }
   let total = 0, secs = 0, fails = 0;
@@ -25,7 +27,8 @@ for (const m of wanted) {
     const r = await runAsk({ mode: process.env.QUICK ? "quick" : undefined, page: x.page, question: x.q, history: [], role: "admin", model: m.key, scope: x.scope as never, chatId: null }, () => {});
     const s = (Date.now() - t0) / 1000;
     if (!r) { fails++; console.log(`  ${m.key} | FAILED | ${x.q}`); rows.push({ model: m.key, q: x.q, failed: true }); continue; }
-    total += r.usd; secs += s;
+    total += r.usd; secs += s; spentAll += r.usd;
+    if (spentAll > cap) { console.log(`STOPPED: spent $${spentAll.toFixed(3)}, over the MAX_USD limit`); break; }
     rows.push({ model: m.key, q: x.q, usd: r.usd, seconds: s, tokens: r.tokens, lookups: r.used.map((u) => u.name), confidence: r.confidence, answer: r.answer });
     console.log(`  ${m.key.padEnd(18)} ${(r.usd * 100).toFixed(3).padStart(7)} c ${s.toFixed(1).padStart(5)} s  ${r.used.map((u) => u.name).join(",").padEnd(34)} ${x.q.slice(0, 50)}`);
   }
