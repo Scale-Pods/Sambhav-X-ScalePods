@@ -3,7 +3,7 @@ import { runAsk } from "../../web/src/lib/ask/engine";
 import { MODEL_LIST, modelByKey } from "../../web/src/lib/ask/models";
 
 // The same questions, asked of each model through the real engine and the real data. Reads its settings from the environment:
-//   MAX_USD=0.5 (hard stop)   LIMIT=2 (only the first 2 questions)   MODELS=claude-haiku-5-5,gpt-6-luna   (default: every model whose key is set)   QUICK=1 (ask as AI mode does)   OUT=path of the results file
+//   ONLY=6,7 (just those questions, counted from 0)   MAX_USD=0.5 (hard stop)   LIMIT=2 (only the first 2 questions)   MODELS=claude-haiku-5-5,gpt-6-luna   (default: every model whose key is set)   QUICK=1 (ask as AI mode does)   OUT=path of the results file
 const QUESTIONS: { q: string; scope: string; page?: { path: string; title: string; params: Record<string, string> } }[] = [
   { q: "Do we have 40 mm SA 387 Gr 22 Cl2 plates, 1250 wide and 6000 long?", scope: "stock" },
   { q: "Who are our top 3 customers by money they owe us, and how much?", scope: "money" },
@@ -22,7 +22,8 @@ let spentAll = 0;
 for (const m of wanted) {
   if (!have(m.provider)) { console.log(`skip ${m.key}: no ${m.provider} key`); continue; }
   let total = 0, secs = 0, fails = 0;
-  for (const x of QUESTIONS.slice(0, Number(process.env.LIMIT) || QUESTIONS.length)) {
+  const picked = process.env.ONLY ? process.env.ONLY.split(",").map(Number).map((i) => QUESTIONS[i]).filter(Boolean) : QUESTIONS.slice(0, Number(process.env.LIMIT) || QUESTIONS.length);
+  for (const x of picked) {
     const t0 = Date.now();
     const r = await runAsk({ mode: process.env.QUICK ? "quick" : undefined, page: x.page, question: x.q, history: [], role: "admin", model: m.key, scope: x.scope as never, chatId: null }, () => {});
     const s = (Date.now() - t0) / 1000;

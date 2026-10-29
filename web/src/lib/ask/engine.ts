@@ -112,7 +112,7 @@ export async function runAsk(input: AskInput, emit: (e: AskEvent) => void): Prom
     const session = openSession(m, {
       system: system(today, input.role, input), final: FINAL, textLimit: FILE_LIMITS.textChars,
       tools: tools.map((t) => ({ name: t.name, description: t.description, schema: t.schema as Record<string, unknown> })),
-      maxTokens: input.mode === "quick" ? 1000 : 1800,
+      maxTokens: input.mode === "quick" ? 1500 : 4000, // a long table of rows must fit: an answer cut off mid-way arrives empty
       history: input.history.slice(-6).map((h) => ({ role: h.role, content: h.content.slice(0, 1500) })),
       question: input.question.slice(0, 600), files: input.files ?? [],
     });
