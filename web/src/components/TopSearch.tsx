@@ -303,7 +303,7 @@ export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: strin
                               <button type="button" onClick={() => void feedback(m, 1)} className={"rounded p-1.5 hover:bg-surface hover:text-ink " + (m.feedback === 1 ? "text-ok" : "")} aria-label="Good answer" aria-pressed={m.feedback === 1}><ThumbsUp className="h-4 w-4" /></button>
                               <button type="button" onClick={() => void feedback(m, -1)} className={"rounded p-1.5 hover:bg-surface hover:text-ink " + (m.feedback === -1 ? "text-bad" : "")} aria-label="Not a good answer" aria-pressed={m.feedback === -1}><ThumbsDown className="h-4 w-4" /></button></>}
                             {idx === messages.length - 1 && !busy && m.meta?.model !== thinkKey && (
-                              <button type="button" onClick={() => void ask("", { regenerate: true, model: "think_harder" })} className="ml-1 inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[0.76rem] hover:border-brand hover:text-brand" title="Ask the same question again with the stronger model. It takes a little longer and costs about 2 to 3 cents."><RefreshCw className="h-3 w-3" />Think harder</button>
+                              <button type="button" onClick={() => void ask("", { regenerate: true, model: "think_harder" })} className="ml-1 inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[0.76rem] hover:border-brand hover:text-brand" title="Ask the same question again with the stronger model. It takes a little longer and costs about 50 paise."><RefreshCw className="h-3 w-3" />Think harder</button>
                             )}
                           </div>
                         )}

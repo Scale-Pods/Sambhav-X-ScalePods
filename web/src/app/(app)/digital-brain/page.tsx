@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import Link from "next/link";
 import { Card, Skeleton } from "@/components/ui";
 import { canExport, canUploadDocs, currentStaff } from "@/lib/auth";
-import { MODEL_LIST, defaultModel, label, typicalUsd } from "@/lib/ask/models";
+import { AI_MODE_KEY, MODEL_LIST, THINK_HARDER_KEY, defaultModel, label, typicalUsd } from "@/lib/ask/models";
 import { providerReady } from "@/lib/ask/providers";
 import { spendToday } from "@/lib/ask/chats";
 import { SCOPE_LABEL, SCOPES } from "@/lib/ask/tools";
@@ -31,6 +31,8 @@ async function Body({ searchParams }: { searchParams: Promise<Record<string, str
   const docs = canUploadDocs(me?.role);
   const allowed = admin ? [...SCOPES] : docs ? (["all", "stock", "documents"] as const) : (["all", "stock"] as const);
   const spend = admin ? await spendToday().catch(() => null) : null;
+  const roles: Record<string, string> = {};
+  for (const [k, v] of [[defaultModel().key, "Digital Brain default"], [AI_MODE_KEY, "AI mode"], [THINK_HARDER_KEY, "Think harder"]]) roles[k] = roles[k] ? roles[k] + ", " + v : v;
   return (
     <>
       <AskApp
@@ -43,6 +45,7 @@ async function Body({ searchParams }: { searchParams: Promise<Record<string, str
           return { value: m.key, label: label(m), provider: m.provider, ready: providerReady(m.provider), hint: `${m.note} About ₹${rs < 1 ? rs.toFixed(2) : rs.toFixed(1)} a question ($${m.in} in / $${m.out} out per 1M tokens).` };
         })}
         defaultModel={defaultModel().key}
+        roles={roles}
         spend={spend}
       />
       {admin && <p className="mt-3 text-[0.82rem] text-muted"><Link href="/digital-brain/log" className="font-medium text-brand hover:underline">See every question that was asked, what it used and what it cost →</Link></p>}

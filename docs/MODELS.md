@@ -5,13 +5,13 @@ Documents are always read by Anthropic (Haiku 5.5 first, Sonnet 5.5 only when th
 ## The list (`web/src/lib/ask/models.ts`, one line per model)
 | Model | Provider | $ per 1M tokens in / out | Measured cost per question* | Use it for |
 |---|---|---|---|---|
-| Haiku 5.5 (Fast) | Anthropic | 0.10 / 0.50 | **0.15 cent** (about ₹0.13) | Everyday questions. The default for the Digital Brain and AI mode |
+| Haiku 5.5 (Fast) | Anthropic | 0.10 / 0.50 | **0.15 cent** (about ₹0.13) | Everyday questions. Fallback; was the default until 30 Oct 2026 |
 | Sonnet 5.5 (Balanced) | Anthropic | 2 / 10 | 2.3 cents (₹2) | Vague or multi-part questions Haiku gets wrong |
 | Opus 5.5 (Best) | Anthropic | 4 / 20 | 5.5 cents (₹4.8) | The hardest analysis; use sparingly |
 | GPT-5 nano (Lowest cost) | OpenAI | 0.05 / 0.40 | 0.054 cent, 12 s | Simple lookups only; wrote wrong number formats once and pads answers. Not the default |
-| GPT-6 Luna (Fast) | OpenAI | 0.10 / 0.50 | **0.055 cent**, 7.7 s | Everyday questions. Cheapest good model: same list price as Haiku, but cached input is billed much lower |
+| GPT-6 Luna (Fast) | OpenAI | 0.10 / 0.50 | **0.055 cent**, 7.7 s | Everyday questions, the default. Cheapest good model: same list price as Haiku, but cached input is billed much lower |
 | GPT-5 mini (Low cost) | OpenAI | 0.25 / 2 | 0.179 cent, 11.6 s | Not recommended: asked for clarification instead of looking things up |
-| GPT-6.1 Terra (Balanced) | OpenAI | 1 / 5 | 0.523 cent, 9 s | Step-up for harder questions at a quarter of Sonnet's cost |
+| GPT-6.1 Terra (Balanced) | OpenAI | 1 / 5 | 0.523 cent, 9 s | Think harder, and harder questions, at a quarter of Sonnet's cost |
 | GPT-6.1 Sol (Strong) | OpenAI | 2 / 10 | not measured yet | Same price as Sonnet 5.5; cached input is cheaper |
 | GPT-6 Astra (Best) | OpenAI | 10 / 50 | not measured yet | OpenAI's top model; expensive |
 
@@ -44,7 +44,9 @@ Switching provider does not cut the bill much by itself: **GPT-6 Luna costs the 
 | Hardest analysis (pick by hand) | Sonnet 5.5 or Opus 5.5 | 2 to 5 cents |
 | Documents | Haiku 5.5, then Sonnet 5.5 | unchanged |
 
-This is set by three Vercel environment variables (no code change): `ASK_DEFAULT_MODEL=gpt-6-luna`, `AI_MODE_MODEL=gpt-6-luna`, `THINK_HARDER_MODEL=gpt-6.1-terra`, then redeploy. Haiku stays available as a fallback if OpenAI has an outage.
+These are now the built-in defaults in `web/src/lib/ask/models.ts` (30 Oct 2026). To change them without code, set the Vercel variables `ASK_DEFAULT_MODEL`, `AI_MODE_MODEL`, `THINK_HARDER_MODEL` to a model key and redeploy. Haiku stays in the picker as a fallback if OpenAI has an outage.
+
+The **i** button next to the model box in the Digital Brain opens three tables in rupees (cost of a question, list price per 1M tokens, which model for what), built from the same list. The rupee rate is `INR_PER_USD` in `models.ts`.
 
 ## Adding the OpenAI key (the OpenAI models stay greyed out until it is set)
 1. Create a key at platform.openai.com/api-keys.
@@ -58,6 +60,6 @@ Never put the key in chat, in a file in the repository or in a screenshot.
 It asks the same 8 questions of each model through the real engine and real data, prints cost, time and which lookups were used, and saves every answer to `data/model-compare.json` (git-ignored) so the answers can be compared side by side. It spends real money on each model named (about 0.5 to 6 cents per model; add `ONLY=6,7` to run just some questions, `MAX_USD=0.3` as a hard stop).
 
 ## Which screen uses which model
-- **Digital Brain:** the model picked in the box under the chat (starts on `ASK_DEFAULT_MODEL`, default Haiku 5.5). Saved per chat.
-- **AI mode:** `AI_MODE_MODEL` (default Haiku 5.5). **Think harder** uses `THINK_HARDER_MODEL` (default Sonnet 5.5). These are environment settings, not code.
+- **Digital Brain:** the model picked in the box under the chat (starts on `ASK_DEFAULT_MODEL`, default GPT-6 Luna). Saved per chat.
+- **AI mode:** `AI_MODE_MODEL` (default GPT-6 Luna). **Think harder** uses `THINK_HARDER_MODEL` (default GPT-6.1 Terra). These are environment settings, not code.
 - Chats started on the old "Fast" or "Balanced" were moved to Haiku 5.5 and Sonnet 5.5.

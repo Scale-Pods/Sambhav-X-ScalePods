@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bookmark, BookmarkPlus, Check, ChevronDown, Copy, Download, ExternalLink, FileText, Loader2, Menu, MessageSquarePlus, Paperclip, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui";
+import { ModelPrices } from "@/components/ModelPrices";
 import { Markdown, type RefLink } from "./Markdown";
 
 type ModelKey = string; // a model's API id (lib/ask/models.ts)
@@ -77,6 +78,7 @@ export type AskAppProps = {
   scopes: { value: string; label: string }[];
   models: { value: ModelKey; label: string; hint: string; provider: "anthropic" | "openai"; ready: boolean }[];
   defaultModel: ModelKey;
+  roles: Record<string, string>; // model key -> where it is used ("default", "AI mode", "Think harder")
   spend: { spent: number; cap: number | null } | null;
 };
 
@@ -88,7 +90,7 @@ const LOOKED: Record<string, string> = {
 
 const cents = (usd: number) => (usd < 0.01 ? "under 1 cent" : `${Math.round(usd * 100)} cents`);
 
-export function AskApp({ canAttach, initialChat, suggestions, scopes, models, defaultModel, spend }: AskAppProps) {
+export function AskApp({ canAttach, initialChat, suggestions, scopes, models, defaultModel, roles, spend }: AskAppProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -502,7 +504,7 @@ export function AskApp({ canAttach, initialChat, suggestions, scopes, models, de
                     <optgroup key={pv} label={pv === "anthropic" ? "Anthropic (Claude)" : "OpenAI"}>
                       {models.filter((m) => m.provider === pv).map((m) => <option key={m.value} value={m.value} disabled={!m.ready}>{m.label}{m.ready ? "" : " - key not set"}</option>)}
                     </optgroup>
-                  ))}</select></label>
+                  ))}</select><ModelPrices roles={roles} /></label>
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Look in</span>
                 <select value={scope} onChange={(e) => setScope(e.target.value)} disabled={busy} className="rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Look in">
                   {scopes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
