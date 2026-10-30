@@ -14,6 +14,7 @@
   --ink: #18222d;
   --muted: #66707a;
   --line: #e7e2da;
+  --grid: #d9d2c6;   /* the lines between table columns and rows */
   --surface: #f7f5f2;
   --card: #ffffff;
   --field: #ffffff;
@@ -47,6 +48,7 @@
   --ink: #e6ebf0;
   --muted: #93a0ad;
   --line: #27313c;
+  --grid: #3b4857;
   --surface: #0f141a;
   --card: #161d25;
   --field: #1b232d;
@@ -79,6 +81,7 @@
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-grid: var(--grid);
   --color-surface: var(--surface);
   --color-card: var(--card);
   --color-field: var(--field);
@@ -115,6 +118,13 @@ body {
 .num {
   font-variant-numeric: tabular-nums;
 }
+
+/* Every table is a grid: hairlines between the columns as well as the rows, so each value sits in its own box (light and dark follow --grid).
+   A table that should stay plain takes the class no-grid. */
+table:not(.no-grid) :is(th, td):not(:last-child) { border-right: 1px solid var(--grid); }
+table:not(.no-grid) :is(th, td) { border-bottom-color: var(--grid); }
+table:not(.no-grid) tr { border-color: var(--grid); }
+table:not(.no-grid) tbody tr { transition: background-color 80ms; }
 
 :focus-visible {
   outline: 2px solid var(--brand);
