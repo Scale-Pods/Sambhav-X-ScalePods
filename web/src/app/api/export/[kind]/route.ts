@@ -5,6 +5,7 @@ import { canExport, currentStaff } from "@/lib/auth";
 import { parseFilter, todayIST } from "@/lib/filters";
 import { readPlateQuery } from "@/lib/plateQuery";
 import { isoDay } from "@/lib/money";
+import { summaryXlsx } from "@/lib/summaryXlsx";
 import { compare, partiesList, readTallyParams } from "@/lib/tally";
 import { brokerageList, expensesList, gpayList, payablesList, pettyList, purchasesList, readPayParams, receivablesList, salesList } from "@/lib/payments";
 
@@ -29,6 +30,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ kind: strin
   if (!canExport(me.role)) return NextResponse.json({ error: "Only the owner or an administrator can download data" }, { status: 403 });
 
   const sp = Object.fromEntries(req.nextUrl.searchParams.entries());
+  if (kind === "summary-xlsx") {
+    const f = parseFilter(sp, "fy");
+    const view = sp.view === "period" ? "period" : "sheet";
+    const rows = await summary(view === "period" ? f : { ...f, from: null }, null);
+    const file = await summaryXlsx(rows, f, view, f.to ?? todayIST());
+    return new NextResponse(new Uint8Array(file), {
+      headers: {
+        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-disposition": `attachment; filename="sambhav-summary-${view}-${todayIST()}.xlsx"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
   let body: string;
   if (kind === "summary") {
     const f = parseFilter(sp, "fy");

@@ -23,7 +23,7 @@ Live link: https://sambhav-stock.vercel.app · login: info@scalepods.co (admin)
 
 1. **Overview** (home). Point at the cards: stock now, received, sold, plates, items needing review. Show a chart. Change the period (7 days, 30 days, custom range). Switch Tonnes to kg. Switch Both books to WB1.
    *Say:* "Every filter works on every page, and the link can be shared."
-2. **Summary.** The same numbers as their Summary tab: opening, received, sold, closing. Show the CSV download.
+2. **Summary.** The same numbers as their Summary tab: opening, received, sold, closing. Show the Excel download (same layout as the screen; a plain CSV is also there).
    *Say:* "Your typed Summary balance on WB1 is about 170 to 200 tonnes below what the rows add up to. This one is calculated from the rows, so it can't drift."
 3. **Plates.** Search a heat number. Open one plate: full history, every receipt and sale, the certificate link opens the real file.
    *Say:* "Every row traces to your sheet, tab and row."

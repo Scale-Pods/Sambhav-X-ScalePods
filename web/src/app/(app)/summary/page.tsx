@@ -54,9 +54,14 @@ async function Body({ searchParams }: { searchParams: SP }) {
               <Link href={viewHref("period")} className={"px-3 py-1.5 " + (view === "period" ? "bg-ink text-surface" : "bg-field text-muted hover:text-ink")}>Period view</Link>
             </div>
             {canExport(me?.role) && (
-              <a href={exportHref} className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink">
-                <Download className="h-4 w-4" /> Excel / CSV
-              </a>
+              <>
+                <a href={exportHref.replace("/api/export/summary", "/api/export/summary-xlsx")} className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink" title="An Excel file laid out like this page">
+                  <Download className="h-4 w-4" /> Excel
+                </a>
+                <a href={exportHref} className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink" title="A plain list, one row per grade and thickness, in kg">
+                  <Download className="h-4 w-4" /> CSV
+                </a>
+              </>
             )}
           </div>
         }
