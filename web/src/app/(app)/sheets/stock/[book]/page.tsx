@@ -79,7 +79,7 @@ async function Body({ params, searchParams }: { params: P; searchParams: SP }) {
         </nav>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-grid bg-card shadow-[0_1px_2px_rgba(24,34,45,0.05)]">
+      <div className="overflow-hidden rounded-lg border border-line bg-card shadow-[0_1px_2px_rgba(24,34,45,0.04)]">
         <div className="max-h-[max(20rem,calc(100dvh-21rem))] overflow-auto">
           {data.sections.length === 0 && <p className="px-5 py-10 text-[0.92rem] text-muted">{search ? `Nothing in ${tab} matches “${search}”.` : "Nothing in this tab."}</p>}
           {data.sections.map((s) => <SectionView key={s.thk} s={s} />)}

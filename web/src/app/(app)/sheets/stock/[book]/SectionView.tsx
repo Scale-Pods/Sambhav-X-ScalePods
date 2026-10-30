@@ -11,10 +11,9 @@ const num = " num text-right";
 
 export function SectionView({ s }: { s: Section }) {
   return (
-    <section id={`t-${s.thk}`} className="border-b border-grid">
+    <section id={`t-${s.thk}`} className="border-b-2 border-line">
       <h2 className="sticky left-0 bg-steel px-3 py-1.5 font-display text-[0.9rem] font-bold tracking-wide text-steel-ink">{s.thk} MM</h2>
-      <div className="flex min-w-max items-start gap-3 p-3">
-        <div className="overflow-clip rounded-lg border border-grid">
+      <div className="flex min-w-max items-start gap-4 px-0 pb-3">
         <table className="border-separate border-spacing-0">
           <caption className="sticky left-0 bg-ok-soft px-2 py-1 text-left text-[0.7rem] font-bold uppercase tracking-wider text-ok">Purchase stock</caption>
           <thead><tr>{["Date", "Thk", "Wid", "Len", "Nos", "Wt", "Heat no", "Plate no", "Cert", "HSN", "Rate"].map((h) => <th key={h} className={hd + (["Thk", "Wid", "Len", "Nos", "Wt", "Rate"].includes(h) ? " text-right" : "")}>{h}</th>)}</tr></thead>
@@ -32,8 +31,6 @@ export function SectionView({ s }: { s: Section }) {
             <tr><td colSpan={5} className="bg-surface px-2 py-1 text-right text-[0.72rem] font-bold uppercase text-muted">Total purchase</td><td className="num bg-surface px-2 py-1 text-right text-[0.82rem] font-bold">{f(s.totals.pur)}</td><td colSpan={5} className="bg-surface" /></tr>
           </tbody>
         </table>
-        </div>
-        <div className="overflow-clip rounded-lg border border-grid">
         <table className="border-separate border-spacing-0">
           <caption className="sticky left-0 bg-warn-soft px-2 py-1 text-left text-[0.7rem] font-bold uppercase tracking-wider text-warn">Sales stock</caption>
           <thead><tr>{["Date", "Inv no", "V. no", "Thk", "Wid", "Len", "Nos", "Wt", "Plot", "Heat / plate", "Notes"].map((h) => <th key={h} className={hd + (["Thk", "Wid", "Len", "Nos", "Wt"].includes(h) ? " text-right" : "")}>{h}</th>)}</tr></thead>
@@ -50,8 +47,6 @@ export function SectionView({ s }: { s: Section }) {
             <tr><td colSpan={7} className="bg-surface px-2 py-1 text-right text-[0.72rem] font-bold uppercase text-muted">Total sale</td><td className="num bg-surface px-2 py-1 text-right text-[0.82rem] font-bold">{f(s.totals.sale)}</td><td colSpan={3} className="bg-surface" /></tr>
           </tbody>
         </table>
-        </div>
-        <div className="overflow-clip rounded-lg border border-grid">
         <table className="border-separate border-spacing-0">
           <caption className="sticky left-0 bg-info-soft px-2 py-1 text-left text-[0.7rem] font-bold uppercase tracking-wider text-brand-dark">Balance stock</caption>
           <thead><tr>{["Plot", "Thk", "Wid", "Len", "Nos", "Wt", "Heat / plate"].map((h) => <th key={h} className={hd + (["Thk", "Wid", "Len", "Nos", "Wt"].includes(h) ? " text-right" : "")}>{h}</th>)}</tr></thead>
@@ -66,7 +61,6 @@ export function SectionView({ s }: { s: Section }) {
             <tr><td colSpan={5} className="bg-surface px-2 py-1 text-right text-[0.72rem] font-bold uppercase text-muted">Total balance</td><td className="num bg-surface px-2 py-1 text-right text-[0.82rem] font-bold">{f(s.totals.bal)}</td><td className="bg-surface" /></tr>
           </tbody>
         </table>
-        </div>
       </div>
     </section>
   );

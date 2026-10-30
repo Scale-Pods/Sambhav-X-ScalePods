@@ -119,12 +119,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Every table is a grid: hairlines between the columns as well as the rows, so each value sits in its own box (light and dark follow --grid).
-   A table that should stay plain takes the class no-grid. */
+/* Every table gets a thin vertical line between its columns (the horizontal row lines were already there), so the columns read as separate.
+   Light and dark follow --grid. A table that should stay plain takes the class no-grid. */
 table:not(.no-grid) :is(th, td):not(:last-child) { border-right: 1px solid var(--grid); }
 table:not(.no-grid) :is(th, td) { border-bottom-color: var(--grid); }
 table:not(.no-grid) tr { border-color: var(--grid); }
-table:not(.no-grid) tbody tr { transition: background-color 80ms; }
 
 :focus-visible {
   outline: 2px solid var(--brand);

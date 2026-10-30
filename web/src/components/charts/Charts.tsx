@@ -174,7 +174,7 @@ export function Heatmap({ grades, thicknesses, cells, unit, hrefs }: {
     >
       {grades.length === 0 ? <Empty /> : (
         <div className="overflow-x-auto px-2 pb-1">
-          <table className="border-separate" style={{ borderSpacing: 2 }}>
+          <table className="no-grid border-separate" style={{ borderSpacing: 2 }}>
             <thead>
               <tr><th className="sticky left-0 z-10 bg-card" />{thicknesses.map((x) => <th key={x} className="num px-1 pb-1 text-center text-[0.7rem] font-medium text-muted">{x}</th>)}</tr>
             </thead>
