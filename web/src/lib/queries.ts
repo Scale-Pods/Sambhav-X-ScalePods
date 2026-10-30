@@ -111,9 +111,14 @@ export async function lotDetail(lotNo: number) {
   return { lot: lot[0], moves, issues, ref: ref[0] ?? null };
 }
 
-export async function reviewList(kind?: string, severity?: string, page = 1, pageSize = 50, f?: Filter) {
+// "Old sheet notes" = what the old sheets carried (a sale dated before its receipt, a row with no receipt date ...) that is not serious; everything else is something a person has to decide.
+const OLD_NOTE = `(e.kind::text = 'legacy_data' and e.severity::text <> 'error')`;
+
+export async function reviewList(kind?: string, severity?: string, page = 1, pageSize = 50, f?: Filter, view: "decide" | "old" | "all" = "all") {
   const params: unknown[] = [];
   const where = [`e.status = 'open'`];
+  if (view === "decide") where.push(`not ${OLD_NOTE}`);
+  else if (view === "old") where.push(OLD_NOTE);
   const p = (v: unknown) => { params.push(v); return `$${params.length}`; };
   if (f?.book) { const b = p(f.book); where.push(`(bk.code = ${b} or e.message like ${b} || ' %')`); }
   if (f?.grades.length) where.push(`g.code = any(${p(f.grades)}::text[])`);

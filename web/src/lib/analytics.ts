@@ -46,7 +46,7 @@ export async function kpis(f: Filter) {
            coalesce(-sum(weight_kg) filter (where weight_kg < 0 and ${s.inRange("movement_date", f.from, f.to)}), 0) sold,
            coalesce(sum(weight_kg) filter (where weight_kg > 0 and ${s.inRange("movement_date", prev?.from ?? null, prev?.to ?? null)}), 0) prev_received,
            coalesce(-sum(weight_kg) filter (where weight_kg < 0 and ${s.inRange("movement_date", prev?.from ?? null, prev?.to ?? null)}), 0) prev_sold,
-           (select count(*) from public.exceptions where status = 'open') review
+           (select count(*) from public.exceptions where status = 'open' and not (kind::text = 'legacy_data' and severity::text <> 'error')) review
     from mv`, s.params);
   const r = rows[0];
   return {

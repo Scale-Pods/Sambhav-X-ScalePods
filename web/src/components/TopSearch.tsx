@@ -64,6 +64,11 @@ export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: strin
   const box = useRef<HTMLTextAreaElement>(null);
   const pageRef = useRef(page); pageRef.current = page;
 
+  // the bar lives in the layout, so it would keep the last words typed on every page: empty it when another page opens (the plate search shows its own query)
+  const stockQ = path === "/stock" ? (sp.get("q") ?? "") : "";
+  const [seen, setSeen] = useState(path + "|" + stockQ);
+  if (seen !== path + "|" + stockQ) { setSeen(path + "|" + stockQ); setValue(stockQ); setHits([]); }
+
   // exact matches while typing (plates, and for administrators invoices and orders): free, no AI
   useEffect(() => {
     const t = value.trim();
@@ -114,7 +119,7 @@ export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: strin
       const base = opts.regenerate ? (ms.at(-1)?.role === "assistant" ? ms.slice(0, -1) : ms) : [...ms, { id: "u-" + aId, role: "user" as const, content: text }];
       return [...base, { id: aId, role: "assistant", content: "", pending: true, status: "Thinking" }];
     });
-    setDraft(""); setBusy(true);
+    setDraft(""); setValue(""); setBusy(true);
     const ctl = new AbortController(); abort.current = ctl;
     let realId = aId;
     const set = (f: (m: PMsg) => PMsg) => setMessages((ms) => ms.map((m) => (m.id === realId ? f(m) : m)));

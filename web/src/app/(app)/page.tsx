@@ -57,7 +57,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
         <Stat label="Sold in period" value={weight(k.sold, u)} unit={unitLabel(u)} delta={change(k.sold, k.prevSold, true, f)} />
         <Stat label="Plates in stock" value={new Intl.NumberFormat("en-IN").format(k.plates)} sub="each traceable to its heat / plate no." />
         <Link href="/review" className="block rounded-lg focus-visible:outline-2">
-          <Stat label="Needs review" value={new Intl.NumberFormat("en-IN").format(k.review)} tone="accent" sub="items the sheets could not settle →" />
+          <Stat label="Needs review" value={new Intl.NumberFormat("en-IN").format(k.review)} tone="accent" sub="items waiting for your decision →" />
         </Link>
       </div>
 
