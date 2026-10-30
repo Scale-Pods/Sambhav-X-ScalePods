@@ -74,6 +74,7 @@ function chatText(title: string, ms: { role: string; content: string; meta: Meta
 export type AskAppProps = {
   canAttach: boolean;
   initialChat?: string | null;
+  initialQuestion?: string | null; // typed into the box (not sent) when the page is opened from a suggestion elsewhere
   suggestions: string[];
   scopes: { value: string; label: string }[];
   models: { value: ModelKey; label: string; hint: string; provider: "anthropic" | "openai"; ready: boolean }[];
@@ -90,13 +91,13 @@ const LOOKED: Record<string, string> = {
 
 const cents = (usd: number) => (usd < 0.01 ? "under 1 cent" : `${Math.round(usd * 100)} cents`);
 
-export function AskApp({ canAttach, initialChat, suggestions, scopes, models, defaultModel, roles, spend }: AskAppProps) {
+export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, scopes, models, defaultModel, roles, spend }: AskAppProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [chatCost, setChatCost] = useState(0);
   const [loadingChat, setLoadingChat] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialQuestion ?? "");
   const [model, setModel] = useState<ModelKey>(defaultModel);
   const [scope, setScope] = useState("all");
   const [busy, setBusy] = useState(false);

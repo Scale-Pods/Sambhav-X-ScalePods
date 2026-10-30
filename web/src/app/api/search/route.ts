@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { canExport, currentStaff } from "@/lib/auth";
+import { canSeeBusiness, currentStaff } from "@/lib/auth";
 import { q } from "@/lib/db";
 
 export type Hit = { kind: "plate" | "invoice" | "order"; label: string; sub: string; href: string };
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const text = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 60);
   if (text.length < 3) return NextResponse.json([]);
   const like = `%${text.replace(/[\%_]/g, (c) => "\\" + c)}%`;
-  const admin = canExport(me.role);
+  const admin = canSeeBusiness(me.role);
   const [plates, invoices, orders] = await Promise.all([
     q<{ lot_no: number; key: string | null; grade: string | null; thk: number; kg: number; status: string }>(
       `select l.lot_no::int lot_no, coalesce(l.plate_no, l.heat_no) "key", g.code grade, l.thickness_mm::float8 thk, l.balance_kg::float8 kg, l.current_status status

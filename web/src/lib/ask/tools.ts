@@ -1,6 +1,6 @@
 import "server-only";
 import { q } from "../db";
-import { canExport, canUploadDocs } from "../auth";
+import { canExport, canSeeBusiness, canUploadDocs } from "../auth";
 import { stockFit } from "../stockfit";
 import { trailDetail, trailList } from "../tallytrail";
 import { appRef, findSheetRows, sheetRef, type ToolCtx } from "./refs";
@@ -10,7 +10,7 @@ import { appRef, findSheetRows, sheetRef, type ToolCtx } from "./refs";
 // Every record a lookup returns carries a reference id (ref / refs: r1, r2 ...) that stands for a link to where it can be checked: the exact row of a
 // Google sheet, or a page of the app. The answer cites those ids and the screen turns them into links.
 
-export type Who = "all" | "docs" | "admin"; // everyone internal / people who work with documents / owner and administrators
+export type Who = "all" | "docs" | "admin" | "owner"; // everyone internal / people who work with documents / every staff login that may see business data (money, orders, mail, Tally) / owner and administrators only
 export type Tool = {
   name: string;
   description: string;
@@ -493,7 +493,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "sheet_search",
-    who: "admin",
+    who: "owner", // the raw sheet copies stay with the owner and administrators
     description: "Last resort: search any text across all the copied Google sheets (every tab). Use only when no other lookup fits. Returns the sheet, tab, row number and the row's cells.",
     schema: { type: "object", properties: { text: P, sheet: { ...P, description: "optional sheet key to limit the search" } }, required: ["text"] },
     async run(i, ctx) {
@@ -520,7 +520,7 @@ const SCOPE_OF: Record<string, Scope> = {
 
 /** Which lookups a role may use, within the chosen "Look in". The database's own row rules apply on top, so a mistake here still cannot open more than the person may read. */
 export function toolsFor(role: string | undefined, scope: Scope = "all"): Tool[] {
-  return TOOLS.filter((t) => t.name === "go_to" || (t.who === "all" || (t.who === "docs" && canUploadDocs(role)) || (t.who === "admin" && canExport(role))) && (scope === "all" || SCOPE_OF[t.name] === scope));
+  return TOOLS.filter((t) => t.name === "go_to" || (t.who === "all" || (t.who === "docs" && canUploadDocs(role)) || (t.who === "admin" && canSeeBusiness(role)) || (t.who === "owner" && canExport(role))) && (scope === "all" || SCOPE_OF[t.name] === scope));
 }
 
 /** A lookup's result as text for the AI, cut to a safe size. The text is data, never instructions. */

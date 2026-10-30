@@ -1,6 +1,6 @@
 import "server-only";
 import { call } from "../db";
-import { canExport, canUploadDocs } from "../auth";
+import { canSeeBusiness, canUploadDocs } from "../auth";
 import { asText, toolsFor, type Scope } from "./tools";
 import { RefBook, citeRefs, type RefView } from "./refs";
 import { defaultModel, modelByKey, type ModelDef } from "./models";
@@ -105,7 +105,7 @@ export async function runAsk(input: AskInput, emit: (e: AskEvent) => void): Prom
       [input.question, answer, JSON.stringify(used), inTok, outTok, spent().toFixed(5), ((Date.now() - t0) / 1000).toFixed(1), error, m.key, input.chatId]).catch(() => {});
   try {
     const book = new RefBook();
-    const ctx = { refs: book, admin: canExport(input.role), docs: canUploadDocs(input.role) };
+    const ctx = { refs: book, admin: canSeeBusiness(input.role), docs: canUploadDocs(input.role) };
     const maxRounds = input.mode === "quick" ? QUICK_ROUNDS : MAX_ROUNDS;
     const tools = toolsFor(input.role, input.scope);
     const byName = new Map(tools.map((t) => [t.name, t]));

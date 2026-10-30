@@ -1,11 +1,11 @@
 import { BookOpenCheck, FileText, Mail, Package, ReceiptIndianRupee } from "lucide-react";
-import { canExport, currentStaff } from "@/lib/auth";
+import { canSeeBusiness, currentStaff } from "@/lib/auth";
 import { NavLink } from "./NavLink";
 
 const icon = "h-[1.15rem] w-[1.15rem] shrink-0";
 const group = "px-3 pb-1.5 font-display text-[0.68rem] font-bold uppercase tracking-[0.14em] text-steel-muted group-data-[rail=true]/side:hidden";
 
-/** The Business section of the sidebar. Orders, mail, leads and payments hold prices, customers and phone numbers, so only people who may open them see them. */
+/** The Business section of the sidebar. Open to every staff login: the owner asked for the same view for everyone. */
 export async function BusinessNav() {
   let role: string | undefined;
   try {
@@ -13,7 +13,7 @@ export async function BusinessNav() {
   } catch {
     role = undefined;
   }
-  if (!canExport(role)) return null;
+  if (!canSeeBusiness(role)) return null;
   return (
     <div className="flex flex-col gap-1">
       <p className={group}>Business</p>

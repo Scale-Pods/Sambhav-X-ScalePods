@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import Link from "next/link";
 import { Card, Skeleton } from "@/components/ui";
-import { canExport, canUploadDocs, currentStaff } from "@/lib/auth";
+import { canExport, canSeeBusiness, canUploadDocs, currentStaff } from "@/lib/auth";
 import { AI_MODE_KEY, MODEL_LIST, THINK_HARDER_KEY, defaultModel, label, typicalUsd } from "@/lib/ask/models";
 import { providerReady } from "@/lib/ask/providers";
 import { spendToday } from "@/lib/ask/chats";
@@ -28,8 +28,9 @@ async function Body({ searchParams }: { searchParams: Promise<Record<string, str
   const initialChat = /^[0-9a-f-]{36}$/i.test(sp.chat ?? "") ? sp.chat! : null;
   const me = await currentStaff().catch(() => null);
   const admin = canExport(me?.role);
+  const business = canSeeBusiness(me?.role); // money, orders, mail and Tally questions: open to every staff login
   const docs = canUploadDocs(me?.role);
-  const allowed = admin ? [...SCOPES] : docs ? (["all", "stock", "documents"] as const) : (["all", "stock"] as const);
+  const allowed = business ? [...SCOPES] : docs ? (["all", "stock", "documents"] as const) : (["all", "stock"] as const);
   const spend = admin ? await spendToday().catch(() => null) : null;
   const roles: Record<string, string> = {};
   for (const [k, v] of [[defaultModel().key, "Digital Brain default"], [AI_MODE_KEY, "AI mode"], [THINK_HARDER_KEY, "Think harder"]]) roles[k] = roles[k] ? roles[k] + ", " + v : v;
@@ -38,7 +39,8 @@ async function Body({ searchParams }: { searchParams: Promise<Record<string, str
       <AskApp
         canAttach={docs}
         initialChat={initialChat}
-        suggestions={admin ? [...ADMIN, ...STOCK] : STOCK}
+        suggestions={business ? [...ADMIN, ...STOCK] : STOCK}
+        initialQuestion={(sp.q ?? "").trim().slice(0, 400) || null}
         scopes={allowed.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))}
         models={MODEL_LIST.map((m) => {
           const rs = typicalUsd(m) * 88;

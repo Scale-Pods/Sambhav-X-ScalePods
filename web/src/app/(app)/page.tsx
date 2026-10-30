@@ -1,114 +1,58 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { ageing, gradeOptions, heatmap, kpis, recentSales, stockByGrade, timeline, topSold } from "@/lib/analytics";
-import { parseFilter, periodLabel, rangeLabel, todayIST, unitLabel, weight, type Filter } from "@/lib/filters";
-import { date, num } from "@/lib/format";
-import { Badge, Card, PageHeader, StatsSkeleton, Skeleton, Stat, td, type Delta, Th } from "@/components/ui";
+import { gradeOptions } from "@/lib/analytics";
+import { parseFilter, periodLabel } from "@/lib/filters";
+import { readOrderParams } from "@/lib/orders";
+import { readPayParams } from "@/lib/payments";
+import { Card, PageHeader, Skeleton, StatsSkeleton } from "@/components/ui";
 import { FilterShell } from "@/components/FilterBar";
-import { AgeChart, HBarChart, Heatmap, InOutChart, StockLevelChart } from "@/components/charts/Charts";
+import { PayExtras } from "@/components/PayBar";
+import { AttentionList, Headline, SectionNav } from "@/components/overview/Top";
+import { AskSection, ControlSection, MailSection, MoneySection, OrdersSection, StockSection, TallySection } from "@/components/overview/Sections";
+import type { OverviewProps } from "@/components/overview/shared";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
 export default function Overview({ searchParams }: { searchParams: SP }) {
   return (
     <>
-      <PageHeader title="Stock overview" hint="What came in, what went out and what is left, worked out from every purchase and sale, never typed by hand." help="Everything here is worked out from the two stock books (WB1 and WB2): received minus sold. The arrows compare the chosen period with the period just before it. Plates are the separate pieces with material left." />
-      <Suspense fallback={<><StatsSkeleton /><Card className="mt-6"><Skeleton rows={8} /></Card></>}>
+      <PageHeader
+        title="Business overview"
+        hint="Stock, money, orders, mail, Tally and the physical count on one page, worked out from your records and never typed by hand."
+        help="Each part is a short version of its own page: open the part's link for the full page. The period and the stock book apply to stock, mail and the money and order totals; the Company choice applies to money and orders. Debtors, creditors and open orders are always today's position."
+      />
+      <Suspense fallback={<><StatsSkeleton /><Card className="mt-6"><Skeleton rows={6} /></Card></>}>
         <Body searchParams={searchParams} />
       </Suspense>
     </>
   );
 }
 
-function change(now: number, before: number | null, goodWhenUp: boolean | null, f: Filter): Delta | undefined {
-  if (before == null) return undefined;
-  if (before === 0) return { text: now ? "nothing in the previous period" : "no movement either period", tone: "neutral", up: null };
-  const pct = Math.round(((now - before) / before) * 100);
-  const up = pct >= 0;
-  const tone = goodWhenUp === null || pct === 0 ? "neutral" : up === goodWhenUp ? "good" : "bad";
-  return { text: `${Math.abs(pct)}% vs previous ${f.preset === "fy" || f.preset === "lastfy" ? "period" : "same length"}`, tone, up: pct === 0 ? null : up };
-}
+const part = (rows = 6) => <Card className="mt-12"><Skeleton rows={rows} /></Card>;
 
 async function Body({ searchParams }: { searchParams: SP }) {
   await connection(); // these pages work out today's date: render them at request time, never while the shell is prepared
-  const f = parseFilter(await searchParams, "fy");
-  const [grades, k, tl, byGrade, ages, sold, heat, recent] = await Promise.all([
-    gradeOptions(), kpis(f), timeline(f), stockByGrade(f), ageing(f), topSold(f), heatmap(f), recentSales(f),
-  ]);
-  const u = f.unit;
-  const asOf = f.to ?? todayIST();
-  const keep = (extra: Record<string, string>) => {
-    const p = new URLSearchParams(extra);
-    if (f.book) p.set("book", f.book);
-    if (u === "kg") p.set("u", "kg");
-    return `/stock?${p}`;
-  };
-
+  const sp = await searchParams;
+  const f = parseFilter(sp, "fy");
+  const props: OverviewProps = { f, pay: readPayParams(sp), ord: readOrderParams(sp), sp: sp as Record<string, string | undefined> };
+  const grades = await gradeOptions().catch(() => [] as string[]); // only the grade picker needs it: the page still shows without
   return (
-    <FilterShell grades={grades}>
+    <FilterShell grades={grades} extra={<PayExtras entity={props.pay.entity ?? "all"} />}>
       <p className="-mt-3 mb-5 text-[0.88rem] text-muted">
-        Showing <span className="font-semibold text-ink">{periodLabel(f)}</span> ({rangeLabel(f)}). Stock figures are as of <span className="font-semibold text-ink">{date(asOf)}</span>.
+        Showing <span className="font-semibold text-ink">{periodLabel(f)}</span>{props.pay.entity ? ` · ${props.pay.entity === "SAI" ? "Sai" : "SPF"} only for money and orders` : " · SPF and Sai together for money and orders"}.
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Stat label={`Stock on ${date(asOf)}`} value={weight(k.stock, u)} unit={unitLabel(u)} sub={`${weight(k.stock, "kg")} kg`} />
-        <Stat label="Received in period" value={weight(k.received, u)} unit={unitLabel(u)} delta={change(k.received, k.prevReceived, null, f)} />
-        <Stat label="Sold in period" value={weight(k.sold, u)} unit={unitLabel(u)} delta={change(k.sold, k.prevSold, true, f)} />
-        <Stat label="Plates in stock" value={new Intl.NumberFormat("en-IN").format(k.plates)} sub="each traceable to its heat / plate no." />
-        <Link href="/review" className="block rounded-lg focus-visible:outline-2">
-          <Stat label="Needs review" value={new Intl.NumberFormat("en-IN").format(k.review)} tone="accent" sub="items waiting for your decision →" />
-        </Link>
-      </div>
+      <Suspense fallback={<StatsSkeleton />}><Headline {...props} /></Suspense>
+      <div className="mt-6"><Suspense fallback={<Card><Skeleton rows={4} /></Card>}><AttentionList {...props} /></Suspense></div>
+      <SectionNav />
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-3"><InOutChart points={tl.points} bucket={tl.bucket} unit={u} note={tl.clipped ? "last 24 months shown" : undefined} /></div>
-        <div className="xl:col-span-2"><StockLevelChart points={tl.points} bucket={tl.bucket} unit={u} /></div>
-      </div>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-3">
-          <HBarChart
-            title="Stock by grade"
-            subtitle={`What is left on ${date(asOf)}; click a grade to see its plates`}
-            rows={byGrade.map((r) => ({ label: r.grade, kg: r.kg, extra: `${r.plates} plates`, href: r.grade.startsWith("Other grades") ? null : keep({ g: r.grade }) }))}
-            unit={u} tone="in" valueLabel="Stock"
-          />
-        </div>
-        <div className="xl:col-span-2"><AgeChart rows={ages} unit={u} /></div>
-      </div>
-
-      <div className="mt-6">
-        <Heatmap grades={heat.grades} thicknesses={heat.thicknesses} cells={heat.cells} unit={u} hrefs={Object.fromEntries(heat.grades.map((g) => [g, keep({ g })]))} />
-      </div>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-2">
-          <HBarChart title="Fastest-moving grades" subtitle={`Sold in ${rangeLabel(f)}`} rows={sold.map((r) => ({ label: r.grade, kg: r.kg, href: keep({ g: r.grade }) }))} unit={u} tone="out" valueLabel="Sold" />
-        </div>
-        <Card title="Latest sales" className="xl:col-span-3">
-          {recent.length === 0 ? <p className="px-5 py-12 text-center text-[0.9rem] text-muted">No sales in this period with these filters.</p> : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-line">
-                  <tr><Th>Date</Th><Th>Grade</Th><Th>Plate / heat</Th><Th right>Weight</Th><Th>Book</Th></tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {recent.map((r, i) => (
-                    <tr key={i} className="hover:bg-surface/60">
-                      <td className={td + " num whitespace-nowrap"}>{date(r.movement_date)}</td>
-                      <td className={td}>{r.grade}</td>
-                      <td className={td}><Link href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.ident}</Link></td>
-                      <td className={td + " num whitespace-nowrap text-right font-medium"}>{weight(-num(r.weight_kg), u)} {unitLabel(u)}</td>
-                      <td className={td}><Badge>{r.book}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      </div>
+      <Suspense fallback={part(10)}><StockSection {...props} /></Suspense>
+      <Suspense fallback={part(8)}><MoneySection {...props} /></Suspense>
+      <Suspense fallback={part(8)}><OrdersSection {...props} /></Suspense>
+      <Suspense fallback={part(8)}><MailSection {...props} /></Suspense>
+      <Suspense fallback={part(5)}><TallySection /></Suspense>
+      <Suspense fallback={part(3)}><ControlSection /></Suspense>
+      <AskSection />
     </FilterShell>
   );
 }

@@ -1,6 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 import { Lock } from "lucide-react";
-import { canExport, currentStaff } from "@/lib/auth";
+import { canSeeBusiness, currentStaff } from "@/lib/auth";
 import { OrderTabs } from "@/components/OrderTabs";
 import { Card, PageHeader, Skeleton } from "@/components/ui";
 
@@ -18,11 +18,11 @@ export default function OrdersLayout({ children }: { children: ReactNode }) {
   );
 }
 
-/** Order data is for the owner and administrators for now. */
+/** Open to every staff login; an outside partner login sees nothing here. */
 async function Gate({ children }: { children: ReactNode }) {
   const me = await currentStaff();
-  if (!canExport(me?.role)) {
-    return <Card><p className="flex items-center gap-2 px-5 py-10 text-[0.95rem] text-muted"><Lock className="h-4 w-4" /> Orders and dispatch are open to the owner and administrators for now.</p></Card>;
+  if (!canSeeBusiness(me?.role)) {
+    return <Card><p className="flex items-center gap-2 px-5 py-10 text-[0.95rem] text-muted"><Lock className="h-4 w-4" /> Orders and dispatch are open to staff logins only.</p></Card>;
   }
   return (
     <>

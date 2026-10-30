@@ -16,7 +16,11 @@ export type Status = {
 };
 
 export async function tallyStatus(): Promise<Status> {
-  const [connector] = await q<NonNullable<Status["connector"]>>(`select (extract(epoch from now() - last_seen_at) / 60)::int seen_min, (extract(epoch from now() - last_sync_ok_at) / 60)::int ok_min, last_seen_at, last_status, last_message, last_version, last_sync_ok_at from public.tally_connectors where active order by created_at limit 1`);
+  // through a function that returns only the status fields: the connector table itself (it holds the key's hash) stays with the owner and administrators.
+  // Until the function exists (migration 20261031100000) the table is read directly, which only the owner and administrators can do.
+  const stateSql = `select seen_min, ok_min, last_seen_at, last_status, last_message, last_version, last_sync_ok_at from public.tally_connector_state()`;
+  const tableSql = `select (extract(epoch from now() - last_seen_at) / 60)::int seen_min, (extract(epoch from now() - last_sync_ok_at) / 60)::int ok_min, last_seen_at, last_status, last_message, last_version, last_sync_ok_at from public.tally_connectors where active order by created_at limit 1`;
+  const [connector] = await q<NonNullable<Status["connector"]>>(stateSql).catch(() => q<NonNullable<Status["connector"]>>(tableSql));
   const [company] = await q<NonNullable<Status["company"]>>(`select tally_name, last_sync_at, last_status from public.tally_companies where id = ${CO}`);
   const [c] = await q<Status["counts"]>(`
     select (select count(*) from public.tally_ledgers where company_id = ${CO} and deleted_at is null)::int ledgers,
@@ -53,7 +57,7 @@ export async function tallyLive(): Promise<Live> {
 // ---------------------------------------------------------------- parties (ledgers)
 export const GROUPS: Record<string, string> = { debtors: "Sundry Debtors", goods: "SUNDRY CREDITORS (FOR GOODS)", expenses: "SUNDRY CREDITORS (FOR EXPENSES)" };
 
-export type TallyParams = { q: string; page: number; show: string; group: string; all?: boolean };
+export type TallyParams = { q: string; page: number; show: string; group: string; all?: boolean; summaryOnly?: boolean };
 export function readTallyParams(sp: Record<string, string | string[] | undefined>): TallyParams {
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   return { q: (one(sp.q) ?? "").trim().slice(0, 80), page: Math.max(1, Number(one(sp.page)) || 1), show: one(sp.show) ?? "all", group: one(sp.group) ?? "all" };
@@ -126,6 +130,7 @@ export async function compare(kind: "receivable" | "payable", p: TallyParams) {
     select coalesce(sum(tally), 0)::float8 tally_total, coalesce(sum(sheet), 0)::float8 sheet_total,
            count(*) filter (where status = 'same')::int same, count(*) filter (where status = 'differs')::int differs,
            count(*) filter (where status = 'only_tally')::int only_tally, count(*) filter (where status = 'only_sheet')::int only_sheet from rows`, [groups]);
+  if (p.summaryOnly) return { rows: [] as CompareRow[], summary: sum, total: 0, page: 1, pages: 1 }; // the overview needs only the totals
   const size = p.all ? 50000 : PAGE_SIZE;
   const [cnt] = await q<{ n: string }>(`${base} select count(*) n from rows where ${where}`, params);
   const total = Number(cnt.n), pages = Math.max(1, Math.ceil(total / size)), page = p.all ? 1 : Math.min(p.page, pages);
