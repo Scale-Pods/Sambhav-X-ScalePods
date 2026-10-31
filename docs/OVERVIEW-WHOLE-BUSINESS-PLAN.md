@@ -101,6 +101,13 @@ A sticky mini menu at the top jumps between sections (Stock, Money, Orders, Mail
 - Every part loads on its own; if one cannot be read, only that part shows a message. At most three overview questions run at once, because the database connections are few.
 - The sidebar, the four section gates (orders, payments, mail, Tally), the top search and the AI questions now use one rule, `canSeeBusiness` (`web/src/lib/auth.ts`), which mirrors the database rule `app.is_internal()`.
 
-## To finish
-- **Apply `supabase/migrations/20261031100000_business_data_for_all_staff.sql`.** It switches the sheet views and the Tally tables from "administrators only" to "every staff login" and adds `tally_connector_state()` so the connector's key hash stays private. Until it is applied, only the owner and administrators see data on these parts; other logins see empty figures (today only the administrator account is linked, so nobody is affected).
-- Look at the expense list once before staff logins are created: it is now visible to everyone.
+## Database change: applied 31 Oct 2026
+`supabase/migrations/20261031100000_business_data_for_all_staff.sql` is applied to the live database. Checked by simulating each login type inside a transaction that was rolled back:
+- owner, sales, accounts and viewer all see the same money, order, mail and Tally rows (327 receivables, 844 orders, 2,608 mails, 4,251 Tally ledgers);
+- the partner role sees none of it;
+- the raw sheet copies and the Tally connector record (key hash) are still visible to the owner and administrators only; other logins read the connector's status through `tally_connector_state()`.
+
+## Still to do
+- Create a login for each person (needs the staff email list).
+- Look at the expense list once before those logins are created: it is now visible to everyone.
+- The "changed by <person>, <when>" remark on screens, once per-person logins exist.
