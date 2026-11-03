@@ -1,7 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- the attached picture is shown from the bytes in the page (a data address), which next/image cannot take */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkPlus, Check, ChevronDown, Copy, Download, ExternalLink, FileText, Loader2, Menu, MessageSquarePlus, Paperclip, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
+import { Bookmark, BookmarkPlus, Check, ChevronDown, Copy, Download, ExternalLink, FileSpreadsheet, FileText, Loader2, Menu, MessageSquarePlus, Paperclip, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, UploadCloud, X } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { ModelPrices } from "@/components/ModelPrices";
 import { Markdown, type RefLink } from "./Markdown";
@@ -12,18 +14,44 @@ type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups
 type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
 
 type Saved = { id: string; title: string; question: string; model: ModelKey; scope: string };
-type Attached = { name: string; mime: string; data: string; size: number };
+type Attached = { name: string; mime: string; data: string; size: number; image: boolean };
 
-const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv,.tsv,.md,.json";
-const MIME_OF: Record<string, string> = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", txt: "text/plain", csv: "text/csv", tsv: "text/tab-separated-values", md: "text/markdown", json: "application/json" };
-const MAX_FILES = 3, MAX_BYTES = 3_000_000;
+const IMAGES = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "avif", "heic", "heif"];
+const SHEETS = ["xlsx", "xlsm", "csv", "tsv"];
+const TEXTS = ["pdf", "docx", "pptx", "txt", "md", "markdown", "json", "xml", "html", "htm", "log", "yaml", "yml", "ini", "sql", "eml"];
+const ACCEPT = [...IMAGES, ...SHEETS, ...TEXTS].map((e) => "." + e).join(",");
+const OLD_KIND: Record<string, string> = { xls: "Excel (.xls)", doc: "Word (.doc)", ppt: "PowerPoint (.ppt)", rtf: "Rich Text (.rtf)", odt: "OpenDocument (.odt)", ods: "OpenDocument (.ods)" };
+const FORMATS = "pictures, PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), CSV and text files";
+const MAX_FILES = 5, MAX_BYTES = 3_000_000; // the server's limits too (lib/ask/engine.ts)
+const BIG_IMAGE = 900_000, LONGEST_SIDE = 2000;
+// the question used when a file is sent with no words (the server uses the same)
+const DEFAULT_FILE_QUESTION = "Read the attached file and tell me what it contains. Then check the important details against our records.";
 
-const readFile = (f: File, text: boolean) => new Promise<string>((ok, no) => {
+const extOf = (name: string) => (name.split(".").pop() ?? "").toLowerCase();
+
+const readB64 = (f: Blob) => new Promise<string>((ok, no) => {
   const r = new FileReader();
   r.onerror = () => no(new Error("read"));
-  r.onload = () => ok(text ? String(r.result) : String(r.result).split(",")[1] ?? "");
-  if (text) r.readAsText(f); else r.readAsDataURL(f);
+  r.onload = () => ok(String(r.result).split(",")[1] ?? "");
+  r.readAsDataURL(f);
 });
+
+/** A large picture made smaller before it is sent (a phone photo is several MB, and the model reads no more detail than 2000 pixels give). Null when the browser cannot open it. */
+async function shrinkImage(f: File): Promise<{ data: string; size: number } | null> {
+  try {
+    const bmp = await createImageBitmap(f);
+    const scale = Math.min(1, LONGEST_SIDE / Math.max(bmp.width, bmp.height));
+    if (scale === 1 && f.size <= BIG_IMAGE) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
+    return blob && blob.size < f.size ? { data: await readB64(blob), size: blob.size } : null;
+  } catch { return null; }
+}
 
 const download = (name: string, body: string, type: string) => {
   const a = document.createElement("a");
@@ -129,6 +157,8 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
   const compact = !railOpen && !railHover;
   const [files, setFiles] = useState<Attached[]>([]);
   const [fileNote, setFileNote] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [menu, setMenu] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -163,7 +193,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
 
   async function openChat(id: string) {
     if (busy) return;
-    setDrawer(false); setLoadingChat(true); setActiveId(id);
+    setDrawer(false); setLoadingChat(true); setActiveId(id); setFiles([]); setFileNote(null);
     try {
       const r = await fetch(`/api/ask/chats/${id}`, { cache: "no-store" });
       if (!r.ok) throw new Error();
@@ -173,23 +203,24 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     } catch { setMessages([]); }
     setLoadingChat(false);
   }
-  function newChat() { if (busy) return; setActiveId(null); setMessages([]); setChatCost(0); setDrawer(false); box.current?.focus(); }
+  function newChat() { if (busy) return; setActiveId(null); setMessages([]); setChatCost(0); setFiles([]); setFileNote(null); setDrawer(false); box.current?.focus(); }
 
   async function send(question: string, regenerate = false) {
-    const qn = question.trim();
-    if ((!regenerate && qn.length < 2) || busy) return;
-    const sendFiles = regenerate ? [] : files;
+    const typed = question.trim();
+    const sendFiles = files; // the files stay on the chat: each follow-up question is answered with them until they are removed
+    if ((!regenerate && typed.length < 2 && sendFiles.length === 0) || busy) return;
+    const qn = typed.length >= 2 ? typed : sendFiles.length ? DEFAULT_FILE_QUESTION : typed;
     const aId = "pending-" + Math.random().toString(36).slice(2);
     setMessages((ms) => {
       const base = regenerate ? (ms.at(-1)?.role === "assistant" ? ms.slice(0, -1) : ms) : [...ms, { id: "u-" + aId, role: "user" as const, content: qn, feedback: null, meta: sendFiles.length ? { files: sendFiles.map((f) => f.name) } : null }];
       return [...base, { id: aId, role: "assistant", content: "", feedback: null, meta: null, pending: true, status: "Thinking" }];
     });
-    setText(""); setFiles([]); setFileNote(null); setBusy(true);
+    setText(""); setFileNote(null); setBusy(true);
     const ctl = new AbortController(); abort.current = ctl;
     const patch = (p: Partial<Msg>) => setMessages((ms) => ms.map((m) => (m.id === aId || (p.id && m.id === aId) ? { ...m, ...p } : m)));
     let realId = aId;
     try {
-      const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal, body: JSON.stringify({ question: qn, chatId: activeId, model, scope, regenerate, files: sendFiles.length ? sendFiles.map((f) => ({ name: f.name, mime: f.mime, data: f.data })) : undefined }) });
+      const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal, body: JSON.stringify({ question: typed, chatId: activeId, model, scope, regenerate, files: sendFiles.length ? sendFiles.map((f) => ({ name: f.name, mime: f.mime, data: f.data })) : undefined }) });
       if (!res.ok || !res.body) { const j = await res.json().catch(() => ({})); patch({ pending: false, error: j.error ?? "It could not be answered. Please try again." }); return; }
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
       for (;;) {
@@ -237,21 +268,51 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     if (activeId === id) newChat();
     await loadChats();
   }
-  async function attach(list: FileList | null) {
-    if (!list) return;
-    setFileNote(null);
+  async function attach(list: FileList | File[] | null) {
+    if (!list || !canAttach) return;
+    setFileNote(null); setReading(true);
     const next = [...files];
+    const notes: string[] = [];
+    let pasted = 0;
     for (const f of Array.from(list)) {
-      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-      const mime = MIME_OF[ext];
-      if (!mime) { setFileNote(`"${f.name}": only PDF, pictures and text files (.txt .csv .md .json) can be attached. For Excel or Word, save as PDF or CSV first.`); continue; }
-      if (next.length >= MAX_FILES) { setFileNote(`Up to ${MAX_FILES} files at a time.`); break; }
-      if (next.reduce((n, x) => n + x.size, 0) + f.size > MAX_BYTES) { setFileNote("The files together can be 3 MB at most."); break; }
-      try { next.push({ name: f.name, mime, size: f.size, data: await readFile(f, mime.startsWith("text/") || mime === "application/json") }); } catch { setFileNote(`"${f.name}" could not be read.`); }
+      const name = f.name && f.name !== "image.png" ? f.name : `pasted-image-${++pasted}.png`; // a screenshot pasted from the clipboard has no name of its own
+      const ext = extOf(name);
+      const image = IMAGES.includes(ext);
+      if (OLD_KIND[ext]) { notes.push(`"${name}" is an old ${OLD_KIND[ext]} file. Save it as ${ext === "xls" || ext === "ods" ? ".xlsx or CSV" : ext === "ppt" ? ".pptx or PDF" : ".docx or PDF"} and attach that.`); continue; }
+      if (!image && !SHEETS.includes(ext) && !TEXTS.includes(ext)) { notes.push(`"${name}" cannot be attached. You can attach ${FORMATS}.`); continue; }
+      if (next.some((x) => x.name === name && x.size === f.size)) continue;
+      if (next.length >= MAX_FILES) { notes.push(`Up to ${MAX_FILES} files at a time.`); break; }
+      try {
+        let data: string, size = f.size, outName = name, mime = f.type || "application/octet-stream";
+        const small = image ? await shrinkImage(f) : null;
+        if (small) { data = small.data; size = small.size; outName = name.replace(/\.[^.]+$/, "") + ".jpg"; mime = "image/jpeg"; } else data = await readB64(f);
+        if (next.reduce((n, x) => n + x.size, 0) + size > MAX_BYTES) { notes.push(`"${name}" is too large: the files together can be ${MAX_BYTES / 1_000_000} MB at most${image ? "" : ". For a big spreadsheet, attach only the sheet you need as CSV"}.`); continue; }
+        next.push({ name: outName, mime, size, data, image: image && mime.startsWith("image/") });
+      } catch { notes.push(`"${name}" could not be read.`); }
     }
     setFiles(next);
+    setReading(false);
+    if (notes.length) setFileNote(notes.join(" "));
     if (picker.current) picker.current.value = "";
   }
+
+  // Dropping files anywhere on the page attaches them (and a file dropped outside the box would otherwise open in the browser, away from the chat)
+  const attachRef = useRef(attach); attachRef.current = attach;
+  const dropOk = useRef(false); dropOk.current = canAttach && !busy;
+  useEffect(() => {
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const enter = (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; setDragging(true); };
+    const over = (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = dropOk.current ? "copy" : "none"; };
+    const leave = (e: DragEvent) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (depth === 0) setDragging(false); };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); depth = 0; setDragging(false);
+      if (dropOk.current) void attachRef.current(e.dataTransfer?.files ?? null);
+    };
+    window.addEventListener("dragenter", enter); window.addEventListener("dragover", over); window.addEventListener("dragleave", leave); window.addEventListener("drop", drop);
+    return () => { window.removeEventListener("dragenter", enter); window.removeEventListener("dragover", over); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); };
+  }, []);
 
   async function saveQuestion(m: Msg) {
     const title = window.prompt("Name for this saved question", m.content.slice(0, 60));
@@ -472,7 +533,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
                         </div>
                       )}
                     </span>
-                    {m === lastAssistant && !busy && !messages.findLast((x) => x.role === "user")?.meta?.files?.length && <button type="button" onClick={() => void send("", true)} className="rounded p-1.5 hover:bg-surface hover:text-ink" aria-label="Answer again"><RefreshCw className="h-4 w-4" /></button>}
+                    {m === lastAssistant && !busy && !(messages.findLast((x) => x.role === "user")?.meta?.files?.length && files.length === 0) && <button type="button" onClick={() => void send("", true)} className="rounded p-1.5 hover:bg-surface hover:text-ink" aria-label="Answer again"><RefreshCw className="h-4 w-4" /></button>}
                   </div>
                 )}
                 {m === lastAssistant && !busy && m.meta?.follow_ups && m.meta.follow_ups.length > 0 && (
@@ -488,16 +549,23 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
           <form onSubmit={(e) => { e.preventDefault(); void send(text); }} className="mx-auto max-w-4xl rounded-xl border border-line bg-field p-1.5 focus-within:border-brand 2xl:p-2">
             <textarea ref={box} value={text} onChange={(e) => setText(e.target.value)} rows={1} maxLength={600} disabled={busy}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(text); } }}
-              placeholder={files.length ? "What should I do with the file? e.g. Do we have stock for this PO?" : "Ask anything, e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?"} aria-label="Your question"
+              onPaste={(e) => { const pasted = Array.from(e.clipboardData.files); if (pasted.length && canAttach) { e.preventDefault(); void attach(pasted); } }}
+              placeholder={files.length ? "What should I do with the file? e.g. Do we have stock for this PO? Or just press Ask to have it read." : canAttach ? "Ask anything, or drop a file here. e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?" : "Ask anything, e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?"} aria-label="Your question"
               className="max-h-[200px] w-full resize-none bg-transparent px-2 py-1.5 text-[0.95rem] outline-none" />
-            {files.length > 0 && <div className="flex flex-wrap gap-1.5 px-1 pb-1">{files.map((f, i) => (
-              <span key={i} className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-0.5 text-[0.78rem]"><FileText className="h-3 w-3 text-muted" />{f.name}<span className="text-muted">({Math.max(1, Math.round(f.size / 1024))} KB)</span>
-                <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="rounded text-muted hover:text-bad" aria-label={`Remove ${f.name}`}><X className="h-3 w-3" /></button></span>))}</div>}
+            {files.length > 0 && <div className="flex flex-wrap items-center gap-1.5 px-1 pb-1">{files.map((f, i) => {
+              const Icon = SHEETS.includes(extOf(f.name)) ? FileSpreadsheet : FileText;
+              return (
+              <span key={i} className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-md border border-line bg-surface py-0.5 pl-1 pr-2 text-[0.78rem]">
+                {f.image ? <img src={`data:${f.mime};base64,${f.data}`} alt="" className="h-6 w-6 rounded object-cover" /> : <Icon className="ml-1 h-3.5 w-3.5 shrink-0 text-muted" />}
+                <span className="truncate" title={f.name}>{f.name}</span><span className="shrink-0 text-muted">({f.size >= 1_000_000 ? (f.size / 1_000_000).toFixed(1) + " MB" : Math.max(1, Math.round(f.size / 1000)) + " KB"})</span>
+                <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="shrink-0 rounded text-muted hover:text-bad" aria-label={`Remove ${f.name}`}><X className="h-3 w-3" /></button></span>);
+            })}<span className="text-[0.72rem] text-muted">stay on this chat for follow-up questions</span></div>}
+            {reading && <p className="flex items-center gap-1.5 px-1 pb-1 text-[0.78rem] text-muted"><Loader2 className="h-3 w-3 animate-spin" />Reading the files…</p>}
             {fileNote && <p className="px-1 pb-1 text-[0.78rem] text-bad">{fileNote}</p>}
             <div className="mt-1 flex flex-wrap items-center gap-2 px-1">
               {canAttach && <>
                 <input ref={picker} type="file" accept={ACCEPT} multiple className="hidden" onChange={(e) => void attach(e.target.files)} aria-label="Attach files" />
-                <button type="button" onClick={() => picker.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md border border-line bg-card px-2 py-1 text-[0.82rem] text-muted hover:text-ink disabled:opacity-50" title="Attach a PDF, picture or text file (up to 3 files, 3 MB). It is read for this question only and not stored."><Paperclip className="h-3.5 w-3.5" /><span className="sr-only sm:not-sr-only">Attach</span></button>
+                <button type="button" onClick={() => picker.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md border border-line bg-card px-2 py-1 text-[0.82rem] text-muted hover:text-ink disabled:opacity-50" title={`Attach files, or drop them anywhere on this page, or paste a screenshot. ${FORMATS[0].toUpperCase() + FORMATS.slice(1)}; up to ${MAX_FILES} files, ${MAX_BYTES / 1_000_000} MB in all. Read for this chat only, not stored.`}><Paperclip className="h-3.5 w-3.5" /><span className="sr-only sm:not-sr-only">Attach</span></button>
               </>}
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Model</span>
                 <select value={model} onChange={(e) => setModel(e.target.value)} disabled={busy} className="max-w-[13rem] rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Model" title={models.find((m) => m.value === model)?.hint}>
@@ -512,12 +580,21 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
               <span className="hidden text-[0.74rem] text-muted 2xl:inline">{models.find((m) => m.value === model)?.hint}</span>
               {busy
                 ? <button type="button" onClick={() => abort.current?.abort()} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-surface"><Square className="h-3.5 w-3.5" />Stop</button>
-                : <button type="submit" disabled={text.trim().length < 2} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"><SendHorizonal className="h-4 w-4" />Ask</button>}
+                : <button type="submit" disabled={text.trim().length < 2 && files.length === 0} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"><SendHorizonal className="h-4 w-4" />Ask</button>}
             </div>
           </form>
           <p className="mx-auto mt-1 hidden max-w-4xl text-center text-[0.72rem] text-muted sm:block">Answers come from your records and can still be wrong. Check anything important. Enter sends, Shift+Enter adds a line.</p>
         </div>
       </section>
+      {dragging && (
+        <div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center bg-black/45 p-6" role="presentation">
+          <div className="max-w-md rounded-2xl border-2 border-dashed border-brand bg-card px-8 py-10 text-center shadow-2xl">
+            <UploadCloud className="mx-auto h-10 w-10 text-brand" />
+            <p className="mt-3 font-display text-lg font-bold">{canAttach ? (busy ? "Wait for the answer, then drop the file" : "Drop files to attach") : "Your account cannot attach files"}</p>
+            {canAttach && !busy && <p className="mt-1 text-[0.85rem] text-muted">{FORMATS[0].toUpperCase() + FORMATS.slice(1)}. Up to {MAX_FILES} files.</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

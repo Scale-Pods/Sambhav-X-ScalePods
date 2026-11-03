@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { call, currentUserId, q, runAs } from "@/lib/db";
-import { FILE_LIMITS, runAsk, type AskEvent, type AskFile, type PageCtx } from "@/lib/ask/engine";
+import { DEFAULT_FILE_QUESTION, FILE_LIMITS, runAsk, type AskEvent, type AskFile, type PageCtx } from "@/lib/ask/engine";
+import { prepareFiles, type RawFile } from "@/lib/ask/files";
 import { AI_MODE_KEY, THINK_HARDER_KEY, defaultModel, modelByKey } from "@/lib/ask/models";
 import { providerReady } from "@/lib/ask/providers";
 import { recentMessages } from "@/lib/ask/chats";
@@ -13,26 +14,21 @@ export const maxDuration = 60;
  * A question in plain words, answered from the read-only lookups the person's role may use (lib/ask). The reply is a stream of JSON lines:
  * {type: meta|status|delta|reset|done|error}. The chat, the question and the answer are saved as the person goes.
  */
-const ALLOWED: Record<string, AskFile["kind"]> = {
-  "application/pdf": "pdf", "image/png": "image", "image/jpeg": "image", "image/webp": "image", "image/gif": "image",
-  "text/plain": "text", "text/csv": "text", "text/tab-separated-values": "text", "text/markdown": "text", "application/json": "text",
-};
-
-/** The attached files, checked: a few, small, of a known kind. "bad" when anything is off. */
-function readFiles(v: unknown): AskFile[] | "bad" {
-  if (v == null) return [];
-  if (!Array.isArray(v) || v.length > FILE_LIMITS.count) return "bad";
-  const out: AskFile[] = [];
+/** The attached files, checked (a few, small, each with a name and its bytes), then read: pictures and PDFs as they are, everything else turned into text. A sentence for the person when anything is off. */
+async function readFiles(v: unknown): Promise<{ files: AskFile[] } | { error: string }> {
+  if (v == null) return { files: [] };
+  if (!Array.isArray(v)) return { error: "The files could not be read." };
+  if (v.length > FILE_LIMITS.count) return { error: `Attach up to ${FILE_LIMITS.count} files at a time.` };
+  const raw: RawFile[] = [];
   let bytes = 0;
   for (const x of v as { name?: unknown; mime?: unknown; data?: unknown }[]) {
-    const kind = typeof x?.mime === "string" ? ALLOWED[x.mime] : undefined;
-    if (!kind || typeof x.name !== "string" || typeof x.data !== "string" || x.data.length === 0) return "bad";
-    bytes += kind === "text" ? x.data.length : Math.floor((x.data.length * 3) / 4);
-    if (bytes > FILE_LIMITS.bytes) return "bad";
-    if (kind !== "text" && !/^[A-Za-z0-9+/=]+$/.test(x.data)) return "bad";
-    out.push({ name: x.name.replace(/[^\w .()\-]/g, "_").slice(0, 100), kind, mime: x.mime as string, data: x.data });
+    if (typeof x?.name !== "string" || typeof x.data !== "string" || x.data.length === 0 || !/^[A-Za-z0-9+/=]+$/.test(x.data)) return { error: "The files could not be read." };
+    bytes += Math.floor((x.data.length * 3) / 4);
+    if (bytes > FILE_LIMITS.bytes) return { error: `The files together can be ${FILE_LIMITS.bytes / 1_000_000} MB at most.` };
+    raw.push({ name: x.name, mime: typeof x.mime === "string" ? x.mime : "", data: x.data });
   }
-  return out;
+  const r = await prepareFiles(raw);
+  return r.ok ? { files: r.files } : { error: r.error };
 }
 
 /** The page AI mode was opened on, kept small and plain. */
@@ -57,14 +53,17 @@ export async function POST(req: NextRequest) {
   const scope: Scope = typeof body?.scope === "string" && (SCOPES as readonly string[]).includes(body.scope) ? (body.scope as Scope) : "all";
   const chatIn = typeof body?.chatId === "string" && /^[0-9a-f-]{36}$/i.test(body.chatId) ? body.chatId : null;
   const regenerate = body?.regenerate === true && chatIn !== null;
+  const read = await readFiles(body?.files);
+  if ("error" in read) return NextResponse.json({ error: read.error }, { status: 400 });
+  const files = read.files;
+  if (files.length > 0 && !canUploadDocs(me.role)) return NextResponse.json({ error: "Your account cannot attach files." }, { status: 403 });
   let question = typeof body?.question === "string" ? body.question.trim() : "";
+  const noQuestion = !regenerate && question.length < 2 && files.length > 0;
+  if (noQuestion) question = DEFAULT_FILE_QUESTION; // a file with no question: read it and say what is in it
   if (!regenerate && (question.length < 2 || question.length > 600)) return NextResponse.json({ error: "Ask a question of up to 600 characters." }, { status: 400 });
 
   const quick = body?.mode === "quick";
   const page = quick ? readPage(body?.page) : undefined;
-  const files = readFiles(body?.files);
-  if (files === "bad") return NextResponse.json({ error: `Attach up to ${FILE_LIMITS.count} files (PDF, picture or text), 3 MB in all.` }, { status: 400 });
-  if (files.length > 0 && !canUploadDocs(me.role)) return NextResponse.json({ error: "Your account cannot attach files." }, { status: 403 });
 
   // limits are checked before anything is saved
   const gate = await q<{ why: string | null }>(`select public.ask_allowed() why`);
@@ -73,7 +72,7 @@ export async function POST(req: NextRequest) {
   try {
     let chatId = chatIn;
     if (!chatId) {
-      chatId = (await call<{ id: string }>(`select public.ask_new_chat($1, $2, $3, $4) id`, [question.slice(0, 60), model, scope, quick ? "ai_mode" : "brain"]))[0].id;
+      chatId = (await call<{ id: string }>(`select public.ask_new_chat($1, $2, $3, $4) id`, [(noQuestion ? `File: ${files[0].name}` : question).slice(0, 60), model, scope, quick ? "ai_mode" : "brain"]))[0].id;
     } else {
       await call(`select public.ask_update_chat($1::uuid, null, null, $2, $3)`, [chatId, model, scope]);
     }

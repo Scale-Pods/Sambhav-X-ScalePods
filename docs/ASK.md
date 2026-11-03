@@ -22,7 +22,7 @@ Laid out like Claude: a left panel of the person's own past chats (search, pin, 
 - **Chats:** tables `ask_chats` and `ask_messages` (migration 36), private by row rules; writes only through `ask_new_chat`, `ask_add_message`, `ask_update_chat`, `ask_delete_chat`, `ask_drop_last_answer`, `ask_set_feedback`. Deleting hides a chat; `ask_log` (administrators only) keeps every question.
 - **Per answer:** copy, thumbs up/down, answer again, "Looked at" (the lookups used and their row counts), follow-up questions.
 - **Administrators:** today's spend against the daily limit and the cost of the current chat; `/ask/log` lists every question (who, lookups, model, cost, time) and the answers marked not good (`ask_feedback_log()`).
-- **Not yet:** attaching a file, export to CSV, saved shared questions, scheduled questions, actions.
+- **Not yet:** saved shared questions, scheduled questions, actions.
 
 ## Checking an answer: references (28 Oct 2026)
 
@@ -37,7 +37,13 @@ Every record a lookup returns carries a reference id (r1, r2 ...). The model cit
 ## Export, attachments and saved questions (29 Oct 2026)
 
 - **Download an answer** (the download icon under it): its table as CSV for Excel (with a last column of links to check each row; cells that start with `=`, `+`, `@` are protected), print or save as PDF (opens a clean page and the browser's print dialog), or text with the numbered sources. The download icon at the top of the chat saves the whole chat as text.
-- **Attach files** (the paperclip; owner, administrators, approvers, accounts, sales, office): up to 3 files, 3 MB together. PDF, pictures (png, jpg, webp, gif) and text files (txt, csv, tsv, md, json). The model reads the file for that question and checks it against the records ("do we have stock for this PO?"). The file itself is NOT stored: only its name stays on the question. Excel and Word are not read yet (save as PDF or CSV). A question with a file cannot be re-answered with the circular arrow (the file is gone); attach it again. File contents are treated as data, never as instructions. Cost: a one-page PO on the Fast model was about half a cent.
+- **Attach files** (the paperclip; owner, administrators, approvers, accounts, sales, office). Updated 3 Nov 2026:
+  - **How:** click the paperclip, **drag files anywhere onto the page**, or **paste a screenshot** (Ctrl+V). Up to 5 files, 3 MB together.
+  - **Formats:** pictures (PNG, JPG, WEBP, GIF, BMP, TIFF, AVIF; a very large photo is made smaller in the browser first, so a 19 MB phone photo works), PDF, Word (.docx), Excel (.xlsx, .xlsm), PowerPoint (.pptx), CSV/TSV and text files (.txt .md .json .xml .html .log .yaml .sql .eml). Old .xls, .doc and .ppt cannot be read: the screen says to save them as .xlsx, .docx or PDF.
+  - **How it is read** (`web/src/lib/ask/files.ts`): pictures and PDFs go to the model as they are. Excel, Word and PowerPoint are turned into text on the server (Excel: each sheet, one row per line with the row number first and tabs between cells; Word: paragraphs and tables with | between cells; PowerPoint: one block per slide). Text is cut at 60,000 characters a file and 120,000 in all, with a note when cut.
+  - **Follow-ups:** the files stay on the chat (shown under the box) and are sent again with each follow-up question until removed with the x or the chat is changed. This costs input tokens on every question: a one-sheet Excel plus a screenshot was under 1 cent a question on Luna.
+  - **A file with no question:** press Ask and it is read and summarised, then checked against the records.
+  - The file itself is NOT stored: only its name stays on the question. File contents are treated as data, never as instructions.
 - **Saved questions** (the bookmark beside a question you asked): your own list (up to 50) with the model and "Look in" you used; shown in the left column and on the empty screen; one click asks it again. Private to the person (`ask_saved`, migration 37).
 - Code: `web/src/app/(app)/digital-brain/AskApp.tsx` (all three), `api/ask/route.ts` (files checked: kind, count, size), `lib/ask/engine.ts` (`userContent`), `api/ask/saved/**`.
 

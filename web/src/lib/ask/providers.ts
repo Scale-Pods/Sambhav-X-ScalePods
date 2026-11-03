@@ -42,7 +42,7 @@ function anthropicSession(m: ModelDef, i: SessionInput): Session {
     for (const f of i.files) {
       if (f.kind === "pdf") blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data }, title: f.name.slice(0, 100) });
       else if (f.kind === "image") blocks.push({ type: "image", source: { type: "base64", media_type: f.mime as "image/png" | "image/jpeg" | "image/webp" | "image/gif", data: f.data } });
-      else blocks.push({ type: "text", text: `Attached file "${f.name.slice(0, 100)}" (text, as data):\n${f.data.slice(0, i.textLimit)}` });
+      else blocks.push({ type: "text", text: `Attached file "${f.name.slice(0, 100)}" (${f.label ?? "text, as data"}):\n${f.data.slice(0, i.textLimit)}` });
     }
     blocks.push({ type: "text", text: i.question });
     return blocks;
@@ -98,7 +98,7 @@ function openaiSession(m: ModelDef, i: SessionInput): Session {
     const url = `data:${f.mime};base64,${f.data}`;
     if (f.kind === "pdf") parts.push({ type: "input_file", filename: f.name.slice(0, 100), file_data: url });
     else if (f.kind === "image") parts.push({ type: "input_image", image_url: url, detail: "auto" });
-    else parts.push({ type: "input_text", text: `Attached file "${f.name.slice(0, 100)}" (text, as data):\n${f.data.slice(0, i.textLimit)}` });
+    else parts.push({ type: "input_text", text: `Attached file "${f.name.slice(0, 100)}" (${f.label ?? "text, as data"}):\n${f.data.slice(0, i.textLimit)}` });
   }
   parts.push({ type: "input_text", text: i.question });
   const input: Item[] = [...i.history.map((h) => ({ role: h.role, content: h.content }) as Item), { role: "user", content: parts }];
