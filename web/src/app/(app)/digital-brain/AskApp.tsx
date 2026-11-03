@@ -3,13 +3,14 @@
 /* eslint-disable @next/next/no-img-element -- the attached picture is shown from the bytes in the page (a data address), which next/image cannot take */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkPlus, Check, ChevronDown, Copy, Download, ExternalLink, FileSpreadsheet, FileText, Loader2, Menu, MessageSquarePlus, Paperclip, Pencil, Pin, PinOff, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, UploadCloud, X } from "lucide-react";
+import { Bookmark, BookmarkPlus, Check, ChevronDown, Copy, Download, ExternalLink, FileSpreadsheet, FileText, Folder, FolderInput, FolderPlus, Loader2, Menu, MessageSquarePlus, Paperclip, Pencil, Pin, PinOff, ChevronRight, RefreshCw, Search, SendHorizonal, Square, ThumbsDown, ThumbsUp, Trash2, UploadCloud, X } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { ModelPrices } from "@/components/ModelPrices";
 import { Markdown, type RefLink } from "./Markdown";
 
 type ModelKey = string; // a model's API id (lib/ask/models.ts)
-type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; origin?: string; updated_at: string };
+type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; origin?: string; project_id?: string | null; updated_at: string };
+type Project = { id: string; name: string; instructions: string; chats: number; updated_at: string };
 type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
 type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
 
@@ -161,6 +162,12 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
   const [dragging, setDragging] = useState(false);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [menu, setMenu] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [openProjects, setOpenProjects] = useState<Set<string>>(new Set());
+  const [newIn, setNewIn] = useState<string | null>(null); // the project a new chat will start in
+  const [pform, setPform] = useState<{ id: string | null; name: string; instructions: string } | null>(null);
+  const [pbusy, setPbusy] = useState(false);
+  const [perr, setPerr] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -169,7 +176,11 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
   const loadChats = useCallback(async () => {
     try { const r = await fetch("/api/ask/chats", { cache: "no-store" }); if (r.ok) setChats((await r.json()) as Chat[]); } catch { /* the list stays as it was */ }
   }, []);
-  useEffect(() => { void loadChats(); }, [loadChats]);
+  const loadProjects = useCallback(async () => {
+    try { const r = await fetch("/api/ask/projects", { cache: "no-store" }); if (r.ok) setProjects((await r.json()) as Project[]); } catch { /* the list stays as it was */ }
+  }, []);
+  useEffect(() => { void loadChats(); void loadProjects(); }, [loadChats, loadProjects]);
+  useEffect(() => { if (!pform) return; const k = (e: KeyboardEvent) => { if (e.key === "Escape") setPform(null); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [pform]);
   // a chat opened from AI mode ("Continue in Digital Brain")
   const opened = useRef(false);
   useEffect(() => { if (initialChat && !opened.current) { opened.current = true; void openChat(initialChat); } }, [initialChat]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -193,7 +204,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
 
   async function openChat(id: string) {
     if (busy) return;
-    setDrawer(false); setLoadingChat(true); setActiveId(id); setFiles([]); setFileNote(null);
+    setDrawer(false); setLoadingChat(true); setActiveId(id); setNewIn(null); setFiles([]); setFileNote(null);
     try {
       const r = await fetch(`/api/ask/chats/${id}`, { cache: "no-store" });
       if (!r.ok) throw new Error();
@@ -203,7 +214,8 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     } catch { setMessages([]); }
     setLoadingChat(false);
   }
-  function newChat() { if (busy) return; setActiveId(null); setMessages([]); setChatCost(0); setFiles([]); setFileNote(null); setDrawer(false); box.current?.focus(); }
+  function newChatIn(projectId: string | null) { if (busy) return; setNewIn(projectId); if (projectId) setOpenProjects((s) => new Set(s).add(projectId)); setActiveId(null); setMessages([]); setChatCost(0); setFiles([]); setFileNote(null); setDrawer(false); box.current?.focus(); }
+  function newChat() { if (busy) return; setNewIn(null); setActiveId(null); setMessages([]); setChatCost(0); setFiles([]); setFileNote(null); setDrawer(false); box.current?.focus(); }
 
   async function send(question: string, regenerate = false) {
     const typed = question.trim();
@@ -220,7 +232,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     const patch = (p: Partial<Msg>) => setMessages((ms) => ms.map((m) => (m.id === aId || (p.id && m.id === aId) ? { ...m, ...p } : m)));
     let realId = aId;
     try {
-      const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal, body: JSON.stringify({ question: typed, chatId: activeId, model, scope, regenerate, files: sendFiles.length ? sendFiles.map((f) => ({ name: f.name, mime: f.mime, data: f.data })) : undefined }) });
+      const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal, body: JSON.stringify({ question: typed, chatId: activeId, projectId: activeId ? undefined : newIn ?? undefined, model, scope, regenerate, files: sendFiles.length ? sendFiles.map((f) => ({ name: f.name, mime: f.mime, data: f.data })) : undefined }) });
       if (!res.ok || !res.body) { const j = await res.json().catch(() => ({})); patch({ pending: false, error: j.error ?? "It could not be answered. Please try again." }); return; }
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
       for (;;) {
@@ -232,7 +244,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
           const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
           if (!line) continue;
           const e = JSON.parse(line) as { type: string; text?: string; chatId?: string; messageId?: string; error?: string; result?: { answer: string; sources: string[]; refs?: RefLink[]; follow_ups: string[]; confidence: string; used: { name: string; rows: number | null }[]; usd: number; model: string } };
-          if (e.type === "meta" && e.chatId) { setActiveId(e.chatId); void loadChats(); }
+          if (e.type === "meta" && e.chatId) { setActiveId(e.chatId); void loadChats(); void loadProjects(); }
           else if (e.type === "status") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, status: e.text } : m)));
           else if (e.type === "delta") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: m.content + (e.text ?? ""), status: undefined } : m)));
           else if (e.type === "reset") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: "" } : m)));
@@ -249,7 +261,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
       const stopped = err instanceof DOMException && err.name === "AbortError";
       setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, pending: false, status: undefined, error: stopped ? undefined : "The connection dropped. Please try again.", content: m.content || (stopped ? "Stopped." : "") } : m)));
     } finally {
-      setBusy(false); abort.current = null; void loadChats();
+      setBusy(false); abort.current = null; void loadChats(); void loadProjects();
     }
   }
 
@@ -267,6 +279,32 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     await fetch(`/api/ask/chats/${id}`, { method: "DELETE" }).catch(() => {});
     if (activeId === id) newChat();
     await loadChats();
+  }
+  async function saveProject() {
+    if (!pform || pbusy) return;
+    setPbusy(true); setPerr(null);
+    try {
+      const r = await fetch(pform.id ? `/api/ask/projects/${pform.id}` : "/api/ask/projects", { method: pform.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: pform.name, instructions: pform.instructions }) });
+      const j = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!r.ok) { setPerr(j.error ?? "The project could not be saved."); setPbusy(false); return; }
+      await loadProjects();
+      if (!pform.id && j.id) { setOpenProjects((s) => new Set(s).add(j.id!)); if (!activeId) setNewIn(j.id); } // a new project becomes the place for the next new chat
+      setPform(null);
+    } catch { setPerr("The project could not be saved."); }
+    setPbusy(false);
+  }
+  async function removeProject(id: string) {
+    if (!window.confirm("Delete this project? Its chats are kept and move back to the plain list.")) return;
+    await fetch(`/api/ask/projects/${id}`, { method: "DELETE" }).catch(() => {});
+    if (newIn === id) setNewIn(null);
+    setPform(null);
+    await Promise.all([loadProjects(), loadChats()]);
+  }
+  async function moveChat(chatId: string, projectId: string | null) {
+    setMenu(null);
+    await patchChat(chatId, { projectId });
+    if (projectId) setOpenProjects((s) => new Set(s).add(projectId));
+    await loadProjects();
   }
   async function attach(list: FileList | File[] | null) {
     if (!list || !canAttach) return;
@@ -356,7 +394,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     const out: { label: string; items: Chat[] }[] = [];
     const add = (label: string, items: Chat[]) => { if (items.length) out.push({ label, items }); };
     add("Pinned", list.filter((c) => c.pinned));
-    const rest = list.filter((c) => !c.pinned);
+    const rest = list.filter((c) => !c.pinned && !c.project_id);
     const age = (c: Chat) => Math.floor((start - new Date(c.updated_at).getTime()) / 86400000);
     add("Today", rest.filter((c) => new Date(c.updated_at).getTime() >= start));
     add("Yesterday", rest.filter((c) => { const a = age(c); return a >= 0 && a < 1 && new Date(c.updated_at).getTime() < start; }));
@@ -365,8 +403,53 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     return out;
   }, [chats, filter, now, inside]);
 
+  const filtering = filter.trim().length > 0;
+  const projectGroups = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    return projects.map((p) => ({ p, items: chats.filter((c) => c.project_id === p.id && !c.pinned && (!q || c.title.toLowerCase().includes(q) || inside.has(c.id))) })).filter((g) => !q || g.items.length > 0);
+  }, [projects, chats, filter, inside]);
+  const activeChat = chats.find((c) => c.id === activeId);
+  const currentProject = projects.find((p) => p.id === (activeId ? activeChat?.project_id : newIn)) ?? null;
+  const projectName = (id?: string | null) => (id ? projects.find((p) => p.id === id)?.name : undefined);
+
   const lastAssistant = messages.findLast((m) => m.role === "assistant");
   const empty = messages.length === 0 && !loadingChat;
+
+  const chatRow = (c: Chat) => (
+    <div key={c.id} className={"group relative flex items-center gap-1 rounded-md px-2 py-1.5 " + (c.id === activeId ? "bg-brand-soft" : "hover:bg-surface")}>
+      {editing === c.id ? (
+        <input autoFocus value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} maxLength={80} className="min-w-0 flex-1 rounded border border-line bg-field px-1.5 py-0.5 text-[0.85rem]" aria-label="Chat name"
+          onKeyDown={(e) => { if (e.key === "Enter") { void patchChat(c.id, { title: draftTitle }); setEditing(null); } if (e.key === "Escape") setEditing(null); }}
+          onBlur={() => { if (draftTitle.trim() && draftTitle !== c.title) void patchChat(c.id, { title: draftTitle }); setEditing(null); }} />
+      ) : (
+        <button type="button" onClick={() => void openChat(c.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.88rem]" title={c.title}>
+          {c.pinned && <Pin className="h-3 w-3 shrink-0 text-brand" aria-label="Pinned" />}
+          {c.origin === "ai_mode" && <span className="shrink-0 rounded bg-brand-soft px-1 text-[0.62rem] font-semibold uppercase text-brand">AI</span>}
+          <span className="truncate">{c.title}</span>
+          {c.pinned && projectName(c.project_id) && <span className="ml-auto max-w-[5rem] shrink-0 truncate rounded bg-surface px-1 text-[0.62rem] text-muted" title={"In the project " + projectName(c.project_id)}>{projectName(c.project_id)}</span>}
+        </button>
+      )}
+      {editing !== c.id && (
+        <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <button type="button" onClick={() => void patchChat(c.id, { pinned: !c.pinned })} className="rounded p-1 text-muted hover:text-ink" aria-label={c.pinned ? "Unpin" : "Pin"} title={c.pinned ? "Unpin" : "Pin to the top"}>{c.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setMenu(menu === "move:" + c.id ? null : "move:" + c.id); }} className="rounded p-1 text-muted hover:text-ink" aria-label="Move to a project" title="Move to a project" aria-haspopup="menu" aria-expanded={menu === "move:" + c.id}><FolderInput className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={() => { setEditing(c.id); setDraftTitle(c.title); }} className="rounded p-1 text-muted hover:text-ink" aria-label="Rename"><Pencil className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={() => void removeChat(c.id)} className="rounded p-1 text-muted hover:text-bad" aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+        </span>
+      )}
+      {menu === "move:" + c.id && (
+        <div role="menu" className="absolute right-1 top-full z-30 mt-1 w-52 rounded-lg border border-line bg-card py-1 text-[0.84rem] shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <p className="px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Move to a project</p>
+          {projects.map((p) => (
+            <button key={p.id} type="button" role="menuitem" onClick={() => void moveChat(c.id, p.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface"><Folder className="h-3.5 w-3.5 shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{p.name}</span>{c.project_id === p.id && <Check className="h-3.5 w-3.5 text-brand" />}</button>
+          ))}
+          {projects.length === 0 && <p className="px-3 py-1.5 text-muted">No projects yet.</p>}
+          {c.project_id && <button type="button" role="menuitem" onClick={() => void moveChat(c.id, null)} className="block w-full border-t border-line px-3 py-1.5 text-left hover:bg-surface">Take out of the project</button>}
+          <button type="button" role="menuitem" onClick={() => { setMenu(null); setPerr(null); setPform({ id: null, name: "", instructions: "" }); }} className="flex w-full items-center gap-2 border-t border-line px-3 py-1.5 text-left text-brand hover:bg-surface"><FolderPlus className="h-3.5 w-3.5" />New project…</button>
+        </div>
+      )}
+    </div>
+  );
 
   const renderSidebar = (desktop: boolean) => (
     <div className="flex h-full min-h-0 flex-col">
@@ -393,28 +476,41 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
         </div>
       )}
       <nav className="nav-scroll mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="Past chats">
-        {groups.length === 0 && <p className="px-3 py-4 text-[0.85rem] text-muted">{chats.length === 0 ? "Your chats will be listed here." : "No chat matches."}</p>}
+        <div className="mb-3">
+          <div className="flex items-center justify-between px-2 pb-1">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Projects</p>
+            <button type="button" onClick={() => { setPerr(null); setPform({ id: null, name: "", instructions: "" }); }} className="rounded p-1 text-muted hover:bg-surface hover:text-ink" aria-label="New project" title="New project"><FolderPlus className="h-3.5 w-3.5" /></button>
+          </div>
+          {projects.length === 0 && !filtering && <p className="px-2 pb-1 text-[0.78rem] leading-snug text-muted">A project keeps related chats together and gives them standing instructions.</p>}
+          {projectGroups.map(({ p, items }) => {
+            const open = openProjects.has(p.id) || filtering;
+            const here = !activeId && newIn === p.id;
+            return (
+              <div key={p.id}>
+                <div className={"group/pr flex items-center gap-1 rounded-md px-2 py-1.5 " + (here ? "bg-brand-soft" : "hover:bg-surface")}>
+                  <button type="button" onClick={() => setOpenProjects((s0) => { const n = new Set(s0); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.88rem] font-medium" title={p.instructions ? p.name + ": " + p.instructions : p.name}>
+                    <ChevronRight className={"h-3.5 w-3.5 shrink-0 text-muted transition-transform " + (open ? "rotate-90" : "")} /><Folder className="h-3.5 w-3.5 shrink-0 text-brand" /><span className="truncate">{p.name}</span><span className="shrink-0 text-[0.72rem] font-normal text-muted">{p.chats}</span>
+                  </button>
+                  <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/pr:opacity-100 focus-within:opacity-100">
+                    <button type="button" onClick={() => newChatIn(p.id)} className="rounded p-1 text-muted hover:text-ink" aria-label={`New chat in ${p.name}`} title="New chat in this project"><MessageSquarePlus className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => { setPerr(null); setPform({ id: p.id, name: p.name, instructions: p.instructions }); }} className="rounded p-1 text-muted hover:text-ink" aria-label={`Edit ${p.name}`} title="Name and instructions"><Pencil className="h-3.5 w-3.5" /></button>
+                  </span>
+                </div>
+                {open && (
+                  <div className="ml-3 border-l border-line pl-1">
+                    {items.map(chatRow)}
+                    {items.length === 0 && <p className="px-2 py-1.5 text-[0.78rem] text-muted">{filtering ? "No chat matches." : "No chats yet. Use the new-chat button on the project to start one."}</p>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {groups.length === 0 && projectGroups.length === 0 && <p className="px-3 py-4 text-[0.85rem] text-muted">{chats.length === 0 ? "Your chats will be listed here." : "No chat matches."}</p>}
         {groups.map((g) => (
           <div key={g.label} className="mb-3">
             <p className="px-2 pb-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{g.label}</p>
-            {g.items.map((c) => (
-              <div key={c.id} className={"group flex items-center gap-1 rounded-md px-2 py-1.5 " + (c.id === activeId ? "bg-brand-soft" : "hover:bg-surface")}>
-                {editing === c.id ? (
-                  <input autoFocus value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} maxLength={80} className="min-w-0 flex-1 rounded border border-line bg-field px-1.5 py-0.5 text-[0.85rem]" aria-label="Chat name"
-                    onKeyDown={(e) => { if (e.key === "Enter") { void patchChat(c.id, { title: draftTitle }); setEditing(null); } if (e.key === "Escape") setEditing(null); }}
-                    onBlur={() => { if (draftTitle.trim() && draftTitle !== c.title) void patchChat(c.id, { title: draftTitle }); setEditing(null); }} />
-                ) : (
-                  <button type="button" onClick={() => void openChat(c.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.88rem]" title={c.title}>{c.origin === "ai_mode" && <span className="shrink-0 rounded bg-brand-soft px-1 text-[0.62rem] font-semibold uppercase text-brand">AI</span>}<span className="truncate">{c.title}</span></button>
-                )}
-                {editing !== c.id && (
-                  <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                    <button type="button" onClick={() => void patchChat(c.id, { pinned: !c.pinned })} className="rounded p-1 text-muted hover:text-ink" aria-label={c.pinned ? "Unpin" : "Pin"}>{c.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}</button>
-                    <button type="button" onClick={() => { setEditing(c.id); setDraftTitle(c.title); }} className="rounded p-1 text-muted hover:text-ink" aria-label="Rename"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button type="button" onClick={() => void removeChat(c.id)} className="rounded p-1 text-muted hover:text-bad" aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </span>
-                )}
-              </div>
-            ))}
+            {g.items.map(chatRow)}
           </div>
         ))}
       </nav>
@@ -455,7 +551,14 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
           <button type="button" onClick={() => setDrawer(true)} className="rounded p-1.5 text-muted hover:text-ink lg:hidden" aria-label="Chats"><Menu className="h-5 w-5" /></button>
-          <h1 className="min-w-0 flex-1 truncate font-display text-[1.02rem] font-bold">{chats.find((c) => c.id === activeId)?.title ?? "New chat"}</h1>
+          <h1 className="min-w-0 flex-1 truncate font-display text-[1.02rem] font-bold">{activeChat?.title ?? "New chat"}</h1>
+          {currentProject && (
+            <span className="inline-flex max-w-[11rem] shrink-0 items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[0.74rem] font-medium text-brand" title={currentProject.instructions ? "Project instructions: " + currentProject.instructions : "This project has no instructions yet"}>
+              <Folder className="h-3 w-3 shrink-0" /><span className="truncate">{currentProject.name}</span>
+              {!activeId && <button type="button" onClick={() => setNewIn(null)} className="rounded hover:text-bad" aria-label="Start this chat outside the project"><X className="h-3 w-3" /></button>}
+            </span>
+          )}
+          {activeChat && <button type="button" onClick={() => void patchChat(activeChat.id, { pinned: !activeChat.pinned })} className={"shrink-0 rounded p-1.5 hover:bg-surface " + (activeChat.pinned ? "text-brand" : "text-muted hover:text-ink")} aria-label={activeChat.pinned ? "Unpin this chat" : "Pin this chat to the top of the list"} title={activeChat.pinned ? "Unpin this chat" : "Pin this chat"} aria-pressed={activeChat.pinned}>{activeChat.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}</button>}
           {spend && chatCost > 0 && <span className="shrink-0 text-[0.78rem] text-muted">this chat {cents(chatCost)}</span>}
           {messages.some((m) => !m.pending && m.content) && <button type="button" onClick={exportChat} className="shrink-0 rounded p-1.5 text-muted hover:text-ink" aria-label="Download this chat as text" title="Download this chat"><Download className="h-4 w-4" /></button>}
         </div>
@@ -586,6 +689,28 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
           <p className="mx-auto mt-1 hidden max-w-4xl text-center text-[0.72rem] text-muted sm:block">Answers come from your records and can still be wrong. Check anything important. Enter sends, Shift+Enter adds a line.</p>
         </div>
       </section>
+      {pform && (
+        <div className="fixed inset-0 z-[85] grid place-items-center bg-black/45 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setPform(null); }}>
+          <form role="dialog" aria-modal="true" aria-label={pform.id ? "Edit project" : "New project"} onSubmit={(e) => { e.preventDefault(); void saveProject(); }} className="w-full max-w-lg rounded-xl border border-line bg-card p-5 shadow-2xl">
+            <h2 className="font-display text-lg font-bold">{pform.id ? "Edit project" : "New project"}</h2>
+            <p className="mt-0.5 text-[0.84rem] text-muted">A project keeps related chats together. Its instructions are followed in every chat inside it.</p>
+            <label className="mt-4 block text-[0.82rem] font-medium">Name
+              <input autoFocus value={pform.name} onChange={(e) => setPform({ ...pform, name: e.target.value })} maxLength={60} placeholder="e.g. SPF stock questions" className="mt-1 w-full rounded-md border border-line bg-field px-2.5 py-1.5 text-[0.92rem] font-normal" />
+            </label>
+            <label className="mt-3 block text-[0.82rem] font-medium">Instructions <span className="font-normal text-muted">(optional)</span>
+              <textarea value={pform.instructions} onChange={(e) => setPform({ ...pform, instructions: e.target.value })} maxLength={2000} rows={5} placeholder="e.g. Always give weights in tonnes. Focus on SPF stock. Keep answers to a short table and one line." className="mt-1 w-full resize-y rounded-md border border-line bg-field px-2.5 py-1.5 text-[0.9rem] font-normal" />
+            </label>
+            <p className="mt-1 text-[0.74rem] text-muted">{pform.instructions.length}/2000. These set focus and style only: answers still come from your records, with sources.</p>
+            {perr && <p className="mt-2 text-[0.84rem] text-bad">{perr}</p>}
+            <div className="mt-4 flex items-center gap-2">
+              {pform.id && <button type="button" onClick={() => void removeProject(pform.id!)} className="rounded-lg px-2.5 py-1.5 text-[0.85rem] font-medium text-bad hover:bg-surface">Delete project</button>}
+              <span className="flex-1" />
+              <button type="button" onClick={() => setPform(null)} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-surface">Cancel</button>
+              <button type="submit" disabled={pform.name.trim().length === 0 || pbusy} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50">{pbusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Save</button>
+            </div>
+          </form>
+        </div>
+      )}
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center bg-black/45 p-6" role="presentation">
           <div className="max-w-md rounded-2xl border-2 border-dashed border-brand bg-card px-8 py-10 text-center shadow-2xl">

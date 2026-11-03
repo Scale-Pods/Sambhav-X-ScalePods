@@ -16,17 +16,24 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   return NextResponse.json(c, { headers: { "Cache-Control": "no-store" } });
 }
 
-/** Rename, pin or unpin, or change the model or "Look in" of a chat. */
+/** Rename, pin or unpin, move into a project (or out of it), or change the model or "Look in" of a chat. */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const me = await currentStaff().catch(() => null);
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const { id } = await ctx.params;
   if (!ID.test(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
-  const b = (await req.json().catch(() => null)) as { title?: unknown; pinned?: unknown; model?: unknown; scope?: unknown } | null;
+  const b = (await req.json().catch(() => null)) as { title?: unknown; pinned?: unknown; model?: unknown; scope?: unknown; projectId?: unknown } | null;
   try {
-    await call(`select public.ask_update_chat($1::uuid, $2, $3, $4, $5)`, [
-      id, typeof b?.title === "string" ? b.title : null, typeof b?.pinned === "boolean" ? b.pinned : null, typeof b?.model === "string" ? b.model : null, typeof b?.scope === "string" ? b.scope : null,
-    ]);
+    if (b && "projectId" in b) {
+      // put the chat into one of the person's projects, or take it out (null)
+      const pid = typeof b.projectId === "string" && ID.test(b.projectId) ? b.projectId : null;
+      await call(`select public.ask_set_chat_project($1::uuid, $2::uuid)`, [id, pid]);
+    }
+    if (b && ("title" in b || "pinned" in b || "model" in b || "scope" in b)) {
+      await call(`select public.ask_update_chat($1::uuid, $2, $3, $4, $5)`, [
+        id, typeof b.title === "string" ? b.title : null, typeof b.pinned === "boolean" ? b.pinned : null, typeof b.model === "string" ? b.model : null, typeof b.scope === "string" ? b.scope : null,
+      ]);
+    }
   } catch (e) {
     return NextResponse.json({ error: userMessage(e) }, { status: 400 });
   }

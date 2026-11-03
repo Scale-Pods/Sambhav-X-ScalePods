@@ -5,7 +5,7 @@ import { DEFAULT_FILE_QUESTION, FILE_LIMITS, runAsk, type AskEvent, type AskFile
 import { prepareFiles, type RawFile } from "@/lib/ask/files";
 import { AI_MODE_KEY, THINK_HARDER_KEY, defaultModel, modelByKey } from "@/lib/ask/models";
 import { providerReady } from "@/lib/ask/providers";
-import { recentMessages } from "@/lib/ask/chats";
+import { projectOfChat, recentMessages } from "@/lib/ask/chats";
 import { SCOPES, type Scope } from "@/lib/ask/tools";
 
 export const maxDuration = 60;
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   const me = await currentStaff().catch(() => null);
   const uid = await currentUserId().catch(() => null);
   if (!me || !uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  const body = (await req.json().catch(() => null)) as { question?: unknown; chatId?: unknown; model?: unknown; scope?: unknown; regenerate?: unknown; files?: unknown; mode?: unknown; page?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { question?: unknown; chatId?: unknown; model?: unknown; scope?: unknown; regenerate?: unknown; files?: unknown; mode?: unknown; page?: unknown; projectId?: unknown } | null;
   // AI mode asks for "ai_mode" (its usual model) or "think_harder" (the stronger one); the Digital Brain names a model from the list
   const asked = body?.mode === "quick" ? (body?.model === "think_harder" ? THINK_HARDER_KEY : body?.model === "ai_mode" ? AI_MODE_KEY : body?.model) : body?.model;
   const chosen = modelByKey(asked) ?? (body?.mode === "quick" ? modelByKey(AI_MODE_KEY) : null) ?? defaultModel();
@@ -76,6 +76,10 @@ export async function POST(req: NextRequest) {
     } else {
       await call(`select public.ask_update_chat($1::uuid, null, null, $2, $3)`, [chatId, model, scope]);
     }
+    // a new chat started inside a project belongs to it from the first question
+    const projectIn = typeof body?.projectId === "string" && /^[0-9a-f-]{36}$/i.test(body.projectId) ? body.projectId : null;
+    if (projectIn && !chatIn) await call(`select public.ask_set_chat_project($1::uuid, $2::uuid)`, [chatId, projectIn]);
+    const project = await projectOfChat(chatId!).catch(() => null);
     let history: { role: "user" | "assistant"; content: string }[];
     if (regenerate) {
       const rows = await recentMessages(chatId!, 10);
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
         send({ type: "meta", chatId: finalChat });
         try {
           await runAs(uid, async () => {
-            const res = await runAsk({ mode: quick ? "quick" : undefined, page, files, question, history, role: me.role, model, scope, chatId: finalChat }, (e) => { if (e.type !== "done") send(e); });
+            const res = await runAsk({ mode: quick ? "quick" : undefined, page, files, project: project ?? undefined, question, history, role: me.role, model, scope, chatId: finalChat }, (e) => { if (e.type !== "done") send(e); });
             if (res) {
               const meta = { sources: res.sources, refs: res.refs, follow_ups: res.follow_ups, confidence: res.confidence, used: res.used.map((u) => ({ name: u.name, rows: u.rows })), usd: res.usd, model: res.model };
               const saved = await call<{ id: string }>(`select public.ask_add_message($1::uuid, 'assistant', $2, $3::jsonb) id`, [finalChat, res.answer, JSON.stringify(meta)]);
