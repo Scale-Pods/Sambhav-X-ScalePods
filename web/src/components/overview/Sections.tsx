@@ -205,7 +205,7 @@ export async function TallySection({ pay }: OverviewProps) {
     const diffRec = gap.rec.tally_total - gap.rec.sheet_total;
     const diffPay = gap.pay.tally_total - gap.pay.sheet_total;
     return (
-      <Section id="tally" title="Tally" hint="A read-only reflection of your accounts: nothing here is ever written back to Tally. Compared with the {entity === "SAI" ? "Sai" : "SPF"} payment sheets, which are the other side of the same books." href="/tally" linkLabel="Open Tally">
+      <Section id="tally" title="Tally" hint={`A read-only reflection of your accounts: nothing here is ever written back to Tally. Compared with the ${entity === "SAI" ? "Sai" : "SPF"} payment sheets, which are the other side of the same books.`} href="/tally" linkLabel="Open Tally">
         {ts.tone !== "ok" && (
           <p className="mb-4 rounded-lg border border-line border-l-4 border-l-accent bg-card px-4 py-3 text-[0.9rem] text-muted">
             {ts.tone === "wait" ? "Waiting for the Tally PC. " : "Tally data may be out of date. "}
