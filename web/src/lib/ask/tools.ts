@@ -351,7 +351,7 @@ export const TOOLS: Tool[] = [
     schema: { type: "object", properties: { voucher_no: P, irn: P, eway_bill_no: P, vehicle_no: P, party: P, type: { ...P, description: "Sales, Purchase, Receipt, Payment, Journal, Credit Note ..." }, from: DATE, to: DATE, limit: N } },
     async run(i, ctx) {
       const rows = await q<{ id: string; voucher_no: string; type: string } & Record<string, unknown>>(
-        `select v.id, v.voucher_no, v.voucher_date::text date, v.voucher_type type, v.party_ledger party, v.amount::float8 amount, v.is_cancelled cancelled, left(v.irn, 12) irn_start, v.eway_bill_no, v.vehicle_no,
+        `select v.id, v.voucher_no, (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = v.company_id) company, v.voucher_date::text date, v.voucher_type type, v.party_ledger party, v.amount::float8 amount, v.is_cancelled cancelled, left(v.irn, 12) irn_start, v.eway_bill_no, v.vehicle_no,
                 v.buyer_order_no, v.shipped_by,
                 (select string_agg(coalesce(i.item_name, '?') || ' ' || coalesce(i.quantity::text, '') || ' ' || coalesce(i.unit, '') || ' @' || coalesce(i.rate::text, ''), '; ' order by i.line_no) from public.tally_voucher_items i where i.voucher_id = v.id) items
            from public.tally_vouchers v
@@ -369,7 +369,7 @@ export const TOOLS: Tool[] = [
     description: "The paperwork behind a Tally sales invoice: the customer's PO (uploaded or in the orders sheet), the heat numbers on its lines and whether a mill certificate is filed for each, the vehicle register row, and any document with the same IRN or e-way bill. Use to ask whether an invoice has its PO or certificates.",
     schema: { type: "object", properties: { invoice_no: { ...P, description: "the invoice (voucher) number, e.g. 730/26-27" } }, required: ["invoice_no"] },
     async run(i, ctx) {
-      const rows = await trailList("all", str(i.invoice_no, 40), 1);
+      const rows = await trailList("all", str(i.invoice_no, 40), 1, null); // both companies
       if (rows.length === 0) return { error: "No sales invoice with that number" };
       const t = await trailDetail(rows[0].id);
       if (!t) return { error: "Not found" };
@@ -394,7 +394,7 @@ export const TOOLS: Tool[] = [
       for (const r of t.register) { const s = await sheetRef(ctx, "dispatch_26_27", r.month_tab, r.row_no); vehicle_register.push({ row: `${r.dispatch_date} vehicle ${r.vehicle_no}`, refs: s ? [s] : [] }); }
       const same = t.same_numbers.map((d) => ({ file: d.file, refs: [appRef(ctx, `Document ${d.file}`, `/documents/${d.id}`)] }));
       return {
-        invoice: t.v.voucher_no, date: t.v.date, customer: t.v.party, amount_rs: t.v.amount, po_noted_in_tally: t.v.buyer_order_no, verbal_order: t.v.verbal, refs: invoice_refs,
+        invoice: t.v.voucher_no, company: rows[0].company, date: t.v.date, customer: t.v.party, amount_rs: t.v.amount, po_noted_in_tally: t.v.buyer_order_no, verbal_order: t.v.verbal, refs: invoice_refs,
         po_documents, po_in_orders_sheet, heats, vehicle_register, e_way_bill: t.v.eway_bill_no, vehicle: t.v.vehicle_no, documents_with_same_irn_or_eway: same,
         more_matches_with_this_number: rows.length - 1,
       };
@@ -407,13 +407,13 @@ export const TOOLS: Tool[] = [
     schema: { type: "object", properties: { kind: { type: "string", enum: ["no_po", "no_certificate", "no_dispatch"] }, limit: N }, required: ["kind"] },
     async run(i, ctx) {
       const show = str(i.kind) === "no_certificate" ? "nocert" : str(i.kind) === "no_dispatch" ? "nodispatch" : "nopo";
-      const rows = await trailList(show, "", 1);
+      const rows = await trailList(show, "", 1, null); // both companies
       const n = limit(i.limit, 12, 15);
       return {
         total_invoices: rows[0]?.total ?? 0,
         note: "newest first; invoice numbers made only of X are placeholders (drafts), not real invoices",
         shown: rows.slice(0, n).map((r) => ({
-          invoice: r.voucher_no, placeholder_number: /^x+$/i.test(r.voucher_no), date: r.date, customer: (r.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, ""), amount_rs: r.amount,
+          invoice: r.voucher_no, company: r.company, placeholder_number: /^x+$/i.test(r.voucher_no), date: r.date, customer: (r.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, ""), amount_rs: r.amount,
           po_noted_in_tally: r.po_ref, verbal_order: r.verbal, heat_numbers: r.heats, certificates_filed: r.certs_filed,
           refs: [appRef(ctx, `Tally invoice ${r.voucher_no} · ${(r.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, "")}`, `/tally/invoices/${r.id}`)],
         })),
@@ -428,8 +428,8 @@ export const TOOLS: Tool[] = [
     schema: { type: "object", properties: { name: P }, required: ["name"] },
     async run(i, ctx) {
       const n = like(str(i.name));
-      const ledgers = await q(`select name, parent_group, gstin, state, closing_balance::float8 balance_rs from public.tally_ledgers where deleted_at is null and name ilike $1 order by abs(coalesce(closing_balance, 0)) desc limit 6`, [n]);
-      const bills = await q(`select kind, party_ledger party, count(*)::int bills, round(sum(pending_amount))::bigint pending_rs, min(due_date)::text oldest_due from public.tally_outstanding_bills where party_ledger ilike $1 group by 1, 2 order by 4 desc limit 8`, [n]);
+      const ledgers = await q(`select (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = company_id) company, name, parent_group, gstin, state, closing_balance::float8 balance_rs from public.tally_ledgers where deleted_at is null and name ilike $1 order by abs(coalesce(closing_balance, 0)) desc limit 6`, [n]);
+      const bills = await q(`select (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = company_id) company, kind, party_ledger party, count(*)::int bills, round(sum(pending_amount))::bigint pending_rs, min(due_date)::text oldest_due from public.tally_outstanding_bills where party_ledger ilike $1 group by 1, 2, 3 order by 5 desc limit 8`, [n]);
       return { ledgers, open_bills: bills, refs: [appRef(ctx, `Tally customers and vendors: ${str(i.name)}`, `/tally/parties?q=${encodeURIComponent(str(i.name))}`)] };
     },
   },

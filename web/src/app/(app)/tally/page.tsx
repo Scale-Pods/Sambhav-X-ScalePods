@@ -1,14 +1,14 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Badge, Card, Skeleton, Stat, StatsSkeleton, td, Th } from "@/components/ui";
-import { tallyLive, tallyStatus } from "@/lib/tally";
+import { readTallyEntity, tallyLive, tallyStatus } from "@/lib/tally";
 import { SyncButton } from "./SyncButton";
 import { LiveProvider, ProgressStrip } from "./live";
 
-export default function TallyStatusPage() {
+export default function TallyStatusPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   return (
     <Suspense fallback={<><StatsSkeleton /><div className="mt-6"><Card><Skeleton rows={6} /></Card></div></>}>
-      <Body />
+      <Body searchParams={searchParams} />
     </Suspense>
   );
 }
@@ -20,9 +20,10 @@ const ago = (min: number | null | undefined) => {
 };
 const n = (v: number | null | undefined) => (v ?? 0).toLocaleString("en-IN");
 
-async function Body() {
+async function Body({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await connection(); // "x minutes ago" depends on the clock
-  const [s, live] = await Promise.all([tallyStatus(), tallyLive()]);
+  const entity = readTallyEntity((await searchParams).entity);
+  const [s, live] = await Promise.all([tallyStatus(entity), tallyLive(entity)]);
   const alive = s.connector?.seen_min != null && s.connector.seen_min < 15;
   const state: { tone: "ok" | "warning" | "error" | "neutral"; text: string; short: string } =
     !s.connector?.last_seen_at ? { tone: "neutral", text: "Not connected yet", short: "Waiting" }
@@ -32,9 +33,18 @@ async function Body() {
     : { tone: "ok", text: "Connected", short: "Connected" };
   const c = s.counts;
   return (
-    <LiveProvider initial={live}>
+    <LiveProvider initial={live} entity={entity}>
     <div className="space-y-6">
       <ProgressStrip />
+      {!s.company && (
+        <Card>
+          <p className="px-5 py-4 text-[0.92rem] text-muted">
+            Nothing has arrived from Tally for {entity === "SAI" ? "Sai Steel & Engineering" : "Sambhav Pipes & Fittings"} yet. A company is read once it is loaded in TallyPrime on the office PC
+            and the connector there is set up for it (version 1.1 reads several companies); the next scheduled sync, or Sync now, then brings it. The last message from the Tally PC, below, says
+            if it could not find the company.
+          </p>
+        </Card>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Connection" value={state.short} sub={s.connector?.last_seen_at ? `Last heard ${ago(s.connector.seen_min)}` : "The program is not installed on the Tally PC yet"} />
         <Stat label="Last good sync" value={s.connector?.last_sync_ok_at ? ago(s.connector.ok_min) : "None yet"} sub={s.connector?.last_sync_ok_at ? when(s.connector.last_sync_ok_at) : "Vouchers arrive with the first full sync"} />

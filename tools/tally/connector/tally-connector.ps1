@@ -7,8 +7,13 @@
 #   -Mode Detect   find the date format this Tally accepts (prints a table; changes nothing)
 #   -Mode Replay   send XML files saved earlier (-Folder), for testing or as a manual fallback
 #   -Mode Dump     save one voucher with every field Tally gives us (-VoucherNo "730/26-27" -From yyyyMMdd) to logs\ (read-only, sends nothing)
+#   -Mode Companies  list the companies Tally has loaded and which of them this connector would sync (read-only, sends nothing)
+#
+# Several companies (version 1.1): put their name patterns in config.json, separated by |, for example  "companyMatch": "SAMBHAV|SAI STEEL".
+# Every loaded company that matches a pattern is synced, one after the other, each into its own books. In Tally, load every company to be read:
+# F1 (Select Company), choose each one. A pattern that matches no loaded company is reported, and the others are still synced.
 param(
-    [ValidateSet("Sync", "Check", "Detect", "Replay", "Dump")][string]$Mode = "Sync",
+    [ValidateSet("Sync", "Check", "Detect", "Replay", "Dump", "Companies")][string]$Mode = "Sync",
     [string]$Config = (Join-Path $PSScriptRoot "config.json"),
     [string]$From = "", [string]$To = "",          # yyyyMMdd, optional (Sync)
     [string]$Folder = "",                          # Replay: folder with saved XML
@@ -18,7 +23,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Version = "1.0"
+$Version = "1.1"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $inv = [Globalization.CultureInfo]::InvariantCulture
 
@@ -87,7 +92,14 @@ function Read-Bytes($stream) { $ms = New-Object IO.MemoryStream; $stream.CopyTo(
 function Tally-Alive {
     try { $req = [Net.WebRequest]::Create($TallyUrl); $req.Timeout = 10000; $res = $req.GetResponse(); $res.Close(); return $true } catch { return $false }
 }
+# With more than one company loaded, Tally answers for the one that is active unless the request names the company: every request then carries it.
+# (With a single company loaded nothing is added, so a one-company set-up behaves exactly as before.)
+$script:CurrentCompany = $null
 function Ask-Tally([string]$xml, [int]$timeoutSec = 900) {
+    if ($script:CurrentCompany) {
+        $named = "<SVCURRENTCOMPANY>" + [Security.SecurityElement]::Escape($script:CurrentCompany) + "</SVCURRENTCOMPANY>"
+        $xml = [regex]::Replace($xml, "<STATICVARIABLES>", ("<STATICVARIABLES>" + $named), 1)
+    }
     $req = [Net.HttpWebRequest]::Create($TallyUrl)
     $req.Method = "POST"; $req.ContentType = "text/xml"; $req.Timeout = $timeoutSec * 1000; $req.ReadWriteTimeout = $timeoutSec * 1000
     $body = [Text.Encoding]::UTF8.GetBytes($xml); $req.ContentLength = $body.Length
@@ -345,12 +357,21 @@ function Sync-Vouchers([string]$company, [datetime]$from, [datetime]$to, $style)
     return $n
 }
 
-function Run-Sync([string]$fromStr, [string]$toStr, [string]$trigger) {
-    $names = Read-Company (Ask-Tally "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>List of Companies</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>" 60)
-    $wanted = [string](Opt "companyMatch" "")
-    $company = if ($wanted) { $names | Where-Object { $_ -like "*$wanted*" } | Select-Object -First 1 } else { $names | Select-Object -First 1 }
-    if (-not $company) { throw "No Tally company is loaded" }
-    if (@($names).Count -gt 1) { Log "Several companies are loaded; using: $company" }
+# Which companies to read: the name patterns in config.json (companyMatch, separated by |), matched against the companies Tally has loaded.
+function Get-Patterns { return @(([string](Opt "companyMatch" "")) -split "\|" | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+function Get-LoadedCompanies {
+    return @(Read-Company (Ask-Tally "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>List of Companies</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>" 60))
+}
+# "first full read done" is remembered per company (a company read for the first time takes the whole financial year). The key kept before version 1.1
+# belonged to the first pattern's company.
+function Has-Full([string]$company) {
+    $st = Get-State; $names = $st.PSObject.Properties.Name
+    if ($names -contains ("lastFull|" + $company)) { return $true }
+    $first = @(Get-Patterns)[0]
+    return (($names -contains "lastFull") -and $first -and ($company -like "*$first*"))
+}
+
+function Sync-Company([string]$company, [string]$fromStr, [string]$toStr, [string]$trigger) {
     Log "Company: $company"
     $run = Call "tally_run_start" @{ p_company = $company; p_trigger = $trigger }
     $script:RunId = $run; $script:ProgressOff = $false; $script:Problems = @(); Progress "Starting" 1
@@ -359,28 +380,54 @@ function Run-Sync([string]$fromStr, [string]$toStr, [string]$trigger) {
         $records += Sync-Masters $company
         $style = Get-VoucherStyle
         if (-not $style) { throw "Tally did not accept any date format for the Day Book; vouchers were not read (masters were sent)" }
-        $st = Get-State; $full = ($st.PSObject.Properties.Name -contains "lastFull")
+        $full = Has-Full $company
         if ($fromStr) { $from = Get-Day $fromStr } elseif ($full) { $from = [datetime]::Today.AddDays(-$Lookback) } else { $from = Get-Day $FyStart }
         $fyStart = Get-Day $FyStart; if ($from -lt $fyStart) { $from = $fyStart }
         $to = if ($toStr) { Get-Day $toStr } else { Get-Day $FyEnd }
         Log ("Vouchers {0} to {1} (method {2})" -f $from.ToString("yyyy-MM-dd"), $to.ToString("yyyy-MM-dd"), $style.name)
         $records += Sync-Vouchers $company $from $to $style
-        if (-not $full -and -not $fromStr) { Set-State "lastFull" (Get-Date -Format s) }
+        if (-not $full -and -not $fromStr) { Set-State ("lastFull|" + $company) (Get-Date -Format s) }
         if ($script:Problems.Count -gt 0) {
             $note = ($script:Problems -join "; ")
             Call "tally_run_finish" @{ p_run = $run; p_status = "partial"; p_records = [int]$records; p_error = $note } | Out-Null
             Log "Done with problems. $records records. $note"
-            return @{ ok = $false; message = "$records records, but: $note" }
+            return @{ ok = $false; message = "${company}: $records records, but: $note" }
         }
         Call "tally_run_finish" @{ p_run = $run; p_status = "ok"; p_records = [int]$records; p_error = $null } | Out-Null
         Log "Done. $records records."
         return @{ ok = $true; message = "$records records" }
     } catch {
         $m = $_.Exception.Message
-        Log "FAILED: $m"
+        Log "FAILED ($company): $m"
         try { Call "tally_run_finish" @{ p_run = $run; p_status = "failed"; p_records = [int]$records; p_error = $m } | Out-Null } catch {}
-        return @{ ok = $false; message = $m }
+        return @{ ok = $false; message = "${company}: $m" }
     }
+}
+
+function Run-Sync([string]$fromStr, [string]$toStr, [string]$trigger) {
+    $names = Get-LoadedCompanies
+    if (@($names).Count -eq 0) { throw "No Tally company is loaded" }
+    $patterns = Get-Patterns
+    $targets = New-Object Collections.Generic.List[string]; $missing = @()
+    if ($patterns.Count -eq 0) { $targets.Add([string]$names[0]) }
+    else {
+        foreach ($pt in $patterns) {
+            $hit = $names | Where-Object { $_ -like "*$pt*" -and -not $targets.Contains([string]$_) } | Select-Object -First 1
+            if ($hit) { $targets.Add([string]$hit) } elseif (-not ($names | Where-Object { $_ -like "*$pt*" })) { $missing += $pt }
+        }
+    }
+    if (@($names).Count -gt 1) { Log ("Several companies are loaded: {0}. Syncing: {1}" -f ($names -join " | "), ($targets -join " | ")) }
+    $oks = @(); $bad = @()
+    foreach ($co in $targets) {
+        # name the company in every request only when Tally has more than one loaded
+        $script:CurrentCompany = $(if (@($names).Count -gt 1) { $co } else { $null })
+        $r = Sync-Company $co $fromStr $toStr $trigger
+        if ($r.ok) { $oks += "$co ($($r.message))" } else { $bad += $r.message }
+    }
+    $script:CurrentCompany = $null
+    foreach ($m in $missing) { $bad += "no loaded Tally company matches '$m' (in Tally press F1 and load it)"; Log "PROBLEM: no loaded Tally company matches '$m'" }
+    if ($bad.Count -gt 0) { return @{ ok = $false; message = (($oks + $bad) -join "; ") } }
+    return @{ ok = $true; message = ($oks -join "; ") }
 }
 
 # ---------------------------------------------------------------- modes
@@ -392,6 +439,14 @@ try {
             Log "Testing date formats on $TallyUrl (reads only)..."
             $st = Detect-DateStyle $true
             if ($st) { Log "WORKS: $($st.name)"; Set-State "dateStyle" $st.name; Set-State "detectVersion" 2 } else { Log "No format worked. Send this log to ScalePods." }
+        }
+        "Companies" {
+            if (-not (Tally-Alive)) { Log "Tally is not answering on $TallyUrl. Is it open?"; exit 1 }
+            $names = Get-LoadedCompanies; $patterns = Get-Patterns
+            Log ("Companies loaded in Tally: {0}" -f @($names).Count)
+            foreach ($n in $names) { $m = @($patterns | Where-Object { $n -like "*$_*" }); Log ("  {0}   ->   {1}" -f $n, $(if ($m.Count -gt 0) { "will be synced (matches " + ($m -join ", ") + ")" } else { "NOT synced (no pattern matches)" })) }
+            foreach ($pt in $patterns) { if (-not ($names | Where-Object { $_ -like "*$pt*" })) { Log "  Pattern '$pt' matches no loaded company. In Tally press F1 (Select Company) and load it." } }
+            Log "Nothing was sent."
         }
         "Dump" {
             if (-not $VoucherNo -or -not $From) { throw "-VoucherNo and -From (the voucher's date, yyyyMMdd) are required" }

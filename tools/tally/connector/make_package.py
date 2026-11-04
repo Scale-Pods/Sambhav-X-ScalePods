@@ -28,7 +28,7 @@ cfg = {
     "apiKey": env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
     "connectorKey": key,
     "tallyUrl": "http://localhost:9001",
-    "companyMatch": "SAMBHAV",
+    "companyMatch": "SAMBHAV|SAI STEEL",  # companies to read, separated by |; check the exact names with -Mode Companies
     "fyStart": "20260401",
     "fyEnd": "20270331",
     "lookbackDays": 45,

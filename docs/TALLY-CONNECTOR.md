@@ -65,3 +65,17 @@ The connector tells ScalePods where a run is (`tally_run_progress`: stage, perce
 - **Vehicle register:** the register's invoice number against the number before the "/" of the Tally voucher number, within a date window (the register sheet runs to 29 Sep 2026).
 - **Same numbers:** an uploaded document carrying the same IRN or e-way bill number.
 The invoice page shows each of these; a vendor invoice's review screen also looks for the Tally purchase voucher by IRN, e-way bill, invoice number, or amount near the date; a customer PO's review screen shows the Tally invoices that cite its number. Tally data is owner/administrator only. The Ask box can answer "does invoice 730/26-27 have its PO and certificates?".
+
+## Two companies, Sambhav and Sai (version 1.1, 4 Nov 2026)
+Both companies are in the same TallyPrime. The connector now reads every loaded company whose name matches a pattern in `config.json`:
+`"companyMatch": "SAMBHAV|SAI STEEL"` (patterns separated by `|`; a pattern matches any part of the name). Each company is synced one after the other into its own books
+(`tally_companies` row per company, mapped to its entity: a name with the word SAI gives Sai, "Ridhi" gives RS, anything else SPF).
+- **Load both in Tally.** TallyPrime lists only the companies that are loaded: F1 (Select Company), choose each one. With more than one loaded, the connector names the company in every
+  request (`SVCURRENTCOMPANY`); with one loaded nothing is added, so a one-company set-up behaves as before.
+- **See the exact names first:** `powershell -File tally-connector.ps1 -Mode Companies` lists the loaded companies and which ones would be synced. It sends nothing.
+- **A pattern that matches no loaded company** is reported ("no loaded Tally company matches 'SAI STEEL', in Tally press F1 and load it"); the other companies are still synced and the run ends with an error status so the Tally page shows it.
+- **First read of a company** takes the whole financial year; later runs the last 45 days. This is remembered per company (state.json key `lastFull|<company name>`); a 1.0 state file keeps the first pattern's company on the short look-back.
+- **Database:** the connector is still pinned to named companies (`tally_connectors.allowed_company`, patterns separated by `|`); migration `20261104100000_tally_two_companies.sql` widens it to `%SAMBHAV%|%SAI STEEL%` and maps a new company to its entity.
+- **Updating the PC:** replace `tally-connector.ps1` with the new file, set `companyMatch` in `config.json`, load both companies in Tally, run `-Mode Companies`, then `-Mode Sync` once (or press Sync now in the app). The scheduled tasks need no change.
+- **App:** the Tally pages (Status, Customers and vendors, Debtors and Creditors against the sheets, Invoices and paperwork) have a Company switch (`?entity=SAI`; Sambhav by default) that follows you from tab to tab; the home page's Tally part follows its Company choice; the AI's Tally lookups search both companies and say which one a record is from.
+- **Tested** (4 Nov 2026) against a pretend Tally with two loaded companies and a fake receiver, with Windows PowerShell 5.1: both companies sync into separate books with their own vouchers; only one loaded; upgrade from a 1.0 state file; the date format check with the company named. Not yet run against the real Sai company.

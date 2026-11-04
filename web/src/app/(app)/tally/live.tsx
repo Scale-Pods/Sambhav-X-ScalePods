@@ -17,21 +17,21 @@ export const useLive = () => {
   return c;
 };
 
-export function LiveProvider({ initial, children }: { initial: Live; children: ReactNode }) {
+export function LiveProvider({ initial, entity = "SPF", children }: { initial: Live; entity?: string; children: ReactNode }) {
   const router = useRouter();
   const [live, setLive] = useState<Live>(initial);
   const last = useRef<Live["state"]>(initial.state);
 
   const poll = useCallback(async () => {
     try {
-      const r = await fetch("/api/tally/live", { cache: "no-store" });
+      const r = await fetch(`/api/tally/live?entity=${entity}`, { cache: "no-store" });
       if (!r.ok) return;
       const d = (await r.json()) as Live;
       setLive(d);
       if (last.current !== "idle" && d.state === "idle") router.refresh(); // a sync just ended: show its numbers
       last.current = d.state;
     } catch { /* the next poll tries again */ }
-  }, [router]);
+  }, [router, entity]);
 
   useEffect(() => {
     const every = live.state === "idle" ? 15000 : 3000;

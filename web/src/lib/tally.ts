@@ -3,9 +3,13 @@ import { q } from "./db";
 import { PAGE_SIZE, W } from "./payments";
 
 // Tally, read-only: what the connector on the Tally PC has sent (tables tally_*). Balances are debit-positive.
-// The company is the one that synced most recently (today there is one: Sambhav Pipes & Fittings).
+// Two Tally companies are read: Sambhav Pipes & Fittings (SPF) and Sai Steel & Engineering (SAI). Every screen shows one of them (the "entity" choice in the address,
+// SPF when none is given); each company's rows carry its own company id.
 
-const CO = "(select id from public.tally_companies order by last_sync_at desc nulls last, created_at limit 1)";
+export type TallyEntity = "SPF" | "SAI";
+export const readTallyEntity = (v: unknown): TallyEntity => (v === "SAI" ? "SAI" : "SPF");
+/** The Tally company of one of our companies, as a piece of a question. The entity is one of two fixed words, so it is safe to write in. */
+export const co = (e: TallyEntity) => `(select tc.id from public.tally_companies tc join public.entities en on en.id = tc.entity_id where en.code = '${e}' order by tc.last_sync_at desc nulls last, tc.created_at limit 1)`;
 
 export type Status = {
   connector: { seen_min: number | null; ok_min: number | null; last_seen_at: string | null; last_status: string | null; last_message: string | null; last_version: string | null; last_sync_ok_at: string | null } | null;
@@ -15,7 +19,8 @@ export type Status = {
   request: { status: string; requested_at: string; message: string | null } | null;
 };
 
-export async function tallyStatus(): Promise<Status> {
+export async function tallyStatus(entity: TallyEntity = "SPF"): Promise<Status> {
+  const CO = co(entity);
   // through a function that returns only the status fields: the connector table itself (it holds the key's hash) stays with the owner and administrators.
   // Until the function exists (migration 20261031100000) the table is read directly, which only the owner and administrators can do.
   const stateSql = `select seen_min, ok_min, last_seen_at, last_status, last_message, last_version, last_sync_ok_at from public.tally_connector_state()`;
@@ -42,7 +47,8 @@ export async function tallyStatus(): Promise<Status> {
  */
 export type Live = { state: "idle" | "waiting" | "running"; pct: number; stage: string | null; detail: string | null; how: string | null; seconds: number };
 
-export async function tallyLive(): Promise<Live> {
+export async function tallyLive(entity: TallyEntity = "SPF"): Promise<Live> {
+  const CO = co(entity);
   const [run] = await q<{ stage: string | null; progress: number | null; detail: string | null; trigger_type: string; seconds: number }>(
     `select stage, progress, detail, trigger_type, extract(epoch from now() - started_at)::int seconds
        from public.tally_sync_runs where company_id = ${CO} and status = 'running' and coalesce(progress_at, started_at) > now() - interval '3 hours'
@@ -57,14 +63,15 @@ export async function tallyLive(): Promise<Live> {
 // ---------------------------------------------------------------- parties (ledgers)
 export const GROUPS: Record<string, string> = { debtors: "Sundry Debtors", goods: "SUNDRY CREDITORS (FOR GOODS)", expenses: "SUNDRY CREDITORS (FOR EXPENSES)" };
 
-export type TallyParams = { q: string; page: number; show: string; group: string; all?: boolean; summaryOnly?: boolean };
+export type TallyParams = { q: string; page: number; show: string; group: string; entity: TallyEntity; all?: boolean; summaryOnly?: boolean };
 export function readTallyParams(sp: Record<string, string | string[] | undefined>): TallyParams {
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-  return { q: (one(sp.q) ?? "").trim().slice(0, 80), page: Math.max(1, Number(one(sp.page)) || 1), show: one(sp.show) ?? "all", group: one(sp.group) ?? "all" };
+  return { q: (one(sp.q) ?? "").trim().slice(0, 80), page: Math.max(1, Number(one(sp.page)) || 1), show: one(sp.show) ?? "all", group: one(sp.group) ?? "all", entity: readTallyEntity(one(sp.entity)) };
 }
 
 export type PartyRow = { name: string; parent_group: string | null; gstin: string | null; state: string | null; balance: string | null; orders: string };
 export async function partiesList(p: TallyParams) {
+  const CO = co(p.entity);
   const w = new W();
   w.and(`l.company_id = ${CO}`); w.and("l.deleted_at is null");
   if (p.group in GROUPS) w.and(`l.parent_group = ${w.p(GROUPS[p.group])}`);
@@ -87,8 +94,9 @@ export async function partiesList(p: TallyParams) {
 export type CompareRow = { tally_name: string | null; sheet_name: string | null; tally: number; sheet: number; diff: number; bills: string | null; how: string; status: "same" | "differs" | "only_tally" | "only_sheet" };
 export type CompareSummary = { tally_total: number; sheet_total: number; same: number; differs: number; only_tally: number; only_sheet: number };
 
-/** kind: debtors (Tally "Sundry Debtors" against the sheet's receivables) or creditors (Tally creditors for goods against the sheet's payables). The sheet side is SPF only: Tally holds one company. */
+/** kind: debtors (Tally "Sundry Debtors" against the sheet's receivables) or creditors (Tally creditors for goods against the sheet's payables). The sheet side is the same company's payment sheet (SPF or Sai). */
 export async function compare(kind: "receivable" | "payable", p: TallyParams) {
+  const CO = co(p.entity);
   const rec = kind === "receivable";
   const groups = rec ? [GROUPS.debtors] : p.group === "expenses" ? [GROUPS.expenses] : p.group === "both" ? [GROUPS.goods, GROUPS.expenses] : [GROUPS.goods];
   const sign = rec ? "" : "-";
@@ -98,7 +106,7 @@ export async function compare(kind: "receivable" | "payable", p: TallyParams) {
                  from (select name, ${sign}closing_balance bal from public.tally_ledgers where company_id = ${CO} and deleted_at is null and parent_group = any($1::text[])) x
                 where bal <> 0 group by 1),
          s as (select app.party_key(${col}) k, min(${col}) name, sum(pending) amt, count(*) bills
-                 from public.${view} where entity = 'SPF' and pending > 0 and ${col} is not null group by 1),
+                 from public.${view} where entity = '${p.entity}' and pending > 0 and ${col} is not null group by 1),
          ex as (select t.name tname, s.name sname, t.bal, s.amt, s.bills, 'same name' how from t join s on s.k = t.k),
          tl as (select * from t where k not in (select k from s)),
          sl as (select * from s where k not in (select k from t)),

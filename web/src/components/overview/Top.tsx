@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
-import { loadControl, loadMail, loadNegatives, loadOrders, loadPay, loadStock, loadTallyStatus, type Attention } from "@/lib/business";
+import { loadControl, loadMail, loadNegatives, loadOrders, loadPay, loadStock, loadTallyStatus, tallyEntityOf, type Attention } from "@/lib/business";
 import { unitLabel, weight } from "@/lib/filters";
 import { rupeesShort } from "@/lib/money";
 import { Card, Stat } from "@/components/ui";
@@ -20,7 +20,7 @@ export function tallyState(s: Awaited<ReturnType<typeof loadTallyStatus>>): Tall
 /** Eight tiles, one per part of the business. Each opens its page. */
 export async function Headline({ f, pay, ord, sp }: OverviewProps) {
   return safe("The headline figures", async () => {
-    const [k, p, o, m, c, t] = await Promise.all([loadStock(f), loadPay(pay), loadOrders(ord), loadMail(f), loadControl(), loadTallyStatus()]);
+    const [k, p, o, m, c, t] = await Promise.all([loadStock(f), loadPay(pay), loadOrders(ord), loadMail(f), loadControl(), loadTallyStatus(tallyEntityOf(pay.entity))]);
     const ts = tallyState(t);
     const waiting = c.decide + c.docs_review + c.drafts;
     return (
@@ -41,7 +41,7 @@ export async function Headline({ f, pay, ord, sp }: OverviewProps) {
 /** What to act on today, most serious first. Each line opens the place to act. A line is shown only when there is something to act on. */
 export async function AttentionList({ f, pay, ord, sp }: OverviewProps) {
   return safe("The attention list", async () => {
-    const [p, o, m, c, t, neg] = await Promise.all([loadPay(pay), loadOrders(ord), loadMail(f), loadControl(), loadTallyStatus(), loadNegatives()]);
+    const [p, o, m, c, t, neg] = await Promise.all([loadPay(pay), loadOrders(ord), loadMail(f), loadControl(), loadTallyStatus(tallyEntityOf(pay.entity)), loadNegatives()]);
     const ts = tallyState(t);
     const over90 = p.ageing.find((a) => a.label.startsWith("Over 90"));
     const items: Attention[] = [];

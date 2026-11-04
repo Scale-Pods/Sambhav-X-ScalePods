@@ -50,7 +50,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
       <Suspense fallback={part(8)}><MoneySection {...props} /></Suspense>
       <Suspense fallback={part(8)}><OrdersSection {...props} /></Suspense>
       <Suspense fallback={part(8)}><MailSection {...props} /></Suspense>
-      <Suspense fallback={part(5)}><TallySection /></Suspense>
+      <Suspense fallback={part(5)}><TallySection {...props} /></Suspense>
       <Suspense fallback={part(3)}><ControlSection /></Suspense>
       <AskSection />
     </FilterShell>

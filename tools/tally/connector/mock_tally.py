@@ -10,9 +10,11 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--port", type=int, default=19001)
 ap.add_argument("--accept", default="dd-MMM-yyyy", help="the only date format it understands (yyyyMMdd, d-MMM-yyyy, dd-MM-yyyy, dd-MMM-yyyy, dd/MM/yyyy); prefix 'typed ' to require TYPE=\"Date\"")
 ap.add_argument("--masters", required=True)
-ap.add_argument("--company", default="ZZ SCALEPODS CONNECTOR TEST")
+ap.add_argument("--company", action="append", help="repeat for several companies loaded at once; a request that names one (SVCURRENTCOMPANY) is answered for it, otherwise for the first")
 ap.add_argument("--default-day", default="2026-10-31", help="the day Tally answers with when it cannot read the dates asked for")
 a = ap.parse_args()
+COMPANIES = a.company or ["ZZ SCALEPODS CONNECTOR TEST"]
+CUR = {"name": COMPANIES[0]}  # the company the request in hand is for
 
 PATTERNS = {"yyyyMMdd": r"^\d{8}$", "d-MMM-yyyy": r"^\d{1,2}-[A-Za-z]{3}-\d{4}$", "dd-MM-yyyy": r"^\d{2}-\d{2}-\d{4}$",
             "dd-MMM-yyyy": r"^\d{2}-[A-Za-z]{3}-\d{4}$", "dd/MM/yyyy": r"^\d{2}/\d{2}/\d{4}$"}
@@ -31,7 +33,7 @@ def parse_date(s):
 
 def voucher(day, kind, n):
     d = day.strftime("%Y%m%d")
-    guid = f"test-{d}-{kind}-{n}"
+    guid = f"test-{COMPANIES.index(CUR['name'])}-{d}-{kind}-{n}"  # each company has its own vouchers
     head = (f'<TALLYMESSAGE><VOUCHER REMOTEID="{guid}" VCHTYPE="{kind}" ACTION="Create"><OLDAUDITENTRYIDS.LIST TYPE="Number"><OLDAUDITENTRYIDS>-1</OLDAUDITENTRYIDS></OLDAUDITENTRYIDS.LIST>'
             f'<DATE>{d}</DATE><UDF:MYFIELD>x</UDF:MYFIELD><GUID>{guid}</GUID><VOUCHERTYPENAME>{kind}</VOUCHERTYPENAME><VOUCHERNUMBER>{kind[:2].upper()}/{d[4:]}/{n}</VOUCHERNUMBER>'
             f'<CSTFORMISSUETYPE>&#4; Not Applicable</CSTFORMISSUETYPE><ENTEREDBY>test</ENTEREDBY><ALTERID>{100 + n}</ALTERID><ISCANCELLED>{"Yes" if n == 9 else "No"}</ISCANCELLED>')
@@ -65,7 +67,7 @@ def daybook(a_day, b_day):
             if d.day % 3 == 0: msgs.append(voucher(d, "Purchase", 3))
             if d.day == 15: msgs.append(voucher(d, "Sales", 9))  # a cancelled one
         d += dt.timedelta(days=1)
-    return ('<ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><STATICVARIABLES><SVCURRENTCOMPANY>' + a.company +
+    return ('<ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><STATICVARIABLES><SVCURRENTCOMPANY>' + CUR['name'].replace('&', '&amp;') +
             '</SVCURRENTCOMPANY></STATICVARIABLES></DESC><DATA>' + "".join(msgs) + '</DATA></BODY></ENVELOPE>')
 
 
@@ -84,8 +86,13 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8", "ignore")
+        named = re.search(r"<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>", body)
+        asked = named.group(1).replace("&amp;", "&") if named else None
+        CUR["name"] = asked if asked in COMPANIES else COMPANIES[0]
+        print(f"request for {CUR['name']!r} ({'named' if named else 'not named'})", flush=True)
         if "List of Companies" in body:
-            out = f'<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="{a.company}" RESERVEDNAME=""><NAME TYPE="String">{a.company}</NAME></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>'
+            esc = lambda c: c.replace("&", "&amp;")
+            out = '<ENVELOPE><BODY><DATA><COLLECTION>' + "".join(f'<COMPANY NAME="{esc(c)}" RESERVEDNAME=""><NAME TYPE="String">{esc(c)}</NAME></COMPANY>' for c in COMPANIES) + '</COLLECTION></DATA></BODY></ENVELOPE>'
         elif "ScalePodsLedgers" in body:
             out = read("ledgers.xml")
         elif "ScalePodsItems" in body:
@@ -115,5 +122,5 @@ class H(BaseHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
 
 
-print(f"mock Tally on :{a.port}, understands only {a.accept!r}, company {a.company!r}", flush=True)
+print(f"mock Tally on :{a.port}, understands only {a.accept!r}, companies {COMPANIES!r}", flush=True)
 ThreadingHTTPServer(("127.0.0.1", a.port), H).serve_forever()

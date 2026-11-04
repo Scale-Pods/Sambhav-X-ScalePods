@@ -48,7 +48,7 @@ def prepare():
     os.makedirs(NEW_CONFIG, exist_ok=True)
     cfg = {
         "supabaseUrl": env("NEXT_PUBLIC_SUPABASE_URL"), "apiKey": env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), "connectorKey": key,
-        "tallyUrl": "http://localhost:9001", "companyMatch": "SAMBHAV", "fyStart": "20260401", "fyEnd": "20270331",
+        "tallyUrl": "http://localhost:9001", "companyMatch": "SAMBHAV|SAI STEEL", "fyStart": "20260401", "fyEnd": "20270331",
         "lookbackDays": 45, "chunkDays": 10, "batchSize": 100,
     }
     json.dump(cfg, open(os.path.join(NEW_CONFIG, "config.json"), "w"), indent=2)

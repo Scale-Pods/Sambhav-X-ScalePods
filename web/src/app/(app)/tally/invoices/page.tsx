@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Check, Minus } from "lucide-react";
 import { Badge, Card, Skeleton, td, Th } from "@/components/ui";
 import { PLACEHOLDER_INVOICE } from "@/lib/glossary";
+import { readTallyEntity } from "@/lib/tally";
 import { TRAIL_PAGE, TRAIL_SHOWS, trailList, type TrailRow, type TrailShow } from "@/lib/tallytrail";
 
 type SP = Promise<Record<string, string | undefined>>;
@@ -45,10 +46,11 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const show = (TRAIL_SHOWS as readonly string[]).includes(sp.show ?? "") ? (sp.show as TrailShow) : "all";
   const search = (sp.q ?? "").trim().slice(0, 80);
   const page = Math.max(1, Number(sp.page) || 1);
-  const rows = await trailList(show, search, page);
+  const entity = readTallyEntity(sp.entity);
+  const rows = await trailList(show, search, page, entity);
   const total = rows[0]?.total ?? 0, pages = Math.max(1, Math.ceil(total / TRAIL_PAGE));
   const href = (changes: Record<string, string | undefined>) => {
-    const p = new URLSearchParams({ ...(show !== "all" ? { show } : {}), ...(search ? { q: search } : {}), ...(page > 1 ? { page: String(page) } : {}) });
+    const p = new URLSearchParams({ ...(entity !== "SPF" ? { entity } : {}), ...(show !== "all" ? { show } : {}), ...(search ? { q: search } : {}), ...(page > 1 ? { page: String(page) } : {}) });
     Object.entries(changes).forEach(([k, v]) => (v ? p.set(k, v) : p.delete(k)));
     const t = p.toString();
     return `/tally/invoices${t ? `?${t}` : ""}`;

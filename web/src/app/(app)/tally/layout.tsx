@@ -2,6 +2,7 @@ import { Suspense, type ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { canSeeBusiness, currentStaff } from "@/lib/auth";
 import { SectionTabs } from "@/components/SectionTabs";
+import { TallyCompany } from "@/components/TallyCompany";
 import { Card, PageHeader, Skeleton } from "@/components/ui";
 
 const TABS: [string, string][] = [
@@ -13,7 +14,7 @@ export default function TallyLayout({ children }: { children: ReactNode }) {
     <>
       <PageHeader
         title="Tally"
-        hint="A read-only copy of Sambhav's Tally books, set against your sheets. A small program on the Tally PC reads Tally and sends it here. Nothing is ever written back to Tally." help="These pages are a copy of Tally as it was when the last sync finished (see Status), not a live view. A positive balance means the party owes us; a negative one means we owe them. Debtors and creditors are compared with the payment sheets."
+        hint="A read-only copy of the Tally books of Sambhav Pipes & Fittings and Sai Steel & Engineering, set against your sheets. A small program on the Tally PC reads Tally and sends it here. Nothing is ever written back to Tally." help="These pages are a copy of Tally as it was when the last sync finished (see Status), not a live view. A positive balance means the party owes us; a negative one means we owe them. Debtors and creditors are compared with the payment sheets."
       />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
         <Gate>{children}</Gate>
@@ -30,7 +31,8 @@ async function Gate({ children }: { children: ReactNode }) {
   }
   return (
     <>
-      <Suspense fallback={null}><SectionTabs tabs={TABS} label="Tally" keep={[]} /></Suspense>
+      <Suspense fallback={null}><TallyCompany /></Suspense>
+      <Suspense fallback={null}><SectionTabs tabs={TABS} label="Tally" keep={["entity"]} /></Suspense>
       {children}
     </>
   );

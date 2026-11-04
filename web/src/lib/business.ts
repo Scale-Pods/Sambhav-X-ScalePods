@@ -6,7 +6,7 @@ import { mailOverview } from "./mail";
 import { orderOverview, vehiclesOverview, type OrderParams } from "./orders";
 import { payOverview, type PayParams } from "./payments";
 import { countSessions } from "./queries";
-import { compare, tallyStatus } from "./tally";
+import { compare, tallyStatus, type TallyEntity } from "./tally";
 import type { Filter } from "./filters";
 
 // What the Business overview reads. Each loader is cached for the request, so the headline strip, the attention list and the section that
@@ -38,15 +38,17 @@ export const loadPay = keyed((p: PayParams) => payOverview(p));
 export const loadOrders = keyed((p: OrderParams) => orderOverview(p));
 export const loadVehicles = keyed((p: OrderParams) => vehiclesOverview(p));
 export const loadMail = keyed((f: Filter) => mailOverview(f));
-export const loadTallyStatus = cache(() => gated(() => tallyStatus()));
+export const loadTallyStatus = keyed((e: TallyEntity) => tallyStatus(e));
+/** The Tally company the home page shows: Sai when Sai is chosen, otherwise Sambhav (SPF). */
+export const tallyEntityOf = (e: "SPF" | "SAI" | null): TallyEntity => (e === "SAI" ? "SAI" : "SPF");
 
-/** Tally against the sheets: customers and vendors the two sides agree on, and the gap. (The sheet side is SPF only: Tally holds one company.) */
-export const loadTallyGap = cache(() => gated(async () => {
-  const p = { q: "", page: 1, show: "all", group: "all", summaryOnly: true };
+/** Tally against the sheets: customers and vendors the two sides agree on, and the gap. (The sheet side is the same company's payment sheet.) */
+export const loadTallyGap = keyed(async (entity: TallyEntity) => {
+  const p = { q: "", page: 1, show: "all", group: "all", entity, summaryOnly: true };
   const rec = await compare("receivable", p); // one after the other: each matching is a heavy question
   const pay = await compare("payable", p);
   return { rec: rec.summary, pay: pay.summary };
-}));
+});
 
 /** Grades and thicknesses whose balance has gone below zero (more sold than bought), as of today. */
 export const loadNegatives = cache(() => gated(async () => {

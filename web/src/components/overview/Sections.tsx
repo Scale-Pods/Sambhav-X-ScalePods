@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ageing, heatmap, recentSales, stockByGrade, timeline, topSold } from "@/lib/analytics";
-import { gated, loadControl, loadMail, loadOrders, loadPay, loadStock, loadTallyGap, loadTallyStatus, loadVehicles } from "@/lib/business";
+import { gated, loadControl, loadMail, loadOrders, loadPay, loadStock, loadTallyGap, loadTallyStatus, loadVehicles, tallyEntityOf } from "@/lib/business";
 import { periodLabel, rangeLabel, todayIST, unitLabel, weight, type Filter } from "@/lib/filters";
 import { date, num } from "@/lib/format";
 import { rupeesShort } from "@/lib/money";
@@ -195,16 +195,17 @@ export async function MailSection({ f, sp }: OverviewProps) {
 }
 
 // ---------------------------------------------------------------- Tally
-export async function TallySection() {
+export async function TallySection({ pay }: OverviewProps) {
   return safe("Tally", async () => {
-    const [s, gap] = await Promise.all([loadTallyStatus(), loadTallyGap()]);
+    const entity = tallyEntityOf(pay.entity);
+    const [s, gap] = await Promise.all([loadTallyStatus(entity), loadTallyGap(entity)]);
     const ts = tallyState(s);
     const c = s.counts;
     const none = !c.vouchers && !c.receivable_bills;
     const diffRec = gap.rec.tally_total - gap.rec.sheet_total;
     const diffPay = gap.pay.tally_total - gap.pay.sheet_total;
     return (
-      <Section id="tally" title="Tally" hint="A read-only reflection of your accounts: nothing here is ever written back to Tally. Compared with the SPF payment sheets, which are the other side of the same books." href="/tally" linkLabel="Open Tally">
+      <Section id="tally" title="Tally" hint="A read-only reflection of your accounts: nothing here is ever written back to Tally. Compared with the {entity === "SAI" ? "Sai" : "SPF"} payment sheets, which are the other side of the same books." href="/tally" linkLabel="Open Tally">
         {ts.tone !== "ok" && (
           <p className="mb-4 rounded-lg border border-line border-l-4 border-l-accent bg-card px-4 py-3 text-[0.9rem] text-muted">
             {ts.tone === "wait" ? "Waiting for the Tally PC. " : "Tally data may be out of date. "}

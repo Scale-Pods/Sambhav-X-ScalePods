@@ -1,5 +1,6 @@
 import "server-only";
 import { q } from "./db";
+import { co, type TallyEntity } from "./tally";
 
 // The paperwork trail of a Tally sales invoice: the customer's PO behind it, the mill certificates for the heat numbers on its lines, the dispatch
 // register row, and any uploaded document carrying the same IRN or e-way bill. Everything is matched on the documents' own numbers, never on row
@@ -13,21 +14,22 @@ const HEAT = `app.norm_text(coalesce(nullif(i.batch, ''), substring(upper(i.desc
 
 export type TrailRow = {
   id: string; voucher_no: string; date: string; party: string | null; amount: number; po_ref: string | null; verbal: boolean; vehicle_no: string | null; eway_bill_no: string | null; has_irn: boolean;
-  po_docs: number; po_orders: number; heats: number; heats_in_stock: number; certs_filed: number; cert_docs: number; in_register: number; total: number;
+  po_docs: number; po_orders: number; heats: number; heats_in_stock: number; certs_filed: number; cert_docs: number; in_register: number; total: number; company: string | null;
 };
 export const TRAIL_SHOWS = ["all", "nopo", "nocert", "nodispatch"] as const;
 export type TrailShow = (typeof TRAIL_SHOWS)[number];
 export const TRAIL_PAGE = 50;
 
-export async function trailList(show: TrailShow, search: string, page: number) {
+export async function trailList(show: TrailShow, search: string, page: number, entity: TallyEntity | null = "SPF") {
   const like = search ? `%${search.replace(/[\%_]/g, (c) => "\\" + c)}%` : null;
   // every lookup table is read once (materialized) and joined set-wise: 800 invoices against the views row by row took 16 seconds
   return q<TrailRow>(`
     with base as (
       select v.id, v.voucher_no, v.voucher_date, v.party_ledger, v.amount, v.vehicle_no, v.eway_bill_no, v.irn is not null has_irn, ${PO_REF} po_ref,
+             (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = v.company_id) company,
              case when app.norm_text(${PO_REF}) ~ '${VERBAL}' then '' else app.norm_text(${PO_REF}) end po_n, app.norm_text(split_part(v.voucher_no, '/', 1)) inv_n
         from public.tally_vouchers v
-       where v.voucher_type = 'Sales' and v.deleted_at is null and not v.is_cancelled
+       where v.voucher_type = 'Sales' and v.deleted_at is null and not v.is_cancelled${entity ? ` and v.company_id = ${co(entity)}` : ""}
          and ($1::text is null or v.voucher_no ilike $1 or v.party_ledger ilike $1 or v.buyer_order_no ilike $1 or v.vehicle_no ilike $1 or v.eway_bill_no ilike $1)
     ), ord as materialized (
       select app.norm_text(po_no) n from public.v_orders where length(app.norm_text(po_no)) >= 4
@@ -59,7 +61,7 @@ export async function trailList(show: TrailShow, search: string, page: number) {
       select *, (po_ref is not null and app.norm_text(po_ref) ~ '${VERBAL}') verbal from ev
        where ${show === "nopo" ? "po_docs = 0 and po_orders = 0" : show === "nocert" ? "certs_filed = 0 and cert_docs = 0" : show === "nodispatch" ? "in_register = 0" : "true"}
     )
-    select id, voucher_no, voucher_date::text date, party_ledger party, amount::float8 amount, po_ref, verbal, vehicle_no, eway_bill_no, has_irn, po_docs, po_orders, heats, heats_in_stock, certs_filed, cert_docs, in_register,
+    select id, voucher_no, voucher_date::text date, party_ledger party, amount::float8 amount, company, po_ref, verbal, vehicle_no, eway_bill_no, has_irn, po_docs, po_orders, heats, heats_in_stock, certs_filed, cert_docs, in_register,
            count(*) over ()::int total
       from shown order by voucher_date desc, voucher_no desc limit ${TRAIL_PAGE} offset ${(Math.max(1, page) - 1) * TRAIL_PAGE}`, [like]);
 }
