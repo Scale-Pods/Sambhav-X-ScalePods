@@ -33,7 +33,7 @@ export async function StockSection({ f }: OverviewProps) {
       const p = new URLSearchParams(extra);
       if (f.book) p.set("book", f.book);
       if (u === "kg") p.set("u", "kg");
-      return `/stock?${p}`;
+      return `/plates?${p}`;
     };
     return (
       <Section id="stock" title="Stock" hint={`What came in, what went out and what is left, worked out from every purchase and sale. Showing ${periodLabel(f)} (${rangeLabel(f)}); stock figures are as of ${date(asOf)}.`} href="/summary" linkLabel="Open the Summary">
@@ -82,7 +82,7 @@ export async function StockSection({ f }: OverviewProps) {
                       <tr key={i} className="hover:bg-surface/60">
                         <td className={td + " num whitespace-nowrap"}>{date(r.movement_date)}</td>
                         <td className={td}>{r.grade}</td>
-                        <td className={td}><Link href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.ident}</Link></td>
+                        <td className={td}><Link href={`/plates/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.ident}</Link></td>
                         <td className={td + " num whitespace-nowrap text-right font-medium"}>{weight(-num(r.weight_kg), u)} {unitLabel(u)}</td>
                         <td className={td}><Badge>{r.book}</Badge></td>
                       </tr>

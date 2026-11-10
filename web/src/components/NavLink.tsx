@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { FILTER_KEYS } from "@/lib/filters";
 import { Children, type ReactNode } from "react";
 
-const CARRY = ["/", "/summary", "/stock", "/review"];
+const CARRY = ["/", "/summary", "/plates", "/review"];
 
 export function NavLink({ href, children, soon }: { href: string; children: ReactNode; soon?: boolean }) {
   const path = usePathname();

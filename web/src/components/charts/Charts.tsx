@@ -181,7 +181,7 @@ export function Heatmap({ grades, thicknesses, cells, unit, hrefs }: {
             <tbody>
               {grades.map((g) => (
                 <tr key={g}>
-                  <th className="sticky left-0 z-10 bg-card pr-3 text-left text-[0.8rem] font-medium text-ink"><Link href={hrefs[g] ?? "/stock"} className="hover:text-brand hover:underline">{g}</Link></th>
+                  <th className="sticky left-0 z-10 bg-card pr-3 text-left text-[0.8rem] font-medium text-ink"><Link href={hrefs[g] ?? "/plates"} className="hover:text-brand hover:underline">{g}</Link></th>
                   {thicknesses.map((x) => {
                     const v = cells[`${g}|${x}`];
                     if (!v) return <td key={x} className="h-8 min-w-[2.4rem] rounded-[3px] bg-surface" />;

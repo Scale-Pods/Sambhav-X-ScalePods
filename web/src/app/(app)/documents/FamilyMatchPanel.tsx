@@ -11,7 +11,7 @@ function Hits({ hits }: { hits: LotHit[] }) {
     <>
       {hits.map((h) => (
         <span key={h.lot_no} className="mr-3 inline-block">
-          <Link href={`/stock/${h.lot_no}`} className="font-medium text-brand hover:underline">Plate {h.lot_no}</Link>
+          <Link href={`/plates/${h.lot_no}`} className="font-medium text-brand hover:underline">Plate {h.lot_no}</Link>
           <span className="text-muted"> {h.grade ?? ""} {h.thickness_mm != null ? `${h.thickness_mm} mm` : ""} · {h.status}{h.balance_kg ? ` · ${kg(h.balance_kg)}` : ""}</span>
         </span>
       ))}

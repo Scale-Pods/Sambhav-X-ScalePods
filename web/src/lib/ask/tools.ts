@@ -26,6 +26,13 @@ const limit = (v: unknown, dflt = 15, max = 30) => Math.max(1, Math.min(max, Mat
 const like = (s: string) => (s ? `%${s.replace(/[\\%_]/g, (c) => "\\" + c)}%` : null);
 const cut = (s: string | null, n = 160) => (s && s.length > n ? s.slice(0, n) + "…" : s);
 
+/** SQL: a name compared without spaces or punctuation, so "q lar" finds "QLAR TECHNOLOGY INDIA PVT LTD". `$n` holds the plain text; write `($n::text is null or ${nameHas(col, n)})`. */
+const nameHas = (col: string, n: number) => `app.norm_text(${col}) like '%' || app.norm_text($${n}::text) || '%'`;
+/** The words of a grade as the grade list writes them: upper case, GRADE as GR, the letter O as the digit 0 (the sheets have both 16Mo3 and 16M03). */
+const gradeWords = (s: string) => s.toUpperCase().replace(/GRADE/g, "GR").replace(/O/g, "0").split(/[^A-Z0-9]+/).filter(Boolean).slice(0, 8);
+/** SQL: every word of the grade is found in the grade's code (`$n` is the array of words, see gradeWords). So "sa gr 11" finds "SA 387 GR 11 CL2". */
+const gradeHas = (col: string, n: number) => `not exists (select 1 from unnest($${n}::text[]) w where translate(upper(${col}), 'O', '0') not like '%' || w || '%')`;
+
 const P = { type: "string" } as const;
 const N = { type: "number" } as const;
 const DATE = { type: "string", description: "YYYY-MM-DD" } as const;
@@ -54,7 +61,7 @@ async function lotRefs(ctx: ToolCtx, lots: LotLike[]) {
   const rows = await findSheetRows(ctx, tokens, STOCK_SHEETS);
   const out = new Map<number, string[]>();
   for (const l of lots) {
-    const ids = [appRef(ctx, `Plate ${l.lot_no} in the app`, `/stock/${l.lot_no}`)];
+    const ids = [appRef(ctx, `Plate ${l.lot_no} in the app`, `/plates/${l.lot_no}`)];
     const hit = rows.get(l.plate_no || l.heat_no || "") ?? [];
     for (const h of hit.slice(0, 2)) { const id = await sheetRef(ctx, h.source_key, h.tab, h.row_no); if (id) ids.push(id); }
     out.set(l.lot_no, ids);
@@ -67,8 +74,8 @@ type AppPage = { path: string; title: string; what: string; who: Who };
 const PAGES: AppPage[] = [
   { path: "/", title: "Stock overview", what: "stock now, received and sold in a period, charts", who: "all" },
   { path: "/summary", title: "Summary", what: "stock by grade and thickness", who: "all" },
-  { path: "/stock", title: "Plates", what: "every plate with heat and plate number, filters, plate history", who: "all" },
-  { path: "/stock/check", title: "Stock check", what: "do we have this plate: type grade and size", who: "all" },
+  { path: "/plates", title: "Plates", what: "every plate with heat and plate number, filters, plate history", who: "all" },
+  { path: "/stock-check", title: "Stock check", what: "do we have this plate: type grade and size", who: "all" },
   { path: "/count", title: "Physical count", what: "count the yard and settle differences", who: "all" },
   { path: "/mill-orders", title: "Mill orders", what: "what was ordered from the mills and what has arrived; vehicle weights", who: "all" },
   { path: "/documents", title: "Documents", what: "upload a PO, enquiry, vendor invoice or mill certificate to be read and confirmed", who: "docs" },
@@ -127,11 +134,57 @@ export const TOOLS: Tool[] = [
         `select g.code grade, l.thickness_mm::float8 thickness_mm, count(*)::int plates, sum(greatest(coalesce(l.balance_pieces, 0), 1))::int pieces, round(sum(l.balance_kg))::int kg
            from public.v_lots_current l join public.grades g on g.id = l.grade_id
           where l.current_status = 'available' and l.balance_kg > 0
-            and ($1::text is null or g.code ilike $1 or g.id in (select a.grade_id from public.grade_aliases a where a.alias_norm = app.norm_text($3)))
+            and (cardinality($1::text[]) = 0 or ${gradeHas("g.code", 1)} or g.id in (select a.grade_id from public.grade_aliases a where translate(a.alias_norm, 'O', '0') = translate(app.norm_text($3), 'O', '0')))
             and ($2::numeric is null or abs(l.thickness_mm - $2) <= 0.05)
-          group by 1, 2 order by kg desc limit 30`, [like(grade), numv(i.thickness_mm), grade]);
+          group by 1, 2 order by kg desc limit 30`, [gradeWords(grade), numv(i.thickness_mm), grade]);
       const ref = appRef(ctx, "Stock summary page", "/summary");
       return { rows, refs: [ref], data_as_of: await stockAsOf(ctx) };
+    },
+  },
+  {
+    name: "stock_age",
+    who: "all",
+    description: "How long plates have been lying in stock: the OLDEST plates still available (by the date they were received), optionally for one grade and/or one thickness, with the date received and days in stock, plus how much stock sits in each age band. Use for 'oldest stock', 'which plates have been here longest', 'slow moving', 'how old is our stock'.",
+    schema: { type: "object", properties: { grade: P, thickness_mm: N, limit: N } },
+    async run(i, ctx) {
+      const words = gradeWords(str(i.grade)), thk = numv(i.thickness_mm);
+      const from = `from public.v_lots_current l left join public.grades g on g.id = l.grade_id left join public.entities e on e.id = l.entity_id
+         where l.current_status = 'available' and l.balance_kg > 0 and l.receipt_date is not null
+           and (cardinality($1::text[]) = 0 or ${gradeHas("g.code", 1)}) and ($2::numeric is null or abs(l.thickness_mm - $2) <= 0.05)`;
+      const rows = await q<{ lot_no: number; plate_no: string | null; heat_no: string | null } & Record<string, unknown>>(
+        `select l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thk, l.width_mm::float8 width, l.length_mm::float8 length, l.heat_no, l.plate_no, l.receipt_date::text received,
+                (current_date - l.receipt_date)::int days_in_stock, round(l.balance_kg)::int kg, l.balance_pieces pieces, e.code company
+           ${from} order by l.receipt_date asc, l.lot_no limit ${limit(i.limit, 10, 20)}`, [words, thk]);
+      const bands = await q(
+        `select case when l.receipt_date < current_date - 730 then 'over 2 years' when l.receipt_date < current_date - 365 then '1 to 2 years' when l.receipt_date < current_date - 180 then '6 to 12 months' else 'under 6 months' end age,
+                count(*)::int plates, round(sum(l.balance_kg))::int kg ${from} group by 1 order by min(l.receipt_date)`, [words, thk]);
+      const refs = await lotRefs(ctx, rows);
+      return { oldest_first: rows.map((r) => ({ ...r, refs: refs.get(r.lot_no) })), stock_by_age: bands, note: "age is counted from the receipt date in the stock sheets", data_as_of: await stockAsOf(ctx) };
+    },
+  },
+  {
+    name: "stock_movements",
+    who: "all",
+    description: "What went in and out of stock in a period, or in all time: receipts (bought), sales (sold), cuts, adjustments and counts, added up by kind, with a breakdown by grade, thickness or month and the latest individual movements. Optionally for one grade, thickness or kind. Use for 'what changed in stock this week', 'how much did we sell of grade X', 'what did we receive in October', 'sales by grade'. Give dates as YYYY-MM-DD (work them out from today's date).",
+    schema: { type: "object", properties: { from: DATE, to: DATE, grade: P, thickness_mm: N, kind: { type: "string", enum: ["receipt", "sale", "cut_out", "cut_in", "adjustment", "opening_count", "reversal"] }, group_by: { type: "string", enum: ["grade", "thickness", "month"], description: "how to split the breakdown; default grade" } } },
+    async run(i, ctx) {
+      const args = [day(i.from), day(i.to), gradeWords(str(i.grade)), numv(i.thickness_mm), str(i.kind, 14) || null];
+      const base = `from public.stock_movements m join public.v_lots_current l on l.id = m.lot_id left join public.grades g on g.id = l.grade_id
+         where ($1::date is null or m.movement_date >= $1::date) and ($2::date is null or m.movement_date <= $2::date)
+           and (cardinality($3::text[]) = 0 or ${gradeHas("g.code", 3)}) and ($4::numeric is null or abs(l.thickness_mm - $4) <= 0.05) and ($5::text is null or m.movement_type::text = $5)`;
+      const g = str(i.group_by, 10);
+      const split = g === "month" ? "to_char(m.movement_date, 'YYYY-MM')" : g === "thickness" ? "l.thickness_mm::float8" : "g.code";
+      const totals = await q(`select m.movement_type::text kind, count(*)::int movements, count(distinct m.lot_id)::int plates, abs(sum(m.pieces))::int pieces, round(abs(sum(m.weight_kg)))::int kg ${base} group by 1 order by 1`, args);
+      const breakdown = await q(`select m.movement_type::text kind, ${split} as ${g === "month" ? "month" : g === "thickness" ? "thickness_mm" : "grade"}, abs(sum(m.pieces))::int pieces, round(abs(sum(m.weight_kg)))::int kg ${base} group by 1, 2 order by 1, 4 desc limit 30`, args);
+      const latest = await q<{ lot_no: number } & Record<string, unknown>>(
+        `select m.movement_date::text date, m.movement_type::text kind, g.code grade, l.thickness_mm::float8 thk, l.width_mm::float8 width, l.length_mm::float8 length, l.heat_no, l.plate_no, l.lot_no::int lot_no, m.pieces, round(m.weight_kg)::int kg, left(m.note, 80) note
+           ${base} order by m.movement_date desc, m.seq desc limit 10`, args);
+      return {
+        period: { from: args[0], to: args[1] }, totals_by_kind: totals, breakdown,
+        latest: latest.map(({ lot_no, ...r }) => ({ ...r, plate: lot_no, refs: [appRef(ctx, `Plate ${lot_no} in the app`, `/plates/${lot_no}`)] })),
+        note: "kg and pieces in the totals are absolute (sales leave stock, receipts enter it); in 'latest' a minus sign means it left stock. Movements come from the stock sheets as loaded into the stock book, so very recent sheet changes may not be in yet.",
+        refs: [appRef(ctx, "Plates in the app", "/plates"), appRef(ctx, "Stock overview", "/")], data_as_of: await stockAsOf(ctx),
+      };
     },
   },
   {
@@ -172,24 +225,27 @@ export const TOOLS: Tool[] = [
   {
     name: "orders_search",
     who: "admin",
-    description: "Customer orders (the Dispatch FMS): by client, PO number, order number, status or date. Returns orders with grades, status and vehicles.",
-    schema: { type: "object", properties: { client: P, po_no: P, order_no: P, status: { ...P, description: "part of the status text" }, since: DATE, limit: N } },
+    description: "Customer orders (the Dispatch FMS): by client, PO number, order number, status or date. Returns how many orders match (total, open, complete) and the orders with grades, status and vehicles. An order's status is 'Open' (not fully dispatched: pending) or 'Complete' (all lines dispatched). For 'how many orders are pending' use status Open and read the counts.",
+    schema: { type: "object", properties: { client: { ...P, description: "customer name, or part of it; spaces and punctuation do not matter" }, po_no: P, order_no: P, status: { ...P, description: "Open (pending) or Complete" }, since: DATE, limit: N } },
     async run(i, ctx) {
-      const rows = await q<{ order_no: string; first_row: number | null } & Record<string, unknown>>(
+      const st0 = str(i.status, 20);
+      const status = !st0 ? null : /pend|open|not.*(done|dispatch|deliver)|undeliver|incomplete/i.test(st0) ? "Open" : /complete|done|deliver|dispatched|closed|finish/i.test(st0) ? "Complete" : st0;
+      const rows = await q<{ order_no: string; first_row: number | null; total_matching: number; open_matching: number } & Record<string, unknown>>(
         `select o.order_no, o.company, o.salesperson, o.client, o.po_no, o.order_date::text, o.etd::text, o.delivery_location, o.lines, o.done_lines, o.status, o.grades, o.vehicles,
-                (select min(l.row_no)::int from public.v_order_lines l where l.order_no = o.order_no) first_row
+                (select min(l.row_no)::int from public.v_order_lines l where l.order_no = o.order_no) first_row,
+                (count(*) over ())::int total_matching, (count(*) filter (where o.status = 'Open') over ())::int open_matching
            from public.v_orders o
-          where ($1::text is null or o.client ilike $1) and ($2::text is null or o.po_no ilike $2) and ($3::text is null or o.order_no = $3)
+          where ($1::text is null or ${nameHas("o.client", 1)}) and ($2::text is null or o.po_no ilike $2) and ($3::text is null or o.order_no = $3)
             and ($4::text is null or o.status ilike $4) and ($5::date is null or o.order_date >= $5::date)
-          order by o.order_date desc nulls last limit ${limit(i.limit)}`, [like(str(i.client)), like(str(i.po_no)), str(i.order_no) || null, like(str(i.status)), day(i.since)]);
-      const out = [];
+          order by o.order_date desc nulls last limit ${limit(i.limit)}`, [str(i.client) || null, like(str(i.po_no)), str(i.order_no) || null, status ? like(status) : null, day(i.since)]);
+      const orders = [];
       for (const r of rows) {
         const refs = [appRef(ctx, `Order ${r.order_no} in the app`, `/orders/${encodeURIComponent(r.order_no)}`)];
         if (r.first_row) { const s = await sheetRef(ctx, "dispatch_fms", "FormResponses", r.first_row); if (s) refs.push(s); }
-        const { first_row: _drop, ...rest } = r; void _drop;
-        out.push({ ...rest, refs });
+        const { first_row: _drop, total_matching: _t, open_matching: _o, ...rest } = r; void _drop; void _t; void _o;
+        orders.push({ ...rest, refs });
       }
-      return out;
+      return { total_matching: rows[0]?.total_matching ?? 0, open_among_them: rows[0]?.open_matching ?? 0, shown: orders.length, orders, note: rows.length ? "orders are listed newest first; the same customer may be written in several ways in the orders sheet and all spellings are included" : "no order matches; the customer name may be written differently in the sheet" };
     },
   },
   {
@@ -233,7 +289,7 @@ export const TOOLS: Tool[] = [
       if (party) {
         const rows = await q<{ entity: string; row_no: number } & Record<string, unknown>>(
           `select entity, row_no::int row_no, party, invoice_no, invoice_date::text, due_date::text, amount::float8, received::float8, pending::float8, overdue_days from public.v_receivables
-            where pending > 0 and party ilike $1 order by overdue_days desc nulls last, pending desc limit 30`, [like(party)]);
+            where pending > 0 and ${nameHas("party", 1)} order by overdue_days desc nulls last, pending desc limit 30`, [party]);
         const out = [];
         for (const r of rows) { const s = await sheetRef(ctx, PAY_SOURCE[r.entity] ?? "spf_payment_better", "M Sale", r.row_no); const { row_no: _r, ...rest } = r; void _r; out.push({ ...rest, refs: s ? [s] : [] }); }
         return out;
@@ -262,7 +318,7 @@ export const TOOLS: Tool[] = [
       if (vendor) {
         const rows = await q<{ entity: string; row_no: number } & Record<string, unknown>>(
           `select entity, row_no::int row_no, vendor, invoice_no, invoice_date::text, due_date::text, amount::float8, advance::float8, pending::float8, overdue_days from public.v_payables
-            where pending > 0 and vendor ilike $1 order by due_date nulls last limit 30`, [like(vendor)]);
+            where pending > 0 and ${nameHas("vendor", 1)} order by due_date nulls last limit 30`, [vendor]);
         const out = [];
         for (const r of rows) { const s = await sheetRef(ctx, PAY_SOURCE[r.entity] ?? "spf_payment_better", "M Pur", r.row_no); const { row_no: _r, ...rest } = r; void _r; out.push({ ...rest, refs: s ? [s] : [] }); }
         return out;
@@ -291,12 +347,12 @@ export const TOOLS: Tool[] = [
       const rows = await q<{ entity: string; row_no: number } & Record<string, unknown>>(
         sales
           ? `select entity, row_no::int row_no, invoice_no, invoice_date::text, client party, amount::float8, po_no, transporter, due_date::text from public.v_sales_invoices
-              where ($1::text is null or client ilike $1) and ($2::text is null or invoice_no ilike $2) and ($3::date is null or invoice_date >= $3::date) and ($4::date is null or invoice_date <= $4::date)
+              where ($1::text is null or ${nameHas("client", 1)}) and ($2::text is null or invoice_no ilike $2) and ($3::date is null or invoice_date >= $3::date) and ($4::date is null or invoice_date <= $4::date)
               order by invoice_date desc nulls last limit ${limit(i.limit)}`
           : `select entity, row_no::int row_no, invoice_no, invoice_date::text, vendor party, amount::float8, weight::float8 weight_kg, rate::float8, due_date::text from public.v_purchase_invoices
-              where ($1::text is null or vendor ilike $1) and ($2::text is null or invoice_no ilike $2) and ($3::date is null or invoice_date >= $3::date) and ($4::date is null or invoice_date <= $4::date)
+              where ($1::text is null or ${nameHas("vendor", 1)}) and ($2::text is null or invoice_no ilike $2) and ($3::date is null or invoice_date >= $3::date) and ($4::date is null or invoice_date <= $4::date)
               order by invoice_date desc nulls last limit ${limit(i.limit)}`,
-        [like(str(i.party)), like(str(i.invoice_no)), day(i.from), day(i.to)]);
+        [str(i.party) || null, like(str(i.invoice_no)), day(i.from), day(i.to)]);
       const out = [];
       for (const r of rows) { const s = await sheetRef(ctx, "form_responses", entityTab(r.entity, sales ? "Inv" : "Pur"), r.row_no); const { row_no: _r, ...rest } = r; void _r; out.push({ ...rest, refs: s ? [s] : [] }); }
       return out;
@@ -356,10 +412,10 @@ export const TOOLS: Tool[] = [
                 (select string_agg(coalesce(i.item_name, '?') || ' ' || coalesce(i.quantity::text, '') || ' ' || coalesce(i.unit, '') || ' @' || coalesce(i.rate::text, ''), '; ' order by i.line_no) from public.tally_voucher_items i where i.voucher_id = v.id) items
            from public.tally_vouchers v
           where v.deleted_at is null and ($1::text is null or v.voucher_no ilike $1) and ($2::text is null or v.irn ilike $2) and ($3::text is null or v.eway_bill_no = $3)
-            and ($4::text is null or v.vehicle_no ilike $4) and ($5::text is null or v.party_ledger ilike $5) and ($6::text is null or v.voucher_type ilike $6)
+            and ($4::text is null or v.vehicle_no ilike $4) and ($5::text is null or ${nameHas("v.party_ledger", 5)}) and ($6::text is null or v.voucher_type ilike $6)
             and ($7::date is null or v.voucher_date >= $7::date) and ($8::date is null or v.voucher_date <= $8::date)
           order by v.voucher_date desc limit ${limit(i.limit, 8, 15)}`,
-        [like(str(i.voucher_no)), like(str(i.irn)), str(i.eway_bill_no) || null, like(str(i.vehicle_no)), like(str(i.party)), str(i.type) || null, day(i.from), day(i.to)]);
+        [like(str(i.voucher_no)), like(str(i.irn)), str(i.eway_bill_no) || null, like(str(i.vehicle_no)), str(i.party) || null, str(i.type) || null, day(i.from), day(i.to)]);
       return rows.map(({ id, ...r }) => ({ ...r, refs: r.type === "Sales" ? [appRef(ctx, `Tally invoice ${r.voucher_no}${r.party ? ` · ${r.party}` : ""}`, `/tally/invoices/${id}`)] : [appRef(ctx, "Tally customers and vendors", "/tally/parties")] }));
     },
   },
@@ -385,7 +441,7 @@ export const TOOLS: Tool[] = [
       const sheetHits = await findSheetRows(ctx, t.heats.map((h) => h.heat), STOCK_SHEETS);
       const heats = [];
       for (const h of t.heats) {
-        const refs = h.lots.slice(0, 2).map((l) => appRef(ctx, `Plate ${l.lot_no} in the app`, `/stock/${l.lot_no}`));
+        const refs = h.lots.slice(0, 2).map((l) => appRef(ctx, `Plate ${l.lot_no} in the app`, `/plates/${l.lot_no}`));
         for (const x of (sheetHits.get(h.heat.trim()) ?? []).slice(0, 1)) { const s = await sheetRef(ctx, x.source_key, x.tab, x.row_no); if (s) refs.push(s); }
         for (const d of h.cert_docs.slice(0, 1)) refs.push(appRef(ctx, `Certificate ${d.file}`, `/documents/${d.id}`));
         heats.push({ heat: h.heat, plates_in_books: h.lots.length, certificates_filed: [...new Set(h.lots.flatMap((l) => l.certs))], certificate_documents_read: h.cert_docs.length, refs });
@@ -427,9 +483,9 @@ export const TOOLS: Tool[] = [
     description: "A customer or vendor in Tally: the ledger balance (positive = they owe us, negative = we owe them), GSTIN, and the open bills.",
     schema: { type: "object", properties: { name: P }, required: ["name"] },
     async run(i, ctx) {
-      const n = like(str(i.name));
-      const ledgers = await q(`select (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = company_id) company, name, parent_group, gstin, state, closing_balance::float8 balance_rs from public.tally_ledgers where deleted_at is null and name ilike $1 order by abs(coalesce(closing_balance, 0)) desc limit 6`, [n]);
-      const bills = await q(`select (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = company_id) company, kind, party_ledger party, count(*)::int bills, round(sum(pending_amount))::bigint pending_rs, min(due_date)::text oldest_due from public.tally_outstanding_bills where party_ledger ilike $1 group by 1, 2, 3 order by 5 desc limit 8`, [n]);
+      const n = str(i.name);
+      const ledgers = await q(`select (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = company_id) company, name, parent_group, gstin, state, closing_balance::float8 balance_rs from public.tally_ledgers where deleted_at is null and ${nameHas("name", 1)} order by abs(coalesce(closing_balance, 0)) desc limit 6`, [n]);
+      const bills = await q(`select (select en.code from public.tally_companies tc join public.entities en on en.id = tc.entity_id where tc.id = company_id) company, kind, party_ledger party, count(*)::int bills, round(sum(pending_amount))::bigint pending_rs, min(due_date)::text oldest_due from public.tally_outstanding_bills where ${nameHas("party_ledger", 1)} group by 1, 2, 3 order by 5 desc limit 8`, [n]);
       return { ledgers, open_bills: bills, refs: [appRef(ctx, `Tally customers and vendors: ${str(i.name)}`, `/tally/parties?q=${encodeURIComponent(str(i.name))}`)] };
     },
   },
@@ -461,8 +517,8 @@ export const TOOLS: Tool[] = [
       const rows = await q<{ id: string; kind: string } & Record<string, unknown>>(
         `select d.id, d.kind::text kind, d.status, d.customer_name, d.tally_ledger is not null as found_in_tally, d.po_no, d.doc_no, d.doc_date::text, d.total_amount::float8 total_rs,
                 (select count(*)::int from public.draft_lines l where l.draft_id = d.id) lines, d.created_at::date::text as made
-           from public.drafts d where ($1::text = 'all' or d.status = $1) and ($2::text is null or d.customer_name ilike $2) and ($3::text is null or d.po_no ilike $3 or d.doc_no ilike $3)
-          order by d.created_at desc limit ${limit(i.limit)}`, [st, like(str(i.customer)), like(str(i.po_no))]);
+           from public.drafts d where ($1::text = 'all' or d.status = $1) and ($2::text is null or ${nameHas("d.customer_name", 2)}) and ($3::text is null or d.po_no ilike $3 or d.doc_no ilike $3)
+          order by d.created_at desc limit ${limit(i.limit)}`, [st, str(i.customer) || null, like(str(i.po_no))]);
       return rows.map(({ id, ...r }) => ({ ...r, refs: [appRef(ctx, `Draft ${r.customer_name ?? ""} ${r.doc_no ?? r.po_no ?? ""}`.trim(), `/drafts/${id}`)] }));
     },
   },
@@ -511,7 +567,7 @@ export type Scope = (typeof SCOPES)[number];
 export const SCOPE_LABEL: Record<Scope, string> = { all: "Everything", stock: "Stock", orders: "Orders and dispatch", money: "Money", mail: "Mail and leads", tally: "Tally", documents: "Documents", sheets: "Sheets" };
 // the "Look in" choice narrows which lookups the model may use: faster, cheaper and it cannot wander
 const SCOPE_OF: Record<string, Scope> = {
-  stock_check: "stock", stock_summary: "stock", plate_lookup: "stock", overview: "all",
+  stock_check: "stock", stock_summary: "stock", stock_age: "stock", stock_movements: "stock", plate_lookup: "stock", overview: "all",
   orders_search: "orders", order_detail: "orders", dispatch_search: "orders",
   receivables: "money", payables: "money", invoices_search: "money", payments_search: "money",
   leads_mail_quotes: "mail", tally_voucher: "tally", tally_party: "tally", invoice_trail: "tally", paperwork_gaps: "tally",

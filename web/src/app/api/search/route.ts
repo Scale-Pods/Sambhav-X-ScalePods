@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       `select order_no, client, po_no from public.v_orders where order_no = $2 or po_no ilike $1 order by order_date desc nulls last limit 3`, [like, text]) : Promise.resolve([]),
   ]);
   const hits: Hit[] = [
-    ...plates.map((p) => ({ kind: "plate" as const, label: `Plate ${p.lot_no} · ${p.key ?? ""}`.trim(), sub: `${p.grade ?? ""} · ${p.thk} mm · ${Math.round(p.kg).toLocaleString("en-IN")} kg left`, href: `/stock/${p.lot_no}` })),
+    ...plates.map((p) => ({ kind: "plate" as const, label: `Plate ${p.lot_no} · ${p.key ?? ""}`.trim(), sub: `${p.grade ?? ""} · ${p.thk} mm · ${Math.round(p.kg).toLocaleString("en-IN")} kg left`, href: `/plates/${p.lot_no}` })),
     ...invoices.map((v) => ({ kind: "invoice" as const, label: `Tally invoice ${v.voucher_no}`, sub: `${(v.party ?? "").replace(/\s*\((Sale|Pur|Rent)\)\s*$/i, "")} · ₹${Math.round(v.amount).toLocaleString("en-IN")}`, href: `/tally/invoices/${v.id}` })),
     ...orders.map((o) => ({ kind: "order" as const, label: `Order ${o.order_no}`, sub: `${o.client ?? ""}${o.po_no ? ` · PO ${o.po_no}` : ""}`, href: `/orders/${encodeURIComponent(o.order_no)}` })),
   ];

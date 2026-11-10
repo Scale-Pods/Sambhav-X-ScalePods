@@ -5,7 +5,7 @@ import { BarChart3 } from "lucide-react";
 import { pageDefault, parseFilter, periodLabel } from "@/lib/filters";
 import { useToday } from "./useToday";
 
-const FILTERED = ["/", "/summary", "/stock", "/review"];
+const FILTERED = ["/", "/summary", "/plates", "/review"];
 
 /** Header reminder of which period the page is showing (the picker itself sits above the content). */
 export function PeriodPill() {

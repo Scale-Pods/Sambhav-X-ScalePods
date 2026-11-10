@@ -93,7 +93,7 @@ export async function PostResults({ sessionId, status, canSend, canDecide, me, f
                 const high = r.risk_tier === "high";
                 return (
                   <tr key={r.id} className="align-top hover:bg-surface/60">
-                    <td className={td}><Link href={`/stock/${r.lot_no}`} className="font-semibold text-brand hover:underline">{r.ident}</Link><div className="text-[0.75rem] text-muted">{r.grade}</div></td>
+                    <td className={td}><Link href={`/plates/${r.lot_no}`} className="font-semibold text-brand hover:underline">{r.ident}</Link><div className="text-[0.75rem] text-muted">{r.grade}</div></td>
                     <td className={td}><Badge tone={o.tone}>{o.label}</Badge>{(Number(r.window_out_kg) > 0 || Number(r.window_in_kg) > 0) && <div className="mt-1 text-[0.72rem] text-muted">moved during count: {kg(r.window_out_kg)} out, {kg(r.window_in_kg)} in</div>}</td>
                     <td className={td + " num text-right"}>{kg(r.books_kg)}</td>
                     <td className={td + " num text-right"}>{r.counted_opening_kg == null ? "-" : kg(r.counted_opening_kg)}</td>

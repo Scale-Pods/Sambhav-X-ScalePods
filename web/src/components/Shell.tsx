@@ -27,8 +27,8 @@ export function Shell({ children }: { children: ReactNode }) {
               <NavLink href="/"><Home className={icon} />Overview</NavLink>
               <NavLink href="/digital-brain"><Sparkles className={icon} />Digital Brain</NavLink>
               <NavLink href="/summary"><Table2 className={icon} />Summary</NavLink>
-              <NavLink href="/stock"><Layers className={icon} />Plates</NavLink>
-              <NavLink href="/stock/check"><PackageSearch className={icon} />Stock check</NavLink>
+              <NavLink href="/plates"><Layers className={icon} />Plates</NavLink>
+              <NavLink href="/stock-check"><PackageSearch className={icon} />Stock check</NavLink>
               <NavLink href="/count"><ClipboardCheck className={icon} />Physical count</NavLink>
               <NavLink href="/mill-orders"><Factory className={icon} />Mill orders</NavLink>
             </div>
@@ -57,7 +57,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <Logo />
           </Link>
           <Suspense fallback={
-            <form action="/stock" className="relative ml-auto w-full max-w-md lg:ml-0">
+            <form action="/plates" className="relative ml-auto w-full max-w-md lg:ml-0">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <input name="q" placeholder="Search a plate, heat number or invoice, or ask a question" className="w-full rounded-md border border-line bg-field py-2 pl-9 pr-3 text-[0.95rem] placeholder:text-muted/80" />
             </form>

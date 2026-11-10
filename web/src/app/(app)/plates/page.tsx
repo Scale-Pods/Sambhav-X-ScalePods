@@ -35,7 +35,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const at = (changes: Record<string, string | undefined>) => {
     const p = new URLSearchParams(raw);
     Object.entries(changes).forEach(([k, v]) => (v ? p.set(k, v) : p.delete(k)));
-    return `/stock?${p}`;
+    return `/plates?${p}`;
   };
   const exportHref = `/api/export/plates?${new URLSearchParams(raw)}`;
   const admin = canExport(me?.role);
@@ -58,7 +58,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     <FilterShell grades={grades} extra={extra}>
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
-          <form action="/stock" className="relative min-w-64 flex-1">
+          <form action="/plates" className="relative min-w-64 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input name="q" defaultValue={pq.search} placeholder="Plate no, heat no or grade" className="w-full rounded-md border border-line bg-field py-2 pl-9 pr-3" />
             {Object.entries(raw).filter(([k]) => !["q", "page"].includes(k)).map(([k, v]) => <input key={k} type="hidden" name={k} value={String(v)} />)}
@@ -88,7 +88,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
               {rows.map((r) => (
                 <tr key={r.lot_no} className="hover:bg-brand-soft/30">
                   <td className={td}>
-                    <Link href={`/stock/${r.lot_no}`} className="font-semibold text-brand hover:underline">{r.plate_no ?? r.heat_no}</Link>
+                    <Link href={`/plates/${r.lot_no}`} className="font-semibold text-brand hover:underline">{r.plate_no ?? r.heat_no}</Link>
                     {r.plate_no && r.heat_no && <div className="text-[0.78rem] text-muted">heat {r.heat_no}</div>}
                   </td>
                   <td className={td}>{r.grade}</td>

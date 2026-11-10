@@ -183,6 +183,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
   useEffect(() => { if (!pform) return; const k = (e: KeyboardEvent) => { if (e.key === "Escape") setPform(null); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [pform]);
   // a chat opened from AI mode ("Continue in Digital Brain")
   const opened = useRef(false);
+  const opening = useRef(0);
   useEffect(() => { if (initialChat && !opened.current) { opened.current = true; void openChat(initialChat); } }, [initialChat]); // eslint-disable-line react-hooks/exhaustive-deps
   // searching inside the words of past questions and answers, not only their titles
   const [inside, setInside] = useState<Set<string>>(new Set());
@@ -204,15 +205,18 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
 
   async function openChat(id: string) {
     if (busy) return;
-    setDrawer(false); setLoadingChat(true); setActiveId(id); setNewIn(null); setFiles([]); setFileNote(null);
+    const mine = ++opening.current; // only the chat opened last may fill the screen
+    // the chat that was on screen goes away at once: never show its answers under another chat's title while this one loads
+    setDrawer(false); setLoadingChat(true); setActiveId(id); setNewIn(null); setFiles([]); setFileNote(null); setMessages([]); setChatCost(0);
     try {
       const r = await fetch(`/api/ask/chats/${id}`, { cache: "no-store" });
       if (!r.ok) throw new Error();
       const j = (await r.json()) as { chat: Chat; messages: Msg[]; usd: number };
+      if (mine !== opening.current) return;
       setMessages(j.messages.map((m) => ({ ...m, meta: m.meta ?? null })));
       setModel(models.some((x) => x.value === j.chat.model) ? j.chat.model : defaultModel); setScope(j.chat.scope); setChatCost(j.usd);
-    } catch { setMessages([]); }
-    setLoadingChat(false);
+    } catch { if (mine === opening.current) setMessages([]); }
+    if (mine === opening.current) setLoadingChat(false);
   }
   function newChatIn(projectId: string | null) { if (busy) return; setNewIn(projectId); if (projectId) setOpenProjects((s) => new Set(s).add(projectId)); setActiveId(null); setMessages([]); setChatCost(0); setFiles([]); setFileNote(null); setDrawer(false); box.current?.focus(); }
   function newChat() { if (busy) return; setNewIn(null); setActiveId(null); setMessages([]); setChatCost(0); setFiles([]); setFileNote(null); setDrawer(false); box.current?.focus(); }

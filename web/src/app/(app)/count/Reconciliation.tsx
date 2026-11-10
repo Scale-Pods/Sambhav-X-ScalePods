@@ -52,7 +52,7 @@ export async function Reconciliation({ sessionId, filter, canExport, startedLabe
                 const out = Number(r.out_before_kg), inn = Number(r.in_before_kg), diff = r.diff_kg == null ? null : Number(r.diff_kg);
                 return (
                   <tr key={r.lot_id} className="hover:bg-surface/60">
-                    <td className={td}><Link href={`/stock/${r.lot_no}`} className="font-semibold text-brand hover:underline">{r.ident}</Link>{r.count_lines > 1 && <div className="text-[0.75rem] text-warn">counted {r.count_lines} times: check</div>}</td>
+                    <td className={td}><Link href={`/plates/${r.lot_no}`} className="font-semibold text-brand hover:underline">{r.ident}</Link>{r.count_lines > 1 && <div className="text-[0.75rem] text-warn">counted {r.count_lines} times: check</div>}</td>
                     <td className={td}>{r.grade} <span className="text-muted">· {Number(r.thickness_mm)} mm</span></td>
                     <td className={td + " num text-right"}>{kg(r.books_kg)}</td>
                     <td className={td + " num text-right"}>{kg(r.counted_kg)}</td>

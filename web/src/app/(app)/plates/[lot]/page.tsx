@@ -9,7 +9,7 @@ import { Badge, Card, Skeleton, td, th } from "@/components/ui";
 export default function LotPage({ params }: { params: Promise<{ lot: string }> }) {
   return (
     <>
-      <Link href="/stock" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink"><ArrowLeft className="h-4 w-4" /> All plates</Link>
+      <Link href="/plates" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink"><ArrowLeft className="h-4 w-4" /> All plates</Link>
       <Suspense fallback={<Card><Skeleton rows={10} /></Card>}>
         <Body params={params} />
       </Suspense>

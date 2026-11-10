@@ -22,8 +22,8 @@ export function SectionView({ s }: { s: Section }) {
               <tr key={i} className="hover:bg-surface/60">
                 <td className={cell}>{day(r.date)}</td><td className={cell + num}>{r.thk}</td><td className={cell + num}>{f(r.wid)}</td><td className={cell + num}>{f(r.len)}</td>
                 <td className={cell + num}>{r.nos}</td><td className={cell + num + " font-medium"}>{f(r.wt)}</td>
-                <td className={cell}><Link prefetch={false} href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.heat ?? ""}</Link></td>
-                <td className={cell}>{r.plate ?? (r.heat ? "" : <Link prefetch={false} href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">open</Link>)}</td>
+                <td className={cell}><Link prefetch={false} href={`/plates/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.heat ?? ""}</Link></td>
+                <td className={cell}>{r.plate ?? (r.heat ? "" : <Link prefetch={false} href={`/plates/${r.lot_no}`} className="font-medium text-brand hover:underline">open</Link>)}</td>
                 <td className={cell}>{r.links.map((l) => <a key={l.label} href={l.url} target="_blank" rel="noreferrer" className="mr-1.5 font-medium text-brand hover:underline">{l.label}</a>)}</td>
                 <td className={cell}>{r.hsn ?? ""}</td><td className={cell + num}>{r.rate == null ? "" : r.rate.toFixed(2)}</td>
               </tr>
@@ -40,7 +40,7 @@ export function SectionView({ s }: { s: Section }) {
                 <td className={cell}>{day(r.date)}</td><td className={cell}>{r.inv ?? ""}</td><td className={cell}>{r.vno ?? ""}</td>
                 <td className={cell + num}>{r.thk}</td><td className={cell + num}>{f(r.wid)}</td><td className={cell + num}>{f(r.len)}</td>
                 <td className={cell + num}>{r.nos}</td><td className={cell + num + " font-medium"}>{f(r.wt)}</td><td className={cell}>{r.plot ?? ""}</td>
-                <td className={cell}><Link prefetch={false} href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.ident ?? ""}</Link></td>
+                <td className={cell}><Link prefetch={false} href={`/plates/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.ident ?? ""}</Link></td>
                 <td className={cell + " max-w-[16rem] truncate"} title={r.note ?? undefined}>{r.adjustment ? "Count adjustment" : r.note ?? ""}</td>
               </tr>
             ))}
@@ -55,7 +55,7 @@ export function SectionView({ s }: { s: Section }) {
               <tr key={i} className="hover:bg-surface/60">
                 <td className={cell}>{r.plot ?? ""}</td><td className={cell + num}>{r.thk}</td><td className={cell + num}>{f(r.wid)}</td><td className={cell + num}>{f(r.len)}</td>
                 <td className={cell + num}>{r.nos}</td><td className={cell + num + " font-medium"}>{f(r.wt)}</td>
-                <td className={cell}><Link prefetch={false} href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.ident ?? ""}</Link></td>
+                <td className={cell}><Link prefetch={false} href={`/plates/${r.lot_no}`} className="font-medium text-brand hover:underline">{r.ident ?? ""}</Link></td>
               </tr>
             ))}
             <tr><td colSpan={5} className="bg-surface px-2 py-1 text-right text-[0.72rem] font-bold uppercase text-muted">Total balance</td><td className="num bg-surface px-2 py-1 text-right text-[0.82rem] font-bold">{f(s.totals.bal)}</td><td className="bg-surface" /></tr>

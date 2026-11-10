@@ -21,7 +21,10 @@ export function NavProgress() {
     };
     const onSubmit = (e: SubmitEvent) => {
       const f = e.target as HTMLFormElement | null;
-      if (f && f.method.toLowerCase() === "get") setState("run");
+      if (!f || f.method.toLowerCase() !== "get") return;
+      setState("run");
+      // a form the page handles itself (the top search) may end up going nowhere: do not leave the bar stuck half way
+      if (e.defaultPrevented) window.setTimeout(() => setState((s) => (s === "run" ? "idle" : s)), 2500);
     };
     document.addEventListener("click", onClick);
     document.addEventListener("submit", onSubmit);

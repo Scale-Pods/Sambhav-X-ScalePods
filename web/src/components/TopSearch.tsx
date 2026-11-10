@@ -14,8 +14,8 @@ type PastChat = { id: string; title: string; updated_at: string };
 
 // the page the person is on -> a name, the part of the records that fits it (narrows what the AI looks in: faster and cheaper) and a few starting questions
 const PAGES: { prefix: string; title: string; scope: string; ask: string[] }[] = [
-  { prefix: "/stock/check", title: "Stock check", scope: "stock", ask: ["Do we have SA 387 GR 22 CL2, 40 mm, 1250 × 6000?", "Which grades have the least stock?"] },
-  { prefix: "/stock", title: "Plates", scope: "stock", ask: ["Which plates are the oldest in stock?", "How much SA 516 Gr 70 do we have?"] },
+  { prefix: "/stock-check", title: "Stock check", scope: "stock", ask: ["Do we have SA 387 GR 22 CL2, 40 mm, 1250 × 6000?", "Which grades have the least stock?"] },
+  { prefix: "/plates", title: "Plates", scope: "stock", ask: ["Which plates are the oldest in stock?", "How much SA 516 Gr 70 do we have?"] },
   { prefix: "/summary", title: "Summary", scope: "stock", ask: ["Which grade has the most stock?", "How much 50 mm plate do we have in all?"] },
   { prefix: "/count", title: "Physical count", scope: "stock", ask: ["How is the physical count going?"] },
   { prefix: "/mill-orders", title: "Mill orders", scope: "stock", ask: ["Which mill orders are still to arrive?"] },
@@ -44,7 +44,7 @@ export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: strin
   const sp = useSearchParams();
   const page = pageOf(path);
 
-  const [value, setValue] = useState(path === "/stock" ? (sp.get("q") ?? "") : "");
+  const [value, setValue] = useState(path === "/plates" ? (sp.get("q") ?? "") : "");
   const [focus, setFocus] = useState(false);
   const [hits, setHits] = useState<Hit[]>([]);
   const [active, setActive] = useState(0);
@@ -65,7 +65,7 @@ export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: strin
   const pageRef = useRef(page); pageRef.current = page;
 
   // the bar lives in the layout, so it would keep the last words typed on every page: empty it when another page opens (the plate search shows its own query)
-  const stockQ = path === "/stock" ? (sp.get("q") ?? "") : "";
+  const stockQ = path === "/plates" ? (sp.get("q") ?? "") : "";
   const [seen, setSeen] = useState(path + "|" + stockQ);
   if (seen !== path + "|" + stockQ) { setSeen(path + "|" + stockQ); setValue(stockQ); setHits([]); }
 
@@ -179,7 +179,7 @@ export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: strin
     const out: { key: string; run: () => void }[] = [];
     if (t.length >= 2) {
       const aiRow = { key: "ai", run: () => void ask(t) };
-      const plateRow = { key: "plates", run: () => { setFocus(false); router.push(`/stock?q=${encodeURIComponent(t)}`); } };
+      const plateRow = { key: "plates", run: () => { setFocus(false); router.push(`/plates?q=${encodeURIComponent(t)}`); } };
       if (question) out.push(aiRow);
       hits.forEach((h) => out.push({ key: h.href, run: () => { setFocus(false); router.push(h.href); } }));
       out.push(plateRow);
@@ -196,7 +196,15 @@ export function TopSearch({ admin, thinkKey }: { admin: boolean; thinkKey: strin
   return (
     <>
       <form
-        onSubmit={(e) => { e.preventDefault(); if (rows[active]) rows[active].run(); else if (t) router.push(`/stock?q=${encodeURIComponent(t)}`); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (rows[active]) rows[active].run();
+          else if (t) router.push(`/plates?q=${encodeURIComponent(t)}`);
+          else if (path === "/plates" && sp.get("q")) { // the search was cleared: back to the plates list without it (other filters stay)
+            const p = new URLSearchParams(sp.toString()); p.delete("q"); p.delete("page"); setFocus(false);
+            router.push(p.size ? `/plates?${p}` : "/plates");
+          }
+        }}
         className="relative ml-auto w-full max-w-md lg:ml-0"
       >
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />

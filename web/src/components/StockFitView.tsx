@@ -13,7 +13,7 @@ function LotList({ lots, label }: { lots: FitLot[]; label?: string }) {
       <ul className="space-y-0.5 text-[0.85rem]">
         {lots.map((l) => (
           <li key={l.lot_no} className="flex flex-wrap items-baseline gap-x-2">
-            <Link href={`/stock/${l.lot_no}`} className="font-medium text-brand hover:underline">Plate {l.lot_no}</Link>
+            <Link href={`/plates/${l.lot_no}`} className="font-medium text-brand hover:underline">Plate {l.lot_no}</Link>
             <span className="num">{size(l)} mm</span>
             <span className="text-muted">{kgFmt.format(l.balance_kg)} kg{l.balance_pieces ? ` · ${l.balance_pieces} pc` : ""}</span>
             {l.part && <Badge tone="warning" info="This plate has been partly cut. The length shown is what is left (worked out from its weight); it arrived this long.">part plate, cut from {l.original_length_mm}</Badge>}

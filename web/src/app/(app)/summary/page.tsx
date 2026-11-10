@@ -107,7 +107,7 @@ function GradeBlock({ grade, list, sub, cols, val, unit }: {
   return (
     <>
       <tr className="border-t border-line bg-surface/70">
-        <td className={td + " font-semibold"} colSpan={2}><Link href={`/stock?g=${encodeURIComponent(grade)}`} className="hover:text-brand hover:underline">{grade}</Link></td>
+        <td className={td + " font-semibold"} colSpan={2}><Link href={`/plates?g=${encodeURIComponent(grade)}`} className="hover:text-brand hover:underline">{grade}</Link></td>
         {cols.map((k) => <td key={k} className={td + " num text-right font-semibold"}>{weight(val(sub, k), unit)}</td>)}
         <td className={td + " num text-right font-semibold"}>{sub.plates}</td>
       </tr>

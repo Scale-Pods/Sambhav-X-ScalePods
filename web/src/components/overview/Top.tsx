@@ -25,7 +25,7 @@ export async function Headline({ f, pay, ord, sp }: OverviewProps) {
     const waiting = c.decide + c.docs_review + c.drafts;
     return (
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <TileLink href={carry(sp, "/stock", {}, ["p", "from", "to"])}><Stat label="Stock" value={weight(k.stock, f.unit)} unit={unitLabel(f.unit)} sub={`${f0.format(k.plates)} plates with material left`} /></TileLink>
+        <TileLink href={carry(sp, "/plates", {}, ["p", "from", "to"])}><Stat label="Stock" value={weight(k.stock, f.unit)} unit={unitLabel(f.unit)} sub={`${f0.format(k.plates)} plates with material left`} /></TileLink>
         <TileLink href={carry(sp, "/payments/receivables")}><Stat label="Customers owe us" value={rupeesShort(p.rec.total)} sub={`${rupeesShort(p.rec.overdue)} past the due date`} tone="accent" /></TileLink>
         <TileLink href={carry(sp, "/payments/payables")}><Stat label="We owe suppliers" value={rupeesShort(p.pay.total)} sub={`${rupeesShort(p.pay.overdue)} past the due date`} /></TileLink>
         <TileLink href={carry(sp, "/orders/list", { show: "open" })}><Stat label="Open orders" value={f0.format(o.open.n)} sub={`${f0.format(o.open.late)} past the delivery date`} /></TileLink>

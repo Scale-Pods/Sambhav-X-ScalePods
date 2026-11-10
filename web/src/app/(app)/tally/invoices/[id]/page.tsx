@@ -90,7 +90,7 @@ async function Body({ params }: { params: P }) {
             <div key={h.heat} className="rounded-md border border-line bg-surface/40 px-3 py-2.5">
               <p className="font-medium">Heat {h.heat}</p>
               <p className="mt-0.5 text-[0.85rem] text-muted">
-                {h.lots.length ? <>In our books: {h.lots.map((l, i) => <span key={l.lot_no}>{i > 0 ? ", " : ""}<Link href={`/stock/${l.lot_no}`} className="font-medium text-brand hover:underline">plate {l.lot_no}</Link>{l.plate_no ? ` (${l.plate_no})` : ""} · {l.status}</span>)}</> : "Not found in our plates."}
+                {h.lots.length ? <>In our books: {h.lots.map((l, i) => <span key={l.lot_no}>{i > 0 ? ", " : ""}<Link href={`/plates/${l.lot_no}`} className="font-medium text-brand hover:underline">plate {l.lot_no}</Link>{l.plate_no ? ` (${l.plate_no})` : ""} · {l.status}</span>)}</> : "Not found in our plates."}
               </p>
               <p className="mt-1 text-[0.85rem]">
                 {h.lots.some((l) => l.certs.length) ? <><Badge tone="ok">Certificate filed</Badge> <span className="text-muted">{[...new Set(h.lots.flatMap((l) => l.certs))].join(", ")}</span></>

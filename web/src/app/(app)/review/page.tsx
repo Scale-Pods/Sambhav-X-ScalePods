@@ -92,7 +92,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
                   <p className="leading-snug">{r.message}</p>
                   <p className="mt-0.5 text-[0.78rem] text-muted">{KIND[r.kind] ?? r.kind}</p>
                 </td>
-                <td className={td + " whitespace-nowrap"}>{r.lot_no ? <Link href={`/stock/${r.lot_no}`} className="font-medium text-brand hover:underline">Plate #{r.lot_no}</Link> : <span className="text-muted">not loaded</span>}</td>
+                <td className={td + " whitespace-nowrap"}>{r.lot_no ? <Link href={`/plates/${r.lot_no}`} className="font-medium text-brand hover:underline">Plate #{r.lot_no}</Link> : <span className="text-muted">not loaded</span>}</td>
                 <td className={td + " text-right"}>
                   {mayDecide ? <div className="flex justify-end"><ApproveButton id={r.id} /></div> : <span className="text-sm text-muted">view only</span>}
                 </td>

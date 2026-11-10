@@ -45,10 +45,12 @@ export function inputsFromRead(r: Read): { line: number; input: FitInput }[] {
 
 async function resolveGrade(raw: string): Promise<{ id: string | null; code: string | null; how: "list" | "close" | "none"; candidates: string[] }> {
   if (!raw) return { id: null, code: null, how: "none", candidates: [] };
+  // the letter O and the digit 0 are taken as the same (the sheets write 16Mo3 and 16M03), and when two grade entries both fit, the one that has plates wins
   const hit = await q<{ id: string; code: string }>(
     `select id, code from (
-       select g.id, g.code from public.grade_aliases a join public.grades g on g.id = a.grade_id where a.alias_norm = app.norm_text($1)
-       union all select g.id, g.code from public.grades g where app.norm_text(g.code) = app.norm_text($1)) x limit 1`, [raw]);
+       select g.id, g.code from public.grade_aliases a join public.grades g on g.id = a.grade_id where translate(a.alias_norm, 'O', '0') = translate(app.norm_text($1), 'O', '0')
+       union all select g.id, g.code from public.grades g where translate(app.norm_text(g.code), 'O', '0') = translate(app.norm_text($1), 'O', '0')) x
+     order by exists (select 1 from public.lots l where l.grade_id = x.id) desc limit 1`, [raw]);
   if (hit[0]) return { id: hit[0].id, code: hit[0].code, how: "list", candidates: [] };
   const close = await q<{ code: string }>(
     `select code from (select distinct g.code, similarity(a.alias_norm, app.norm_text($1)) s
