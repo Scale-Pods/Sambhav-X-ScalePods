@@ -1,0 +1,1 @@
+powershell -ExecutionPolicy Bypass -File "E:\Export\tally-daybook.ps1" -Port 9001 -Out "E:\Export\daybook-sambhav"
