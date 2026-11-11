@@ -43,3 +43,10 @@ Thumbs.db
 # credentials (repo is public)
 secrets/
 *service-account*.json
+
+# personal notes and local files, not for the repo
+.obsidian/
+Sambav Weekly Meet.md
+tools/tally (2).zip
+tools/tally/commads.txt
+docs/app/
