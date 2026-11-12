@@ -1,6 +1,7 @@
 name: Sheets sync
 
 # One-way mirror: Google Sheets -> Supabase. Reads sheets, never writes to them.
+# After the copy, the stock book (plates and sales) is brought up to date from the two live stock sheets: additions only, nothing is deleted or changed.
 on:
   schedule:
     # once a day, 06:30 India time. The sheets are a temporary source until each part moves into the app, so a daily copy is enough;
@@ -12,6 +13,10 @@ on:
         description: "Re-read every sheet even if unchanged"
         type: boolean
         default: false
+      stock_load:
+        description: "Also bring the stock book up to date from the stock sheets afterwards"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -37,3 +42,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: python tools/sync/sheets_sync.py ${{ inputs.force && '--force' || '' }}
+      - name: Stock book
+        if: ${{ github.event_name == 'schedule' || inputs.stock_load }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python tools/import/stock_refresh.py --commit

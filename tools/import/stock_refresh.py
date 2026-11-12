@@ -14,6 +14,7 @@ The stock_movements balance trigger is switched off for this transaction only (a
 import io
 import json
 import os
+import re
 import sys
 import uuid
 from collections import defaultdict
@@ -107,6 +108,12 @@ def main() -> None:
         books = {c: (i, e) for i, e, c in cur.fetchall()}
         cur.execute("select code, id from public.grades")
         grade_id = dict(cur.fetchall())
+        # a grade the sheet writes differently from our list ("SA 537 CL 1" for "SA537 CL1 PLATE") is found through its aliases, so no second grade is ever made for it
+        cur.execute("select alias_norm, grade_id from public.grade_aliases")
+        alias_grade = dict(cur.fetchall())
+
+        def grade_of(name):
+            return grade_id.get(name) or alias_grade.get(re.sub(r"[^A-Z0-9]", "", (name or "").upper()))
 
         report, plan = [], {}
         for code, live, moves in (("WB1", lots1, alloc1), ("WB2", lots2, moves2)):
@@ -167,6 +174,7 @@ def main() -> None:
             report += [(code, "weight differs", "", n, k, f"{a} -> {b}") for n, k, a, b in wchg]
 
         import csv
+        DATA.mkdir(parents=True, exist_ok=True)  # the data folder is not in the repository, so it is missing on a fresh machine (the daily run)
         with open(DATA / "stock-refresh-report.csv", "w", newline="", encoding="utf-8-sig") as fh:
             w = csv.writer(fh)
             w.writerow(["book", "what", "tab / grade", "row / lot", "plate or heat", "kg"])
@@ -192,7 +200,7 @@ def main() -> None:
                 if not l["receipt_date"]:
                     exceptions.append(("legacy_data", "warning", f"{code} live {l['tab']} row {l['row']}: purchase has no receipt date, so it was not added", {"tab": l["tab"], "row": l["row"]}, None, None))
                     continue
-                gid = grade_id.get(l["grade"])
+                gid = grade_of(l["grade"])
                 if gid is None:
                     exceptions.append(("legacy_data", "warning", f"{code} live {l['tab']} row {l['row']}: grade {l['grade']} is not in the grade list, so it was not added", {"tab": l["tab"], "row": l["row"]}, None, None))
                     continue
@@ -241,6 +249,11 @@ def main() -> None:
         for no, g, k, rec, bal in cur.fetchall():
             if rec:
                 exceptions.append(("weight_warning", "warning", f"Lot {no} ({g} {k}) sold {-bal:.0f} kg more than received", {"lot_no": no, "balance_kg": float(bal)}, None, None))
+        if exceptions:
+            # the same plate is skipped again on every daily run until the sheet is fixed: a note that is already in the review list is not added twice
+            cur.execute("select message from public.exceptions where message = any(%s)", ([e[2] for e in exceptions],))
+            known = {r[0] for r in cur.fetchall()}
+            exceptions = [e for e in exceptions if e[2] not in known]
         if exceptions:
             cur.executemany("insert into public.exceptions (kind, severity, message, context, related_table, related_id) values (%s,%s,%s,%s,%s,%s)",
                             [(k, s, m, json.dumps(c, default=str), t, i) for k, s, m, c, t, i in exceptions])
