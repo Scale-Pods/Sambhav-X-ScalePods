@@ -1,28 +1,27 @@
--- 60: mail sync. The mailboxes the app reads (Gmail, read-only), the mails it picked up, and the stock suggestions read from the mill's "Dispatch details" mails.
+-- 60: mail sync. Gmail access for the mailboxes the app reads (read-only), the mill's "Dispatch details" mails picked up from them, and the stock suggestions read from those mails.
 -- DRAFT: not applied until the owner says so.
+--
+-- The existing mail tables (mailboxes, mail_threads, mail_messages: the mail tracker) are NOT changed. A mailbox keeps its row in public.mailboxes (address, active,
+-- last_synced_at, sync_cursor); the Google login for it is kept apart in mailbox_tokens, which the app's login role cannot read at all.
 --
 -- Nothing here changes stock by itself. A mail only ever becomes a suggestion (mill_receipts, status 'pending'). Plates are added only when a person with the
 -- right role approves it (mill_receipt_approve), and a mill invoice item can be received once, whatever mail it comes in.
 
--- ---------------------------------------------------------------- the mailboxes
-create table public.mail_accounts (
-  id             uuid primary key default gen_random_uuid(),
-  provider       text not null default 'gmail' check (provider in ('gmail')),
-  email          text not null unique,
-  token_enc      text not null,                    -- Google's refresh token, encrypted by the server; the app's login role cannot read this column
+-- ---------------------------------------------------------------- the Google login of a mailbox (server only)
+create table public.mailbox_tokens (
+  mailbox_id     uuid primary key references public.mailboxes (id) on delete cascade,
+  token_enc      text not null,                    -- Google's refresh token, encrypted by the server
   connected_by   uuid references public.staff (id),
   connected_at   timestamptz not null default now(),
-  active         boolean not null default true,
   sender_filter  text not null default '',         -- a part of the sender's name or address; empty = any sender
   subject_filter text not null default 'dispatch detail', -- a part of the subject
-  last_synced_at timestamptz,
   last_error     text
 );
 
--- ---------------------------------------------------------------- the mails picked up (only those that match the filter)
-create table public.mail_messages (
+-- ---------------------------------------------------------------- the mill mails picked up (only those that match the filter)
+create table public.mill_mails (
   id             uuid primary key default gen_random_uuid(),
-  account_id     uuid not null references public.mail_accounts (id) on delete cascade,
+  mailbox_id     uuid not null references public.mailboxes (id) on delete cascade,
   gmail_id       text not null,
   thread_id      text,
   from_name      text,
@@ -35,14 +34,14 @@ create table public.mail_messages (
   status         text not null default 'new' check (status in ('new', 'read', 'no_table', 'failed')),
   note           text,
   created_at     timestamptz not null default now(),
-  unique (account_id, gmail_id)
+  unique (mailbox_id, gmail_id)
 );
-create index mail_messages_received on public.mail_messages (received_at desc);
+create index mill_mails_received on public.mill_mails (received_at desc);
 
 -- ---------------------------------------------------------------- the suggestion a person sees: one per mail
 create table public.mill_receipts (
   id          uuid primary key default gen_random_uuid(),
-  message_id  uuid unique references public.mail_messages (id) on delete set null,
+  message_id  uuid unique references public.mill_mails (id) on delete set null,
   status      text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   rows        jsonb not null,                      -- the plates as read (lib/mill/dispatchTable.ts DispatchRow)
   consignments jsonb not null default '[]',
@@ -66,19 +65,17 @@ create table public.mill_receipt_lines (
 );
 
 -- ---------------------------------------------------------------- who may see what
-alter table public.mail_accounts enable row level security;
-alter table public.mail_messages enable row level security;
+alter table public.mailbox_tokens enable row level security; -- no policy and no grant: only the server reads or writes it
+alter table public.mill_mails enable row level security;
 alter table public.mill_receipts enable row level security;
 alter table public.mill_receipt_lines enable row level security;
 
-create policy mail_accounts_read on public.mail_accounts for select to authenticated using (app.is_admin());
-create policy mail_messages_read on public.mail_messages for select to authenticated using (app.is_internal());
+create policy mill_mails_read on public.mill_mails for select to authenticated using (app.is_internal());
 create policy mill_receipts_read on public.mill_receipts for select to authenticated using (app.is_internal());
 create policy mill_receipt_lines_read on public.mill_receipt_lines for select to authenticated using (app.is_internal());
 
-revoke all on public.mail_accounts, public.mail_messages, public.mill_receipts, public.mill_receipt_lines from anon, authenticated;
-grant select (id, provider, email, connected_by, connected_at, active, sender_filter, subject_filter, last_synced_at, last_error) on public.mail_accounts to authenticated; -- never the token
-grant select on public.mail_messages, public.mill_receipts, public.mill_receipt_lines to authenticated;
+revoke all on public.mailbox_tokens, public.mill_mails, public.mill_receipts, public.mill_receipt_lines from anon, authenticated;
+grant select on public.mill_mails, public.mill_receipts, public.mill_receipt_lines to authenticated;
 -- writes happen only on the server (the sync) and through the two checked functions below
 
 -- ---------------------------------------------------------------- approve: the only way a mail adds stock
