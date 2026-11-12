@@ -7,7 +7,7 @@ import { exchangeCode, gmail } from "@/lib/mail/google";
 /** Google sends the person back here with a one-time code. It is swapped for a refresh token, which is stored encrypted next to the mailbox. */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const back = (query: string) => { const r = NextResponse.redirect(new URL(`/mill-mail?${query}`, url.origin)); r.cookies.delete({ name: "mail_oauth", path: "/api/mail/google" }); return r; };
+  const back = (query: string) => { const r = NextResponse.redirect(new URL(`/mail/mailboxes?${query}`, url.origin)); r.cookies.delete({ name: "mail_oauth", path: "/api/mail/google" }); return r; };
   const me = await currentStaff().catch(() => null);
   if (!me || !canExport(me.role)) return NextResponse.json({ error: "Only the owner or an administrator may connect a mailbox." }, { status: 403 });
   if (url.searchParams.get("error")) return back(`error=${encodeURIComponent("Google did not allow it: " + url.searchParams.get("error"))}`);

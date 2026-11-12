@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
       { source: "/ask", destination: "/digital-brain", permanent: true },
       { source: "/ask/:path*", destination: "/digital-brain/:path*", permanent: true },
       // Plates and Stock check used to live under /stock: old links, bookmarks and links saved in past chats keep working
+      { source: "/mill-mail", destination: "/mail/dispatch", permanent: true },
       { source: "/stock/check", destination: "/stock-check", permanent: true },
       { source: "/stock", destination: "/plates", permanent: true },
       { source: "/stock/:path*", destination: "/plates/:path*", permanent: true },

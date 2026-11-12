@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { MailboxFilter, NoTracker } from "@/components/MailboxFilter";
+import { mailScope } from "@/lib/mailboxes";
 import { connection } from "next/server";
 import { ExternalLink } from "lucide-react";
 import { Badge, Card, Skeleton } from "@/components/ui";
@@ -17,6 +19,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
   await connection();
   const sp = await searchParams;
   const p = readMailParams(sp);
+  const scope = await mailScope(sp.mb);
+  if (!scope.tracker) return <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]} extra={<MailboxFilter mb={sp.mb} />}><NoTracker what="Quotations" label={scope.label} /></FilterShell>;
   const d = await quotesList(p);
   const link = linker("/mail/quotations", sp);
   const cols: Col<QuoteRow>[] = [
@@ -34,7 +38,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   ];
   return (
     <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]}
-      extra={<><ParamSearch placeholder="Quote no., client, email, material" value={p.q} />
+      extra={<><MailboxFilter mb={sp.mb} /><ParamSearch placeholder="Quote no., client, email, material" value={p.q} />
         <ParamSelect name="show" label="Show" value={p.show} options={[{ value: "all", label: "All quotations" }, { value: "followup", label: "No follow-up yet" }, { value: "numbered", label: "With a quote number" }, { value: "won", label: "Orders won" }]} /></>}>
       <Card title="Quotations">
         <PayTable cols={cols} rows={d.rows} />

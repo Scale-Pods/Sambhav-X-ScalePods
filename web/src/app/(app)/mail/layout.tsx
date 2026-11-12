@@ -4,14 +4,14 @@ import { canSeeBusiness, currentStaff } from "@/lib/auth";
 import { SectionTabs } from "@/components/SectionTabs";
 import { Card, PageHeader, Skeleton } from "@/components/ui";
 
-const TABS: [string, string][] = [["/mail", "Overview"], ["/mail/quotations", "Quotations"], ["/mail/inbox", "Inbox"], ["/mail/clients", "Clients"], ["/mail/leads", "IndiaMART leads"]];
+const TABS: [string, string][] = [["/mail", "Overview"], ["/mail/quotations", "Quotations"], ["/mail/inbox", "Inbox"], ["/mail/clients", "Clients"], ["/mail/leads", "IndiaMART leads"], ["/mail/dispatch", "Mill dispatch"], ["/mail/mailboxes", "Mailboxes"]];
 
 export default function MailLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PageHeader
         title="Mail and leads" help="Pending means nobody has replied yet. Urgent and Follow up come from the status in the Email Tracker sheet. Leads are enquiries from IndiaMART; buy leads are people who want to buy."
-        hint="Enquiry mail, quotations and clients from your Email Tracker, and the leads from IndiaMART. A read-only copy that refreshes once a day; the Email Tracker sheet keeps doing its work for now."
+        hint="Enquiry mail, quotations and clients from your Email Tracker, the leads from IndiaMART, and the mill's dispatch mails read from the connected mailboxes. The tracker and leads are read-only copies that refresh once a day."
       />
       <Suspense fallback={<Card><Skeleton rows={8} /></Card>}>
         <Gate>{children}</Gate>

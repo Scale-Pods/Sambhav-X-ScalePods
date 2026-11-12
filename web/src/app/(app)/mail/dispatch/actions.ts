@@ -15,7 +15,7 @@ export async function syncNow(): Promise<Result> {
   try {
     const results = await syncAll();
     if (results.length === 0) return { ok: false, error: "No mailbox is connected yet." };
-    revalidatePath("/mill-mail");
+    revalidatePath("/mail/dispatch"); revalidatePath("/mail/inbox"); revalidatePath("/mail/mailboxes");
     const bad = results.find((r) => r.error);
     if (bad) return { ok: false, error: `${bad.address}: ${bad.error}` };
     const n = results.reduce((a, r) => a + r.suggestions, 0), mails = results.reduce((a, r) => a + r.new_mails, 0);
@@ -31,7 +31,7 @@ export async function disconnectMailbox(mailboxId: string): Promise<Result> {
   if (!me || !canExport(me.role)) return { ok: false, error: "Only the owner or an administrator may do this." };
   if (!UUID.test(mailboxId)) return { ok: false, error: "Bad id" };
   await serviceQuery(`delete from public.mailbox_tokens where mailbox_id = $1`, [mailboxId]);
-  revalidatePath("/mill-mail");
+  revalidatePath("/mail/dispatch"); revalidatePath("/mail/inbox"); revalidatePath("/mail/mailboxes");
   return { ok: true, message: "Disconnected. You can also remove the app's access in your Google account." };
 }
 
@@ -42,7 +42,7 @@ export async function approveReceipt(id: string): Promise<Result> {
   if (!me || !canDecide(me.role)) return { ok: false, error: "Only an approver, an administrator or the owner may add stock from a mail." };
   try {
     const [r] = await call<{ r: { added: number; already_received: number } }>(`select public.mill_receipt_approve($1::uuid) r`, [id]);
-    revalidatePath("/mill-mail");
+    revalidatePath("/mail/dispatch"); revalidatePath("/mail/inbox"); revalidatePath("/mail/mailboxes");
     revalidatePath("/plates");
     revalidatePath("/summary");
     return { ok: true, message: `${r.r.added} plate${r.r.added === 1 ? "" : "s"} added to stock${r.r.already_received ? `, ${r.r.already_received} already received before` : ""}.` };
@@ -55,7 +55,7 @@ export async function rejectReceipt(id: string, note: string): Promise<Result> {
   if (!UUID.test(id)) return { ok: false, error: "Bad id" };
   try {
     await call(`select public.mill_receipt_reject($1::uuid, $2)`, [id, note.trim().slice(0, 300)]);
-    revalidatePath("/mill-mail");
+    revalidatePath("/mail/dispatch"); revalidatePath("/mail/inbox"); revalidatePath("/mail/mailboxes");
     return { ok: true, message: "Set aside. No stock was added." };
   } catch (e) {
     return { ok: false, error: userMessage(e) };

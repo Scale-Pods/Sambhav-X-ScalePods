@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { MailboxFilter, NoTracker } from "@/components/MailboxFilter";
+import { mailScope } from "@/lib/mailboxes";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { mailOverview, readMailParams } from "@/lib/mail";
@@ -22,6 +24,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
   await connection(); // the period depends on today's date
   const sp = await searchParams;
   const p = readMailParams(sp);
+  const scope = await mailScope(sp.mb);
+  if (!scope.tracker) return <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]} extra={<MailboxFilter mb={sp.mb} />}><NoTracker what="The overview figures" label={scope.label} /></FilterShell>;
   const o = await mailOverview(p.f);
   const keep = (path: string, extra: Record<string, string> = {}) => {
     const u = new URLSearchParams(extra);
@@ -30,7 +34,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   };
 
   return (
-    <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]}>
+    <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]} extra={<MailboxFilter mb={sp.mb} />}>
       <p className="-mt-3 mb-5 text-[0.88rem] text-muted">
         Quotations and leads for <span className="font-semibold text-ink">{periodLabel(p.f)}</span>. The inbox is today&apos;s position, whatever the period.
       </p>

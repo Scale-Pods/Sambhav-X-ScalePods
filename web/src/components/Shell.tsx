@@ -9,7 +9,7 @@ import { SidebarShell } from "./SidebarShell";
 import { PeriodPill } from "./PeriodPill";
 import { ThemeToggle } from "./ThemeToggle";
 import { TopSearchGate } from "./TopSearchGate";
-import { MillMailBell, MillMailNav } from "./MillMailNav";
+import { MillMailBell } from "./MillMailNav";
 import { UserChip } from "./UserChip";
 import { ViewToggle } from "./ViewToggle";
 
@@ -43,7 +43,6 @@ export function Shell({ children }: { children: ReactNode }) {
               <NavLink href="/review"><ShieldAlert className={icon} />Needs review</NavLink>
               <NavLink href="/documents"><FileText className={icon} />Documents</NavLink>
               <NavLink href="/drafts"><ListChecks className={icon} />Drafts</NavLink>
-              <Suspense fallback={null}><MillMailNav /></Suspense>
             </div>
           </nav>
         </Suspense>

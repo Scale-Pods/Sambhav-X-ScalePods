@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { MailboxFilter, NoTracker } from "@/components/MailboxFilter";
+import { mailScope } from "@/lib/mailboxes";
 import { connection } from "next/server";
 import { Card, Skeleton } from "@/components/ui";
 import { FilterShell, ParamSearch, ParamSelect } from "@/components/FilterBar";
@@ -16,6 +18,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
   await connection();
   const sp = await searchParams;
   const p = readMailParams(sp, "all");
+  const scope = await mailScope(sp.mb);
+  if (!scope.tracker) return <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]} extra={<MailboxFilter mb={sp.mb} />}><NoTracker what="Clients" label={scope.label} /></FilterShell>;
   const d = await clientsList(p);
   const link = linker("/mail/clients", sp);
   const cols: Col<ClientRow>[] = [
@@ -29,7 +33,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   ];
   return (
     <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]}
-      extra={<><ParamSearch placeholder="Client or email" value={p.q} />
+      extra={<><MailboxFilter mb={sp.mb} /><ParamSearch placeholder="Client or email" value={p.q} />
         <ParamSelect name="grade" label="Grade" value={p.grade} options={[{ value: "all", label: "All" }, { value: "A", label: "A" }, { value: "B", label: "B" }, { value: "C", label: "C" }]} /></>}>
       <p className="-mt-3 mb-5 text-[0.88rem] text-muted">Grades are as set in the Email Tracker. Almost every client is still graded C, so the grade says little yet.</p>
       <Card title="Clients">
