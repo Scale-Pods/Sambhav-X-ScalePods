@@ -46,6 +46,7 @@ function ChallanPanel({ m }: { m: ChallanMatch }) {
               {l.hits.length > 0 && <div className="mt-0.5"><Hits hits={l.hits} />{l.best?.balance_pieces != null && <span className="text-muted">· {l.best.balance_pieces} pcs left</span>}</div>}
               {l.est_kg != null && <span className="ml-1 text-[0.82rem] text-muted">about {kg(l.est_kg)}</span>}
               {l.notes.map((n, i) => <p key={i} className="text-[0.82rem] text-warn">{n}</p>)}
+              {l.similar.length > 0 && <p className="text-[0.82rem] text-muted">Did you mean: <Hits hits={l.similar} />? Correct the heat number above if so.</p>}
             </li>
           );
         })}

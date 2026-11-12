@@ -107,7 +107,7 @@ async function triage(first: Anthropic.ImageBlockParam | undefined, text: string
     const m = MODELS.first;
     const client = new Anthropic({ maxRetries: 2, timeout: 60_000 });
     const r = await client.messages.create({
-      model: m.id, max_tokens: 100, system: TRIAGE_SYSTEM,
+      model: m.id, max_tokens: 1500, system: TRIAGE_SYSTEM,
       output_config: { format: { type: "json_schema", schema: TRIAGE_SCHEMA as Record<string, unknown> } },
       messages: [{ role: "user", content: [first, { type: "text", text: `${text ? `Start of the text layer:\n${text.slice(0, 1200)}\n\n` : ""}What kind of document is this?` }] }],
     });

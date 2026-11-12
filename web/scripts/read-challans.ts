@@ -32,11 +32,13 @@ async function main() {
     // 1. what is it, and which way up?
     const first = await image(buf, 0);
     const tri = await client.messages.create({
-      model: MODELS.first.id, max_tokens: 100, system: TRIAGE_SYSTEM, output_config: { format: { type: "json_schema", schema: TRIAGE_SCHEMA as Record<string, unknown> } },
+      model: MODELS.first.id, max_tokens: 1500, system: TRIAGE_SYSTEM, output_config: { format: { type: "json_schema", schema: TRIAGE_SCHEMA as Record<string, unknown> } },
       messages: [{ role: "user", content: [first, { type: "text", text: "What kind of document is this?" }] }],
     });
     spent += usd(MODELS.first, tri.usage);
-    const t = JSON.parse((tri.content.find((b) => b.type === "text") as Anthropic.TextBlock).text) as { family: string; rotate: string };
+    const tb = tri.content.find((b) => b.type === "text") as Anthropic.TextBlock | undefined;
+    if (!tb) { console.error("triage returned no text:", tri.stop_reason, JSON.stringify(tri.content).slice(0, 400)); throw new Error("no triage answer"); }
+    const t = JSON.parse(tb.text) as { family: string; rotate: string };
     const turn = Number(t.rotate) || 0;
     // 2. the challan read on the upright picture
     const pic = turn ? await image(buf, turn) : first;

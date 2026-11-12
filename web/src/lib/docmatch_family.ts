@@ -27,6 +27,7 @@ export type ChallanHit = {
 };
 export type ChallanLineMatch = {
   n: number; key: string; verdict: "ok" | "short" | "thickness" | "not_found" | "several"; hits: ChallanHit[]; best: ChallanHit | null; est_kg: number | null; notes: string[];
+  similar: ChallanHit[]; // when the heat is not found: the closest heat numbers of the same thickness (a handwritten number often loses or changes a character)
 };
 export type ChallanMatch = { family: "challan"; same: { id: string; file: string; decided: string }[]; lines: ChallanLineMatch[]; est_kg: number; written_kg: number | null };
 
@@ -61,6 +62,15 @@ async function challanLots(heat: string): Promise<ChallanHit[]> {
   const exact = await q<ChallanHit>(`${CHALLAN_LOTS} where app.norm_text(l.heat_no) = app.norm_text($1) or app.norm_text(l.plate_no) = app.norm_text($1) order by l.lot_no limit 8`, [h]);
   if (exact.length || app_len(h) < 6) return exact;
   return q<ChallanHit>(`${CHALLAN_LOTS} where app.norm_text(l.heat_no) like app.norm_text($1) || '%' and length(app.norm_text(l.heat_no)) <= length(app.norm_text($1)) + 2 order by l.lot_no limit 8`, [h]);
+}
+
+/** Heat numbers that look like the one written, of about the same thickness: for a heat that was misread. Needs the trigram index of the book already used for grades. */
+async function similarLots(heat: string, thickness: number | null): Promise<ChallanHit[]> {
+  const h = heat.trim();
+  if (app_len(h) < 4) return [];
+  return q<ChallanHit>(
+    `${CHALLAN_LOTS} where similarity(app.norm_text(l.heat_no), app.norm_text($1)) >= 0.45 and l.current_status = 'available' and ($2::numeric is null or abs(l.thickness_mm - $2) <= 0.6)
+      order by similarity(app.norm_text(l.heat_no), app.norm_text($1)) desc, l.lot_no limit 3`, [h, thickness]);
 }
 
 const KG_PER_MM3 = 7.85e-6;
@@ -108,7 +118,8 @@ export async function matchChallan(r: ChallanRead, docId: string): Promise<Chall
       est = p * (full ? (best!.kg_per_piece as number) : theo);
       estTotal += num(l.weight_kg) ?? est;
     }
-    lines.push({ n: i + 1, key, verdict, hits: sized.length ? sized : found, best, est_kg: est, notes });
+    const similar = verdict === "not_found" || verdict === "thickness" ? await similarLots(l.heat_no, t) : [];
+    lines.push({ n: i + 1, key, verdict, hits: sized.length ? sized : found, best, est_kg: est, notes, similar });
   }
   return { family: "challan", same, lines, est_kg: estTotal, written_kg: num(r.total_weight_kg) };
 }
