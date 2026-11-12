@@ -132,6 +132,12 @@ export async function qTx<T>(fn: (q: <R = Record<string, unknown>>(sql: string, 
   });
 }
 
+/** For the server's own jobs, with nobody signed in (the mail sync the scheduler starts): runs as the database owner and so skips the row rules.
+ *  Only ever called behind a check that cannot be faked: the scheduler's secret, or a signed-in administrator. Never used for a page. */
+export async function serviceQuery<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+  return timed(sql, async () => (await pool.query(sql, params)).rows as T[]);
+}
+
 /** Write as the signed-in person. Only ever used to call the checked functions in the database (record_count_line and friends). */
 export async function call<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
   const id = await currentUserId();
