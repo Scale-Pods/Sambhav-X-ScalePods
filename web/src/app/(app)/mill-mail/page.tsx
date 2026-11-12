@@ -55,6 +55,10 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const gradeOf = new Map(grades.map((g) => [g.txt, g.code]));
   const books = new Set((await q<{ code: string }>(`select distinct e.code from public.stock_books b join public.entities e on e.id = b.owner_entity_id`)).map((b) => b.code));
 
+  // mails that looked like a dispatch mail but held no table the reader could use: shown so that nothing disappears quietly
+  const unread = await q<{ id: string; subject: string | null; from_name: string | null; from_addr: string | null; received_at: string | null; attachment_names: string[]; note: string | null }>(
+    `select id, subject, from_name, from_addr, received_at::text, attachment_names, note from public.mill_mails where status = 'no_table' order by received_at desc nulls last limit 8`);
+
   const boxes = admin
     ? await serviceQuery<{ mailbox_id: string; address: string; last_synced_at: string | null; last_error: string | null; sender_filter: string; subject_filter: string }>(
         `select m.id mailbox_id, m.address, m.last_synced_at::text, t.last_error, t.sender_filter, t.subject_filter from public.mailboxes m join public.mailbox_tokens t on t.mailbox_id = m.id order by m.address`)
@@ -135,6 +139,20 @@ async function Body({ searchParams }: { searchParams: SP }) {
           );
         })}
       </section>
+
+      {unread.length > 0 && (
+        <Card title="Mails with no table found" aside={<span className="text-[0.82rem] text-muted">The app could not find the dispatch table in these</span>}>
+          <ul className="divide-y divide-line">
+            {unread.map((m) => (
+              <li key={m.id} className="px-5 py-3 text-[0.9rem]">
+                <p className="font-medium">{m.subject || "(no subject)"}</p>
+                <p className="text-[0.82rem] text-muted">From {m.from_name || m.from_addr || "?"} · {when(m.received_at)} · attachments: {m.attachment_names.length ? m.attachment_names.join(", ") : "none"}</p>
+                <p className="text-[0.82rem] text-warn">Attach the table as an HTML or text file, or paste it into the mail body, and send it again.</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {done.length > 0 && (
         <Card title="Earlier mails">
