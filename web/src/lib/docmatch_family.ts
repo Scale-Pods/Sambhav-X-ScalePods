@@ -1,6 +1,6 @@
 import "server-only";
 import { q } from "./db";
-import type { InvoiceRead, MtcRead } from "./docreader/families";
+import type { ChallanRead, InvoiceRead, MtcRead } from "./docreader/families";
 import { num } from "./docreader/checks";
 
 // Step 5 for vendor invoices and mill certificates: put what was read next to what we already hold. Reads only.
@@ -21,6 +21,15 @@ export type MtcMatch = {
   items: { heat_no: string; plate_no: string; hits: LotHit[] }[];
 };
 
+export type ChallanHit = {
+  lot_no: number; grade: string | null; thickness_mm: number | null; width_mm: number | null; length_mm: number | null; heat_no: string | null; plate_no: string | null;
+  status: string; balance_kg: number | null; balance_pieces: number | null; kg_per_piece: number | null; entity: string | null;
+};
+export type ChallanLineMatch = {
+  n: number; key: string; verdict: "ok" | "short" | "thickness" | "not_found" | "several"; hits: ChallanHit[]; best: ChallanHit | null; est_kg: number | null; notes: string[];
+};
+export type ChallanMatch = { family: "challan"; same: { id: string; file: string; decided: string }[]; lines: ChallanLineMatch[]; est_kg: number; written_kg: number | null };
+
 const LOTS = `select l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thickness_mm, l.current_status status, l.balance_kg::float8 balance_kg, l.heat_no, l.plate_no
                 from public.v_lots_current l left join public.grades g on g.id = l.grade_id`;
 
@@ -38,6 +47,70 @@ async function lotsFor(heat: string, plate: string): Promise<LotHit[]> {
     return q<LotHit>(`${LOTS} where app.norm_text(l.heat_no) like app.norm_text($1) || '%' and length(app.norm_text(l.heat_no)) <= length(app.norm_text($1)) + 2 order by l.lot_no limit 6`, [heat]);
   }
   return [];
+}
+
+const CHALLAN_LOTS = `select l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thickness_mm, l.width_mm::float8 width_mm, l.length_mm::float8 length_mm, l.heat_no, l.plate_no,
+                l.current_status status, l.balance_kg::float8 balance_kg, l.balance_pieces balance_pieces,
+                (coalesce(l.invoice_weight_kg, l.theoretical_weight_kg) / nullif(l.pieces_received, 0))::float8 kg_per_piece, e.code entity
+           from public.v_lots_current l left join public.grades g on g.id = l.grade_id left join public.entities e on e.id = l.entity_id`;
+
+/** The plates that carry a heat or plate number as written on a challan (the same tolerance as for certificates: the mill's heat may lack the letter our books append). */
+async function challanLots(heat: string): Promise<ChallanHit[]> {
+  const h = heat.trim();
+  if (!h) return [];
+  const exact = await q<ChallanHit>(`${CHALLAN_LOTS} where app.norm_text(l.heat_no) = app.norm_text($1) or app.norm_text(l.plate_no) = app.norm_text($1) order by l.lot_no limit 8`, [h]);
+  if (exact.length || app_len(h) < 6) return exact;
+  return q<ChallanHit>(`${CHALLAN_LOTS} where app.norm_text(l.heat_no) like app.norm_text($1) || '%' and length(app.norm_text(l.heat_no)) <= length(app.norm_text($1)) + 2 order by l.lot_no limit 8`, [h]);
+}
+
+const KG_PER_MM3 = 7.85e-6;
+const digitsOf = (s: string) => (s.match(/\d+/g) ?? []).join("");
+
+/** An outward challan against our plates: is each heat in stock, with the right thickness and enough pieces, and what do the lines weigh by the plates' own weights? Reads only: it posts nothing. */
+export async function matchChallan(r: ChallanRead, docId: string): Promise<ChallanMatch> {
+  const no = r.challan_no.trim();
+  const same = no
+    ? await q<{ id: string; file: string; decided: string }>(
+        `select id, original_filename file, review_status decided from public.documents
+          where id <> $1::uuid and extracted->>'family' = 'challan' and app.norm_text(extracted->>'challan_no') = app.norm_text($2) and upper(coalesce(extracted->>'entity', '')) = $3 order by created_at limit 4`,
+        [docId, no, r.entity.toUpperCase()])
+    : [];
+  const lines: ChallanLineMatch[] = [];
+  let estTotal = 0;
+  for (let i = 0; i < r.lines.length; i++) {
+    const l = r.lines[i];
+    const t = num(l.thickness_mm), w = num(l.width_mm), len = num(l.length_mm), p = num(l.pieces);
+    const key = [l.heat_no || "no number", [t, w, len].every((x) => x != null) ? `${t}×${w}×${len}` : "", p != null ? `${p} pcs` : ""].filter(Boolean).join(" · ");
+    const notes: string[] = [];
+    const found = await challanLots(l.heat_no);
+    const sized = t == null ? found : found.filter((h) => h.thickness_mm != null && Math.abs(h.thickness_mm - t) <= 0.6);
+    let verdict: ChallanLineMatch["verdict"];
+    let best: ChallanHit | null = null;
+    if (found.length === 0) verdict = "not_found";
+    else if (sized.length === 0) { verdict = "thickness"; best = found[0]; notes.push(`This heat is in our books as ${found[0].thickness_mm} mm, the challan says ${t} mm.`); }
+    else {
+      best = sized.find((h) => p != null && (h.balance_pieces ?? 0) >= p) ?? sized[0];
+      verdict = sized.length > 1 ? "several" : p != null && best.balance_pieces != null && best.balance_pieces < p ? "short" : "ok";
+      if (verdict === "short") notes.push(`Only ${best.balance_pieces} piece${best.balance_pieces === 1 ? "" : "s"} left on this plate; the challan sends ${p}.`);
+      if (best.entity && r.entity !== "unclear" && best.entity !== r.entity) notes.push(`The plate is in the ${best.entity} books, the challan is from ${r.entity}.`);
+      const lg = l.grade.trim();
+      if (lg && best.grade && digitsOf(lg) && !digitsOf(best.grade).includes(digitsOf(lg))) notes.push(`Grade written ${lg}, our books say ${best.grade}.`);
+      if (w != null && len != null && best.width_mm != null && best.length_mm != null) {
+        const same_size = (Math.abs(best.width_mm - w) <= best.width_mm * 0.02 && Math.abs(best.length_mm - len) <= best.length_mm * 0.02) || (Math.abs(best.width_mm - len) <= best.width_mm * 0.02 && Math.abs(best.length_mm - w) <= best.length_mm * 0.02);
+        if (!same_size && (w > best.width_mm * 1.02 || len > best.length_mm * 1.02) && (len > best.width_mm * 1.02 || w > best.length_mm * 1.02)) notes.push(`The size sent is bigger than the plate in our books (${best.width_mm} × ${best.length_mm}).`);
+      }
+    }
+    // weight: the plate's own weight per piece when the size sent is the plate's size, otherwise the size by the steel formula
+    let est: number | null = null;
+    if (p != null && t != null && w != null && len != null) {
+      const theo = t * w * len * KG_PER_MM3;
+      const full = best && best.kg_per_piece != null && best.width_mm != null && best.length_mm != null && Math.abs(best.width_mm * best.length_mm - w * len) <= best.width_mm * best.length_mm * 0.03;
+      est = p * (full ? (best!.kg_per_piece as number) : theo);
+      estTotal += num(l.weight_kg) ?? est;
+    }
+    lines.push({ n: i + 1, key, verdict, hits: sized.length ? sized : found, best, est_kg: est, notes });
+  }
+  return { family: "challan", same, lines, est_kg: estTotal, written_kg: num(r.total_weight_kg) };
 }
 
 export async function matchInvoice(r: InvoiceRead, docId: string): Promise<InvoiceMatch> {

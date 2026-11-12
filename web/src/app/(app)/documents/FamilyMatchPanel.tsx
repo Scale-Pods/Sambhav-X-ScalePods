@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui";
-import type { InvoiceMatch, LotHit, MtcMatch } from "@/lib/docmatch_family";
+import type { ChallanMatch, InvoiceMatch, LotHit, MtcMatch } from "@/lib/docmatch_family";
 
 const kg = (n: number | null) => (n == null ? "" : `${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n)} kg`);
 const rs = (n: number | null) => (n == null ? "" : "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(n));
@@ -19,8 +19,48 @@ function Hits({ hits }: { hits: LotHit[] }) {
   );
 }
 
-/** A vendor invoice or a mill certificate next to what we already hold. Read-only: it suggests, a person decides. */
-export function FamilyMatchPanel({ m }: { m: InvoiceMatch | MtcMatch }) {
+const VERDICT: Record<string, { tone: "ok" | "warning" | "error" | "info"; text: string }> = {
+  ok: { tone: "ok", text: "In stock" }, short: { tone: "warning", text: "Not enough pieces" }, thickness: { tone: "error", text: "Thickness differs" },
+  not_found: { tone: "info", text: "Not in our books" }, several: { tone: "warning", text: "Several plates" },
+};
+
+/** An outward challan against our plates, line by line. Read-only: nothing is posted from here. */
+function ChallanPanel({ m }: { m: ChallanMatch }) {
+  const diff = m.written_kg ? ((m.est_kg - m.written_kg) / m.written_kg) * 100 : null;
+  return (
+    <div className="mb-5 space-y-3 rounded-lg border border-line bg-card p-4 text-[0.9rem]">
+      <h3 className="font-display text-[0.95rem] font-bold">Against our plates</h3>
+      {m.same.length > 0 && (
+        <div>
+          <span className={label}>Seen before</span>
+          {m.same.map((d) => <Link key={d.id} href={`/documents/${d.id}`} className="mr-3 font-medium text-brand hover:underline">{d.file}</Link>)}
+          <Badge tone="warning">same challan number and company</Badge>
+        </div>
+      )}
+      <ul className="space-y-2">
+        {m.lines.map((l) => {
+          const v = VERDICT[l.verdict];
+          return (
+            <li key={l.n} className="border-b border-line pb-2 last:border-0 last:pb-0">
+              <span className="text-muted">Line {l.n}: </span><span className="font-medium">{l.key}</span> <Badge tone={v.tone}>{v.text}</Badge>
+              {l.hits.length > 0 && <div className="mt-0.5"><Hits hits={l.hits} />{l.best?.balance_pieces != null && <span className="text-muted">· {l.best.balance_pieces} pcs left</span>}</div>}
+              {l.est_kg != null && <span className="ml-1 text-[0.82rem] text-muted">about {kg(l.est_kg)}</span>}
+              {l.notes.map((n, i) => <p key={i} className="text-[0.82rem] text-warn">{n}</p>)}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-[0.82rem] text-muted">
+        {m.lines.filter((l) => l.verdict === "ok" || l.verdict === "several").length} of {m.lines.length} lines match plates we hold. By the plates&apos; own weights the challan comes to about {kg(m.est_kg)}
+        {m.written_kg != null ? `; ${kg(m.written_kg)} is written${diff != null ? ` (${diff > 0 ? "+" : ""}${diff.toFixed(1)}%)` : ""}` : ""}. Nothing is deducted from stock yet.
+      </p>
+    </div>
+  );
+}
+
+/** A vendor invoice, a mill certificate or a delivery challan next to what we already hold. Read-only: it suggests, a person decides. */
+export function FamilyMatchPanel({ m }: { m: InvoiceMatch | MtcMatch | ChallanMatch }) {
+  if (m.family === "challan") return <ChallanPanel m={m} />;
   return (
     <div className="mb-5 space-y-3 rounded-lg border border-line bg-card p-4 text-[0.9rem]">
       <h3 className="font-display text-[0.95rem] font-bold">Against what we already know</h3>

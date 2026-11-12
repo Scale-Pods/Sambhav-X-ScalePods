@@ -7,8 +7,8 @@ import { supabaseServer } from "@/lib/supabase";
 import { PROMPT_VERSION, SCHEMA, SYSTEM } from "./prompt";
 import { type Check, type Read, docTypeFor, needsSecondRead, runChecks } from "./checks";
 import {
-  INVOICE_SCHEMA, INVOICE_SYSTEM, MTC_SCHEMA, MTC_SYSTEM, TRIAGE_SCHEMA, TRIAGE_SYSTEM, type FamilyRead, type InvoiceRead, type MtcRead,
-  docTypeForFamily, needsSecondReadFamily, runInvoiceChecks, runMtcChecks,
+  CHALLAN_SCHEMA, CHALLAN_SYSTEM, INVOICE_SCHEMA, INVOICE_SYSTEM, MTC_SCHEMA, MTC_SYSTEM, TRIAGE_SCHEMA, TRIAGE_SYSTEM, type ChallanRead, type FamilyRead, type InvoiceRead, type MtcRead,
+  docTypeForFamily, needsSecondReadFamily, runChallanChecks, runInvoiceChecks, runMtcChecks,
 } from "./families";
 
 // USD per million tokens (input, output)
@@ -22,23 +22,25 @@ const MAX_SIDE = 1568;     // longest side of an image sent to the model
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const ACCEPTED_TYPES = [...IMAGE_TYPES, "application/pdf"];
 
-async function jpeg(input: Buffer): Promise<Anthropic.ImageBlockParam> {
-  const buf = await sharp(input).rotate().resize({ width: MAX_SIDE, height: MAX_SIDE, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+/** `turn`: extra degrees clockwise (a sideways phone photo of a challan), applied after the camera's own orientation tag. */
+async function jpeg(input: Buffer, turn = 0): Promise<Anthropic.ImageBlockParam> {
+  const upright = turn ? await sharp(input).rotate().toBuffer() : input; // sharp keeps only one rotation per pipeline, so the camera's tag is applied first
+  const buf = await (turn ? sharp(upright).rotate(turn) : sharp(upright).rotate()).resize({ width: MAX_SIDE, height: MAX_SIDE, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
   return { type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } };
 }
 
-export async function toBlocks(bytes: Buffer, mime: string): Promise<{ blocks: Anthropic.ImageBlockParam[]; pages: number }> {
+export async function toBlocks(bytes: Buffer, mime: string, turn = 0): Promise<{ blocks: Anthropic.ImageBlockParam[]; pages: number }> {
   if (mime === "application/pdf") {
     const doc = mupdf.Document.openDocument(bytes, "application/pdf");
     const pages = doc.countPages();
     const blocks: Anthropic.ImageBlockParam[] = [];
     for (let i = 0; i < Math.min(pages, MAX_PAGES); i++) {
       const pix = doc.loadPage(i).toPixmap(mupdf.Matrix.scale(110 / 72, 110 / 72), mupdf.ColorSpace.DeviceRGB, false, true);
-      blocks.push(await jpeg(Buffer.from(pix.asPNG())));
+      blocks.push(await jpeg(Buffer.from(pix.asPNG()), turn));
     }
     return { blocks, pages };
   }
-  return { blocks: [await jpeg(bytes)], pages: 1 };
+  return { blocks: [await jpeg(bytes, turn)], pages: 1 };
 }
 
 type Run<T = Read> = { read: T; model: string; input: number; output: number; usd: number; seconds: number; stop: string };
@@ -96,10 +98,10 @@ async function callFamily<T>(stage: "first" | "second", cfg: Cfg, blocks: Anthro
   return { read: JSON.parse(out.text) as T, model: m.id, input: r.usage.input_tokens, output: r.usage.output_tokens, usd, seconds: (Date.now() - t) / 1000, stop: r.stop_reason ?? "" };
 }
 
-type Triage = { family: "po_or_enquiry" | "purchase_invoice" | "mill_certificate" | "other"; input: number; output: number; usd: number };
+type Triage = { family: "po_or_enquiry" | "purchase_invoice" | "mill_certificate" | "delivery_challan" | "other"; rotate: 0 | 90 | 180 | 270; input: number; output: number; usd: number };
 /** What kind of document is this? One cheap look at the first page. A failure here just means the order reader is used, as before. */
 async function triage(first: Anthropic.ImageBlockParam | undefined, text: string): Promise<Triage> {
-  const none: Triage = { family: "po_or_enquiry", input: 0, output: 0, usd: 0 };
+  const none: Triage = { family: "po_or_enquiry", rotate: 0, input: 0, output: 0, usd: 0 };
   if (!first) return none;
   try {
     const m = MODELS.first;
@@ -110,14 +112,15 @@ async function triage(first: Anthropic.ImageBlockParam | undefined, text: string
       messages: [{ role: "user", content: [first, { type: "text", text: `${text ? `Start of the text layer:\n${text.slice(0, 1200)}\n\n` : ""}What kind of document is this?` }] }],
     });
     const out = r.content.find((b) => b.type === "text");
-    const fam = out && out.type === "text" ? (JSON.parse(out.text) as { family: Triage["family"] }).family : "po_or_enquiry";
-    return { family: fam, input: r.usage.input_tokens, output: r.usage.output_tokens, usd: (r.usage.input_tokens * m.in + r.usage.output_tokens * m.out) / 1e6 };
+    const got = out && out.type === "text" ? (JSON.parse(out.text) as { family: Triage["family"]; rotate?: string }) : { family: "po_or_enquiry" as const, rotate: "0" };
+    const rotate = ([90, 180, 270] as const).find((d) => String(d) === got.rotate) ?? 0;
+    return { family: got.family, rotate, input: r.usage.input_tokens, output: r.usage.output_tokens, usd: (r.usage.input_tokens * m.in + r.usage.output_tokens * m.out) / 1e6 };
   } catch {
     return none;
   }
 }
 
-async function saveFamily(docId: string, fam: "invoice" | "mtc", stage: "first" | "second", run: Run<FamilyRead>, checks: Check[], final: boolean) {
+async function saveFamily(docId: string, fam: "invoice" | "mtc" | "challan", stage: "first" | "second", run: Run<FamilyRead>, checks: Check[], final: boolean) {
   await call(
     `select public.record_extraction($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::public.doc_type, $13)`,
     [docId, stage, run.model, `${fam}-v1-2026-10-26`, run.input, run.output, run.usd.toFixed(5), run.seconds.toFixed(1), run.stop,
@@ -126,9 +129,9 @@ async function saveFamily(docId: string, fam: "invoice" | "mtc", stage: "first" 
 }
 
 /** Read a vendor invoice or a mill certificate: the cheap model first, the stronger one when the first read shows doubt. */
-async function readFamily(docId: string, fam: "invoice" | "mtc", blocks: Anthropic.ImageBlockParam[], note: string, text: string, tri: Triage, extra: Check[]) {
-  const cfg: Cfg = fam === "invoice" ? { system: INVOICE_SYSTEM, schema: INVOICE_SCHEMA, maxTokens: 8000 } : { system: MTC_SYSTEM, schema: MTC_SCHEMA, maxTokens: 8000 };
-  const checkOf = (r: FamilyRead) => (fam === "invoice" ? runInvoiceChecks(r as InvoiceRead) : runMtcChecks(r as MtcRead));
+async function readFamily(docId: string, fam: "invoice" | "mtc" | "challan", blocks: Anthropic.ImageBlockParam[], note: string, text: string, tri: Triage, extra: Check[]) {
+  const cfg: Cfg = fam === "invoice" ? { system: INVOICE_SYSTEM, schema: INVOICE_SCHEMA, maxTokens: 8000 } : fam === "mtc" ? { system: MTC_SYSTEM, schema: MTC_SCHEMA, maxTokens: 8000 } : { system: CHALLAN_SYSTEM, schema: CHALLAN_SCHEMA, maxTokens: 8000 };
+  const checkOf = (r: FamilyRead) => (fam === "invoice" ? runInvoiceChecks(r as InvoiceRead) : fam === "mtc" ? runMtcChecks(r as MtcRead) : runChallanChecks(r as ChallanRead));
   const first = await callFamily<FamilyRead>("first", cfg, blocks, note, text);
   first.read = { ...first.read, family: fam } as FamilyRead;
   first.input += tri.input; first.output += tri.output; first.usd += tri.usd;
@@ -172,7 +175,7 @@ export async function readDocument(docId: string): Promise<{ ok: true; second: b
     const dl = await supabase.storage.from("documents").download(d.storage_path);
     if (dl.error || !dl.data) throw new Error("The file could not be fetched from storage");
     const bytes = Buffer.from(await dl.data.arrayBuffer());
-    const { blocks, pages } = await toBlocks(bytes, d.mime_type);
+    let { blocks, pages } = await toBlocks(bytes, d.mime_type); // eslint-disable-line prefer-const
     const note = `File name: ${d.original_filename}. ` + (pages > 1 ? `PDF with ${pages} pages; the first ${blocks.length} are shown. ` : "");
     const extra: Check[] = pages > MAX_PAGES ? [{ field: "pages", level: "info", message: `Only the first ${MAX_PAGES} of ${pages} pages were read.` }] : [];
 
@@ -181,6 +184,11 @@ export async function readDocument(docId: string): Promise<{ ok: true; second: b
     const tri = await triage(blocks[0], text);
     if (tri.family === "purchase_invoice") return await readFamily(docId, "invoice", blocks, note, text, tri, extra);
     if (tri.family === "mill_certificate") return await readFamily(docId, "mtc", blocks, note, text, tri, extra);
+    if (tri.family === "delivery_challan") {
+      // a challan is often a sideways phone photo: turn it upright first (only for challans; every other document is read exactly as before)
+      if (tri.rotate && d.mime_type !== "application/pdf") blocks = (await toBlocks(bytes, d.mime_type, tri.rotate)).blocks;
+      return await readFamily(docId, "challan", blocks, note, text, tri, extra);
+    }
 
     const first = await callModel("first", blocks, note);
     first.input += tri.input; first.output += tri.output; first.usd += tri.usd;

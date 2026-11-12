@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { type Check, checkKey } from "@/lib/docreader/checks";
-import { BLANK_ROW, FAMILY_UI, type FamilyRead, runInvoiceChecks, runMtcChecks } from "@/lib/docreader/families";
+import { BLANK_ROW, FAMILY_UI, type FamilyRead, runChallanChecks, runInvoiceChecks, runMtcChecks } from "@/lib/docreader/families";
 import { reviewFamilyDocument } from "./actions";
 
 const input = "w-full rounded-md border bg-field px-2 py-1.5 text-[0.9rem] focus:border-brand disabled:opacity-70 ";
@@ -23,7 +23,7 @@ export function FamilyReviewForm({ id, original, firstChecks, canEdit }: { id: s
   const [pending, start] = useTransition();
 
   const same = JSON.stringify(r) === JSON.stringify(original);
-  const run = (x: FamilyRead) => (x.family === "invoice" ? runInvoiceChecks(x) : runMtcChecks(x));
+  const run = (x: FamilyRead) => (x.family === "invoice" ? runInvoiceChecks(x) : x.family === "challan" ? runChallanChecks(x) : runMtcChecks(x));
   // the rules run again as the person edits, so a fixed value stops being amber at once
   const checks = useMemo(() => (same ? firstChecks : [...run(r), ...firstChecks.filter((c) => c.field === "pages" || c.field === "second_read")]), [r, same, firstChecks]); 
   const flagged = useMemo(() => run(r).filter((c) => c.level === "amber"), [r]);
@@ -151,7 +151,9 @@ export function FamilyReviewForm({ id, original, firstChecks, canEdit }: { id: s
           <p className="text-[0.8rem] text-muted">
             {original.family === "invoice"
               ? "Confirming a vendor invoice makes a draft purchase invoice. Nothing is posted to the books or to Tally."
-              : "Confirming a certificate files it and links it to the plates in stock that carry its heat or plate numbers. Numbers we do not hold are left alone."}
+              : original.family === "challan"
+                ? "Confirming a challan saves the reading as checked. Stock is not deducted yet: posting a confirmed challan to stock is the next step."
+                : "Confirming a certificate files it and links it to the plates in stock that carry its heat or plate numbers. Numbers we do not hold are left alone."}
           </p>
         </div>
       )}

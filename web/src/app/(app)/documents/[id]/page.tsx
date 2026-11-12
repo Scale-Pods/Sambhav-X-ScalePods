@@ -8,7 +8,7 @@ import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { documentDetail, expireStuckDocuments } from "@/lib/documents";
 import { draftOfDocument } from "@/lib/drafts";
 import { matchRead } from "@/lib/docmatch";
-import { matchInvoice, matchMtc } from "@/lib/docmatch_family";
+import { matchChallan, matchInvoice, matchMtc } from "@/lib/docmatch_family";
 import { isFamilyRead } from "@/lib/docreader/families";
 import { inputsFromRead, stockFit } from "@/lib/stockfit";
 import { StockFitView } from "@/components/StockFitView";
@@ -52,7 +52,7 @@ async function Body({ params }: { params: P }) {
     currentStaff(),
     supabase.storage.from("documents").createSignedUrl(d.doc.storage_path, 900),
     order ? matchRead(order) : Promise.resolve(null),
-    family ? (family.family === "invoice" ? matchInvoice(family, d.doc.id) : matchMtc(family, d.doc.id)) : Promise.resolve(null),
+    family ? (family.family === "invoice" ? matchInvoice(family, d.doc.id) : family.family === "challan" ? matchChallan(family, d.doc.id) : matchMtc(family, d.doc.id)) : Promise.resolve(null),
     draftOfDocument(d.doc.id),
     Promise.all(wanted.map(async (w) => ({ line: w.line, fit: await stockFit(w.input) }))),
   ]);

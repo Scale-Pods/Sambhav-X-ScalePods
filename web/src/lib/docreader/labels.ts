@@ -5,5 +5,5 @@ export const KIND: Record<string, string> = {
   negotiation_not_final: "Price talk (not final)", our_proforma_invoice: "Our proforma", our_sales_invoice: "Our invoice",
   transport_receipt: "Lorry receipt", price_list_or_offer: "Price list / offer", registration_or_certificate: "Certificate",
   sent_mail_or_notice: "Sent mail", other_not_an_order: "Not an order",
-  invoice: "Vendor invoice", mtc: "Mill certificate",
+  invoice: "Vendor invoice", mtc: "Mill certificate", challan: "Delivery challan",
 };

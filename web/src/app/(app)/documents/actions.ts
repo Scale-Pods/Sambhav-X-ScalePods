@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { call, q, userMessage } from "@/lib/db";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { checkKey, runChecks, type Read } from "@/lib/docreader/checks";
-import { FAMILY_UI, isFamilyRead, runInvoiceChecks, runMtcChecks, type FamilyRead } from "@/lib/docreader/families";
+import { FAMILY_UI, isFamilyRead, runChallanChecks, runInvoiceChecks, runMtcChecks, type FamilyRead } from "@/lib/docreader/families";
 
 export type Result = { ok: true; draftId?: string | null } | { ok: false; error: string };
 
@@ -89,11 +89,11 @@ export async function reviewFamilyDocument(id: string, decision: "confirmed" | "
     if (decision !== "rejected") {
       if (!isFamilyRead(before)) return { ok: false, error: "Nothing was read from this document, so it can only be rejected" };
       final = { ...(edited ?? before), family: before.family } as FamilyRead; // the kind of document is fixed by what was read
-      const list = final.family === "invoice" ? final.lines : final.items;
+      const list = final.family === "invoice" || final.family === "challan" ? final.lines : final.items;
       if (!Array.isArray(list)) return { ok: false, error: "The form is incomplete" };
       changes = diffFamily(before, final);
       decision = changes.length > 0 ? "corrected" : "confirmed";
-      const flagged = (final.family === "invoice" ? runInvoiceChecks(final) : runMtcChecks(final)).filter((c) => c.level === "amber");
+      const flagged = (final.family === "invoice" ? runInvoiceChecks(final) : final.family === "challan" ? runChallanChecks(final) : runMtcChecks(final)).filter((c) => c.level === "amber");
       const open = flagged.filter((c) => !acknowledged.includes(checkKey(c)));
       if (open.length > 0) return { ok: false, error: `${open.length} flagged check${open.length === 1 ? "" : "s"} still need${open.length === 1 ? "s" : ""} you to tick "I checked this against the document".` };
       if (flagged.length > 0) note = `${note.trim()}${note.trim() ? " | " : ""}Looked at flagged: ${flagged.map((c) => c.field).join(", ")}`;
