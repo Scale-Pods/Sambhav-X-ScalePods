@@ -21,6 +21,7 @@ export type Answer = {
   answer: string; sources: string[]; follow_ups: string[]; confidence: "found" | "partly" | "not_found";
   used: { name: string; rows: number | null; ms: number }[]; usd: number; model: ModelKey; tokens: { in: number; cached: number; out: number };
   refs: RefView[]; // where the facts were taken from: the answer cites them as [r3]; the screen shows them as numbered links
+  auto?: { tier: number; picked: number; upgraded: boolean; reasons: string[] }; // Auto mode: the level used, the level first picked, whether it had to be raised, and why
 };
 export type AskEvent =
   | { type: "status"; text: string }

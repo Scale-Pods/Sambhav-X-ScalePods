@@ -11,7 +11,7 @@ import { Markdown, type RefLink } from "./Markdown";
 type ModelKey = string; // a model's API id (lib/ask/models.ts)
 type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; origin?: string; project_id?: string | null; updated_at: string };
 type Project = { id: string; name: string; instructions: string; chats: number; updated_at: string };
-type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string };
+type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string; auto?: { tier: number; picked: number; upgraded: boolean; reasons: string[] } };
 type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
 
 type Saved = { id: string; title: string; question: string; model: ModelKey; scope: string };
@@ -247,7 +247,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
         while ((nl = buf.indexOf("\n")) >= 0) {
           const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
           if (!line) continue;
-          const e = JSON.parse(line) as { type: string; text?: string; chatId?: string; messageId?: string; error?: string; result?: { answer: string; sources: string[]; refs?: RefLink[]; follow_ups: string[]; confidence: string; used: { name: string; rows: number | null }[]; usd: number; model: string } };
+          const e = JSON.parse(line) as { type: string; text?: string; chatId?: string; messageId?: string; error?: string; result?: { answer: string; sources: string[]; refs?: RefLink[]; follow_ups: string[]; confidence: string; used: { name: string; rows: number | null }[]; usd: number; model: string; auto?: { tier: number; picked: number; upgraded: boolean; reasons: string[] } } };
           if (e.type === "meta" && e.chatId) { setActiveId(e.chatId); void loadChats(); void loadProjects(); }
           else if (e.type === "status") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, status: e.text } : m)));
           else if (e.type === "delta") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: m.content + (e.text ?? ""), status: undefined } : m)));
@@ -255,7 +255,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
           else if (e.type === "saved" && e.messageId) { const old = realId; realId = e.messageId; setMessages((ms) => ms.map((m) => (m.id === old ? { ...m, id: e.messageId! } : m))); }
           else if (e.type === "done" && e.result) {
             const r = e.result;
-            setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: r.answer, pending: false, status: undefined, meta: { sources: r.sources, refs: r.refs, follow_ups: r.follow_ups, confidence: r.confidence, used: r.used, usd: r.usd, model: r.model } } : m)));
+            setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, content: r.answer, pending: false, status: undefined, meta: { sources: r.sources, refs: r.refs, follow_ups: r.follow_ups, confidence: r.confidence, used: r.used, usd: r.usd, model: r.model, auto: r.auto } } : m)));
             setChatCost((c) => c + r.usd); setToday((t) => t + r.usd);
           } else if (e.type === "error") setMessages((ms) => ms.map((m) => (m.id === realId ? { ...m, pending: false, status: undefined, error: e.error } : m)));
         }
@@ -617,6 +617,12 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
                         </ol>
                       </div>
                     )}
+                    {m.meta.auto && (
+                      <p className="text-[0.78rem] text-muted" title={m.meta.auto.reasons.length ? m.meta.auto.reasons.join("; ") : undefined}>
+                        Auto used {models.find((x) => x.value === m.meta?.model)?.label.replace(/ \(.*\)$/, "") ?? m.meta.model}
+                        {m.meta.auto.upgraded ? " after the first try did not work out" : ` for ${m.meta.auto.tier >= 3 ? "a hard question" : m.meta.auto.tier === 2 ? "a question needing care" : "a simple question"}`}.
+                      </p>
+                    )}
                     {m.meta.used && m.meta.used.length > 0 && (
                       <details className="text-[0.78rem] text-muted"><summary className="inline-flex cursor-pointer items-center gap-1 hover:text-ink">Looked at <ChevronDown className="h-3 w-3" /></summary>
                         <ul className="mt-1 space-y-0.5 pl-1">{m.meta.used.map((u, i) => <li key={i}>{LOOKED[u.name] ?? u.name}{u.rows != null ? `: ${u.rows} row${u.rows === 1 ? "" : "s"}` : ""}</li>)}</ul>
@@ -676,9 +682,10 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
               </>}
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Model</span>
                 <select value={model} onChange={(e) => setModel(e.target.value)} disabled={busy} className="max-w-[13rem] rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Model" title={models.find((m) => m.value === model)?.hint}>
+                  {models.filter((m) => m.value === "auto").map((m) => <option key={m.value} value={m.value} disabled={!m.ready}>{m.label}{m.ready ? "" : " - key not set"}</option>)}
                   {(["anthropic", "openai"] as const).map((pv) => (
                     <optgroup key={pv} label={pv === "anthropic" ? "Anthropic (Claude)" : "OpenAI"}>
-                      {models.filter((m) => m.provider === pv).map((m) => <option key={m.value} value={m.value} disabled={!m.ready}>{m.label}{m.ready ? "" : " - key not set"}</option>)}
+                      {models.filter((m) => m.provider === pv && m.value !== "auto").map((m) => <option key={m.value} value={m.value} disabled={!m.ready}>{m.label}{m.ready ? "" : " - key not set"}</option>)}
                     </optgroup>
                   ))}</select><ModelPrices roles={roles} /></label>
               <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Look in</span>

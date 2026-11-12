@@ -36,6 +36,18 @@ export const DEFAULT_KEY = process.env.ASK_DEFAULT_MODEL || "gpt-6-luna";
 export const AI_MODE_KEY = process.env.AI_MODE_MODEL || "gpt-6-luna";
 export const THINK_HARDER_KEY = process.env.THINK_HARDER_MODEL || "gpt-6.1-terra";
 
+/** "Auto" is not a model: it is a choice in the Digital Brain's list. For each question it picks the cheapest of these three that can answer it well (see router.ts). Set in the environment to change a level without code. */
+export const AUTO_KEY = "auto";
+export const AUTO_TIERS: Record<1 | 2 | 3, string> = {
+  1: process.env.AUTO_TIER1_MODEL || "gpt-6-luna",       // simple, one-fact lookups
+  2: process.env.AUTO_TIER2_MODEL || "gpt-6.1-terra",    // vague or multi-part questions, a file to check
+  3: process.env.AUTO_TIER3_MODEL || "claude-sonnet-5-5", // hard analysis (owner and administrators only)
+};
+/** The highest level a role may reach on its own: the owner and administrators level 3, everyone else level 2. Opus and Astra are only ever chosen by hand. */
+export const autoMaxTier = (role: string | undefined): 1 | 2 | 3 => (role === "owner" || role === "admin" ? 3 : 2);
+/** The level a model belongs to in Auto (to keep a follow-up on the level its chat was on), or 0. */
+export const tierOfModel = (key: string | null | undefined): 0 | 1 | 2 | 3 => { const t = Object.entries(AUTO_TIERS).find(([, k]) => k === key)?.[0]; return (t ? Number(t) : 0) as 0 | 1 | 2 | 3; };
+
 export const modelByKey = (k: unknown): ModelDef | null => {
   if (typeof k !== "string") return null;
   const key = LEGACY[k] ?? k;
