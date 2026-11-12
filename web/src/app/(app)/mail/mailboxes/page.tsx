@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Badge, Card, Skeleton } from "@/components/ui";
+import { GmailLogo } from "@/components/GmailLogo";
 import { canExport, currentStaff } from "@/lib/auth";
 import { serviceQuery } from "@/lib/db";
 import { mailSources, TRACKER_ADDRESS } from "@/lib/mailboxes";
@@ -34,7 +35,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
             const i = s.id ? info.get(s.id) : undefined;
             return (
               <li key={s.value} className="space-y-1.5 px-5 py-4">
-                <p className="font-semibold">{s.address} {s.kind === "tracker" ? <Badge tone="info">Email Tracker sheet</Badge> : null} {s.connected ? <Badge tone={i?.last_error ? "error" : "ok"}>{i?.last_error ? "Problem" : "Connected"}</Badge> : null}</p>
+                <p className="flex flex-wrap items-center gap-2 font-semibold"><GmailLogo className="h-4 w-auto" />{s.address} {s.kind === "tracker" ? <Badge tone="info">Email Tracker sheet</Badge> : null} {s.connected ? <Badge tone={i?.last_error ? "error" : "ok"}>{i?.last_error ? "Problem" : "Connected"}</Badge> : null}</p>
                 {s.kind === "tracker" && <p className="text-[0.88rem] text-muted">Quotations, Inbox and Clients are read from this mailbox&apos;s Email Tracker sheet, a copy that refreshes once a day. Last copied {when(s.last_synced_at)}.{s.connected ? "" : " Its dispatch mails are not read yet: connect it to start."}</p>}
                 {s.connected && i && (
                   <>

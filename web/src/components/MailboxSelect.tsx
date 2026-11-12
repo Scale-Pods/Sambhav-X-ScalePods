@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Mail } from "lucide-react";
+import { GmailLogo } from "./GmailLogo";
 import { useTransition } from "react";
 
 /** The mailbox dropdown of Mail & leads, built like the period dropdown next to it. The last entry (administrators) goes to Google to connect another mailbox. */
@@ -12,7 +12,7 @@ export function MailboxSelect({ value, options, canAdd }: { value: string; optio
   const [, start] = useTransition();
   return (
     <label className="flex items-center gap-2 text-[0.82rem] text-muted">
-      <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> Mailbox</span>
+      <span className="flex items-center gap-1.5"><GmailLogo className="h-3.5 w-auto" /> Mailbox</span>
       <select
         value={value}
         aria-label="Mailbox"

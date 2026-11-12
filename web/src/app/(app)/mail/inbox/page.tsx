@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Inbox as InboxIcon, Search } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Search } from "lucide-react";
 import { Badge, Card, Skeleton } from "@/components/ui";
 import { MailboxFilter } from "@/components/MailboxFilter";
 import { canDecide, currentStaff } from "@/lib/auth";
 import { LABELS, PER_PAGE, inboxFeed, isLabel, trackerMail, type FeedItem, type Label } from "@/lib/mailFeed";
 import { mailScope, TRACKER_ADDRESS } from "@/lib/mailboxes";
 import { dispatchContext, receiptOfMail } from "@/lib/mill/view";
+import { GmailLogo } from "@/components/GmailLogo";
 import { ReceiptCard } from "../dispatch/ReceiptCard";
+import { InboxShell, type RailItem } from "./InboxShell";
 
 export const metadata = { title: "Inbox · Sambhav Stock" };
 type SP = Promise<Record<string, string | undefined>>;
@@ -96,72 +98,53 @@ async function Body({ searchParams }: { searchParams: SP }) {
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <MailboxFilter mb={sp.mb} />
-        <form action="/mail/inbox" className="relative min-w-60 flex-1">
-          {scope.value !== "all" && <input type="hidden" name="mb" value={scope.value} />}
-          {label !== "inbox" && <input type="hidden" name="label" value={label} />}
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input name="q" defaultValue={q} placeholder="Search mail" className="w-full rounded-full border border-line bg-field py-2 pl-9 pr-3 text-[0.92rem]" />
-        </form>
-        <span className="ml-auto text-[0.82rem] text-muted">{feed.total ? `${(feed.page - 1) * PER_PAGE + 1}–${Math.min(feed.total, feed.page * PER_PAGE)} of ${feed.total.toLocaleString("en-IN")}` : "0 mails"}</span>
-        <div className="flex">
-          {feed.page > 1 ? <Link href={href({ page: feed.page > 2 ? String(feed.page - 1) : null, m: null })} className="rounded-full p-1.5 hover:bg-surface" aria-label="Newer"><ChevronLeft className="h-5 w-5" /></Link> : <span className="p-1.5 opacity-30"><ChevronLeft className="h-5 w-5" /></span>}
-          {feed.page < feed.pages ? <Link href={href({ page: String(feed.page + 1), m: null })} className="rounded-full p-1.5 hover:bg-surface" aria-label="Older"><ChevronRight className="h-5 w-5" /></Link> : <span className="p-1.5 opacity-30"><ChevronRight className="h-5 w-5" /></span>}
-        </div>
+  const toolbar = (
+    <>
+      <MailboxFilter mb={sp.mb} />
+      <form action="/mail/inbox" className="relative min-w-60 flex-1">
+        {scope.value !== "all" && <input type="hidden" name="mb" value={scope.value} />}
+        {label !== "inbox" && <input type="hidden" name="label" value={label} />}
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <input name="q" defaultValue={q} placeholder="Search mail" className="w-full rounded-full border border-line bg-field py-2 pl-9 pr-3 text-[0.92rem]" />
+      </form>
+      <span className="ml-auto text-[0.82rem] text-muted">{feed.total ? `${(feed.page - 1) * PER_PAGE + 1}–${Math.min(feed.total, feed.page * PER_PAGE)} of ${feed.total.toLocaleString("en-IN")}` : "0 mails"}</span>
+      <div className="flex">
+        {feed.page > 1 ? <Link href={href({ page: feed.page > 2 ? String(feed.page - 1) : null, m: null })} className="rounded-full p-1.5 hover:bg-surface" aria-label="Newer"><ChevronLeft className="h-5 w-5" /></Link> : <span className="p-1.5 opacity-30"><ChevronLeft className="h-5 w-5" /></span>}
+        {feed.page < feed.pages ? <Link href={href({ page: String(feed.page + 1), m: null })} className="rounded-full p-1.5 hover:bg-surface" aria-label="Older"><ChevronRight className="h-5 w-5" /></Link> : <span className="p-1.5 opacity-30"><ChevronRight className="h-5 w-5" /></span>}
       </div>
+    </>
+  );
 
-      <div className="grid gap-4 xl:grid-cols-[12.5rem_minmax(0,27rem)_minmax(0,1fr)]">
-        {/* labels, like Gmail's left side */}
-        <nav aria-label="Mail labels" className={"flex gap-1 overflow-x-auto xl:flex-col xl:overflow-visible " + (sel ? "hidden xl:flex" : "")}>
-          {scope.admin && <a href="/api/mail/google/connect" className="mb-1 hidden items-center gap-2 rounded-2xl bg-brand-soft px-4 py-3 text-[0.9rem] font-semibold text-brand hover:bg-brand hover:text-white xl:flex"><span className="text-lg leading-none">+</span> Add mailbox</a>}
-          {LABELS.map((l) => {
-            const n = feed.counts[l.key], on = l.key === label;
-            return (
-              <Link key={l.key} href={href({ label: l.key === "inbox" ? null : l.key, page: null, m: null })} title={l.info} aria-current={on ? "page" : undefined}
-                className={"flex shrink-0 items-center justify-between gap-6 whitespace-nowrap rounded-full px-4 py-1.5 text-[0.9rem] " + (on ? "bg-brand-soft font-bold text-brand" : "text-ink hover:bg-surface")}>
-                <span className="flex items-center gap-2">{l.key === "inbox" && <InboxIcon className="h-4 w-4" />}{l.name}</span>
-                {n > 0 && <span className={"text-[0.78rem] " + (on ? "font-bold" : "text-muted")}>{n.toLocaleString("en-IN")}</span>}
+  const list = (
+    <div className="overflow-hidden rounded-xl border border-line bg-card">
+      {feed.items.length === 0 && <p className="px-5 py-14 text-center text-muted">{q ? `No mail matches “${q}”.` : label === "dispatch" ? "No dispatch mail has been read yet." : "Nothing here."}</p>}
+      <ul className="divide-y divide-line">
+        {feed.items.map((it) => {
+          const on = it.key === sel, unread = it.state === "Pending";
+          return (
+            <li key={it.key}>
+              <Link href={href({ m: it.key })} className={"flex gap-3 px-4 py-2.5 hover:bg-surface/70 " + (on ? "bg-brand-soft/60" : unread ? "bg-card" : "bg-surface/40")}>
+                <Avatar name={it.from_name ?? it.from_addr} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className={"truncate text-[0.9rem] " + (unread ? "font-bold" : "font-medium text-muted")}>{it.from_name ?? it.from_addr ?? "(unknown)"}</span>
+                    <span className={"shrink-0 text-[0.78rem] " + (unread ? "font-bold text-ink" : "text-muted")}>{short(it.at)}</span>
+                  </span>
+                  <span className={"block truncate text-[0.88rem] " + (unread ? "font-semibold" : "")}>{it.subject ?? "(no subject)"}</span>
+                  <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-[0.82rem] text-muted">{it.preview ?? ""}</span><StatusChip it={it} /></span>
+                </span>
               </Link>
-            );
-          })}
-        </nav>
-
-        {/* the list */}
-        <section aria-label="Mails" className={(sel ? "hidden xl:block" : "block")}>
-          <div className="overflow-hidden rounded-xl border border-line bg-card">
-            {feed.items.length === 0 && <p className="px-5 py-14 text-center text-muted">{q ? `No mail matches “${q}”.` : label === "dispatch" ? "No dispatch mail has been read yet." : "Nothing here."}</p>}
-            <ul className="divide-y divide-line">
-              {feed.items.map((it) => {
-                const on = it.key === sel, unread = it.state === "Pending";
-                return (
-                  <li key={it.key}>
-                    <Link href={href({ m: it.key })} className={"flex gap-3 px-4 py-2.5 hover:bg-surface/70 " + (on ? "bg-brand-soft/60" : unread ? "bg-card" : "bg-surface/40")}>
-                      <Avatar name={it.from_name ?? it.from_addr} />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline justify-between gap-3">
-                          <span className={"truncate text-[0.9rem] " + (unread ? "font-bold" : "font-medium text-muted")}>{it.from_name ?? it.from_addr ?? "(unknown)"}</span>
-                          <span className={"shrink-0 text-[0.78rem] " + (unread ? "font-bold text-ink" : "text-muted")}>{short(it.at)}</span>
-                        </span>
-                        <span className={"block truncate text-[0.88rem] " + (unread ? "font-semibold" : "")}>{it.subject ?? "(no subject)"}</span>
-                        <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-[0.82rem] text-muted">{it.preview ?? ""}</span><StatusChip it={it} /></span>
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </section>
-
-        {/* the mail being read */}
-        <section aria-label="Reading pane" className={"min-w-0 rounded-xl border border-line bg-card px-5 py-5 " + (sel ? "block" : "hidden xl:block")}>
-          {reader ?? <p className="flex min-h-48 items-center justify-center text-center text-[0.92rem] text-muted">Select a mail to read it.</p>}
-        </section>
-      </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
+  );
+
+  const items: RailItem[] = LABELS.map((l) => ({ key: l.key, name: l.name, info: l.info, count: feed.counts[l.key], on: l.key === label, href: href({ label: l.key === "inbox" ? null : l.key, page: null, m: null }) }));
+  return (
+    <InboxShell toolbar={toolbar} items={items} admin={scope.admin} list={list} reading={Boolean(reader)}
+      reader={reader ?? <p className="flex min-h-48 items-center justify-center text-center text-[0.92rem] text-muted">Select a mail to read it.</p>} />
   );
 }
 
@@ -174,7 +157,7 @@ function Header({ subject, chips, name, addr, to, at, back }: { subject: string;
         <Avatar name={name ?? addr} size="h-10 w-10" />
         <div className="min-w-0 flex-1 text-[0.88rem]">
           <p className="truncate"><span className="font-bold">{name ?? addr ?? "(unknown)"}</span>{addr && name && name !== addr ? <span className="text-muted"> &lt;{addr}&gt;</span> : null}</p>
-          {to && <p className="truncate text-muted">to {to}</p>}
+          {to && <p className="flex items-center gap-1.5 truncate text-muted"><GmailLogo className="h-3 w-auto" /> to {to}</p>}
         </div>
         <p className="shrink-0 text-[0.8rem] text-muted">{full(at)}</p>
       </div>
