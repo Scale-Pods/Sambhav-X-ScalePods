@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore, type ReactNode } from "react";
-import { AlertCircle, CheckCheck, Clock, EyeOff, Factory, Inbox, Menu } from "lucide-react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { AlertCircle, CheckCheck, Clock, EyeOff, Factory, Inbox, Menu, Plus } from "lucide-react";
 
-// The Inbox's frame: a menu button (three lines) that folds the labels on the left to icons, as Gmail does. Folded, the labels open again while the pointer is on them.
+// The Inbox's frame: a menu button (three lines) folds the labels on the left to a column of icons, as Gmail does; pressed again, the names come back.
+// The folded column takes its own room (the list never sits over it) and every icon says its name when the pointer rests on it.
 // The choice is remembered in the browser. Below the wide layout the labels are a row of chips and the button is not shown.
 
 const KEY = "mail-rail";
@@ -21,36 +22,34 @@ export function InboxShell({ toolbar, items, admin, list, reader, reading }: { t
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => write(!closed)} aria-label={closed ? "Show the labels" : "Hide the labels"} aria-pressed={!closed} title={closed ? "Show the labels" : "Hide the labels"}
+        <button type="button" onClick={() => write(!closed)} aria-label={closed ? "Show the label names" : "Fold the labels"} aria-pressed={!closed} title={closed ? "Show the label names" : "Fold the labels"}
           className="hidden rounded-full p-2 text-muted hover:bg-surface hover:text-ink xl:inline-flex"><Menu className="h-5 w-5" /></button>
         {toolbar}
       </div>
 
-      <div className="grid gap-4 xl:[grid-template-columns:var(--rail)_minmax(0,27rem)_minmax(0,1fr)]" style={{ "--rail": closed ? "3.25rem" : "12.5rem" } as React.CSSProperties}>
-        {/* the labels: full width, or icons that open while the pointer is on them */}
-        <div className={"relative " + (reading ? "hidden xl:block" : "")}>
-          <nav aria-label="Mail labels"
-            className={"flex gap-1 overflow-x-auto xl:absolute xl:inset-y-0 xl:left-0 xl:z-20 xl:flex-col xl:gap-0.5 xl:overflow-hidden xl:rounded-xl xl:bg-surface/0 xl:transition-[width,box-shadow] xl:duration-150 " + (closed ? "xl:w-[3.25rem] xl:hover:w-52 xl:hover:bg-card xl:hover:shadow-lg xl:hover:ring-1 xl:hover:ring-line" : "xl:w-full")}>
-            {admin && (
-              <a href="/api/mail/google/connect" title="Add mailbox" className="mb-1 hidden items-center gap-3 rounded-2xl bg-brand-soft px-3.5 py-3 text-[0.9rem] font-semibold text-brand hover:bg-brand hover:text-white xl:flex">
-                <span className="w-5 shrink-0 text-center text-lg leading-none">+</span><span className="whitespace-nowrap">Add mailbox</span>
-              </a>
-            )}
-            {items.map((l) => {
-              const Icon = ICONS[l.key];
-              return (
-                <Link key={l.key} href={l.href} title={l.info} aria-current={l.on ? "page" : undefined}
-                  className={"flex shrink-0 items-center gap-3 whitespace-nowrap rounded-full px-3.5 py-2 text-[0.9rem] " + (l.on ? "bg-brand-soft font-bold text-brand" : "text-ink hover:bg-surface")}>
-                  <Icon className="h-[1.1rem] w-[1.1rem] shrink-0" />
-                  <span className="flex-1">{l.name}</span>
-                  {l.count > 0 && <span className={"text-[0.78rem] " + (l.on ? "font-bold" : "text-muted")}>{l.count.toLocaleString("en-IN")}</span>}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+      <div className="grid gap-4 xl:[grid-template-columns:var(--rail)_minmax(0,27rem)_minmax(0,1fr)]" style={{ "--rail": closed ? "3rem" : "12.5rem" } as CSSProperties}>
+        <nav aria-label="Mail labels" className={"flex gap-1 overflow-x-auto xl:flex-col xl:gap-1 xl:overflow-visible " + (reading ? "hidden xl:flex" : "")}>
+          {admin && (
+            <a href="/api/mail/google/connect" title="Add mailbox"
+              className={"mb-1 hidden items-center rounded-2xl bg-brand-soft text-[0.9rem] font-semibold text-brand hover:bg-brand hover:text-white xl:flex " + (closed ? "h-10 w-10 justify-center" : "gap-3 px-3.5 py-3")}>
+              <Plus className="h-5 w-5 shrink-0" />{!closed && <span className="whitespace-nowrap">Add mailbox</span>}
+            </a>
+          )}
+          {items.map((l) => {
+            const Icon = ICONS[l.key];
+            return (
+              <Link key={l.key} href={l.href} title={`${l.name}${l.count ? ` (${l.count.toLocaleString("en-IN")})` : ""}: ${l.info}`} aria-current={l.on ? "page" : undefined} aria-label={l.name}
+                className={"relative flex shrink-0 items-center whitespace-nowrap rounded-full text-[0.9rem] gap-3 px-3.5 py-2 " + (closed ? "xl:h-10 xl:w-10 xl:justify-center xl:gap-0 xl:p-0 " : "") + (l.on ? "bg-brand-soft font-bold text-brand" : "text-ink hover:bg-surface")}>
+                <Icon className="h-[1.1rem] w-[1.1rem] shrink-0" />
+                <span className={"flex-1 " + (closed ? "xl:hidden" : "")}>{l.name}</span>
+                {l.count > 0 && <span className={"text-[0.78rem] " + (l.on ? "font-bold" : "text-muted") + (closed ? " xl:hidden" : "")}>{l.count.toLocaleString("en-IN")}</span>}
+                {closed && l.count > 0 && <span className="absolute right-0.5 top-0.5 hidden h-2 w-2 rounded-full bg-accent xl:block" aria-hidden />}
+              </Link>
+            );
+          })}
+        </nav>
 
-        <section aria-label="Mails" className={(reading ? "hidden xl:block " : "block ") + "xl:max-h-[calc(100vh-9.5rem)] xl:overflow-y-auto"}>{list}</section>
+        <section aria-label="Mails" className={(reading ? "hidden xl:block " : "block ") + "min-w-0 xl:max-h-[calc(100vh-9.5rem)] xl:overflow-y-auto"}>{list}</section>
         <section aria-label="Reading pane" className={"min-w-0 rounded-xl border border-line bg-card px-5 py-5 xl:max-h-[calc(100vh-9.5rem)] xl:overflow-y-auto " + (reading ? "block" : "hidden xl:block")}>{reader}</section>
       </div>
     </div>
