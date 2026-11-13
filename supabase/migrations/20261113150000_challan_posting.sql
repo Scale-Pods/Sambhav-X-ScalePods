@@ -3,7 +3,7 @@
 -- and for each line a sale of the chosen plate (pieces and weight go out of its balance, with the challan as the source document), or "not from our stock" for
 -- material that never touched the books. Everything happens in one transaction: if any line is refused, nothing is posted.
 -- A mistake is taken back with unpost_challan, which posts a reversal for each sale (the stock table is append-only; nothing is deleted).
--- DRAFT: not applied until the owner says so.
+-- Applied.
 
 -- the challan comes before an order exists (the orders table is empty), so a dispatch no longer needs one; it keeps what the slip says
 alter table public.dispatches alter column order_id drop not null;
