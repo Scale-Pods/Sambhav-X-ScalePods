@@ -8,6 +8,8 @@ import { filterParams, parseFilter, rangeLabel, todayIST, unitLabel, weight, typ
 import { date, mm } from "@/lib/format";
 import { Card, PageHeader, Skeleton, td, th, Th } from "@/components/ui";
 import { FilterShell } from "@/components/FilterBar";
+import { summaryFormat } from "@/lib/summaryFormat";
+import { SheetFormat } from "./SheetFormat";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
@@ -26,14 +28,20 @@ async function Body({ searchParams }: { searchParams: SP }) {
   await connection(); // these pages work out today's date: render them at request time, never while the shell is prepared
   const sp = await searchParams;
   const f = parseFilter(sp, "fy");
-  const view = sp.view === "period" ? "period" : "sheet";
-  // sheet view = everything up to the end date (no opening line); period view = opening + movements in the period + closing
-  const [grades, rows, me] = await Promise.all([gradeOptions(), summary(view === "sheet" ? { ...f, from: null } : f, null), currentStaff()]);
+  const view = sp.view === "period" ? "period" : sp.view === "ims" ? "ims" : "sheet";
+  // sheet view = everything up to the end date (no opening line); period view = opening + movements in the period + closing; stock-sheet view = the Summary tab of the stock sheets
+  const [grades, rows, me, ims] = await Promise.all([
+    gradeOptions(),
+    view === "ims" ? Promise.resolve([] as SummaryRow[]) : summary(view === "sheet" ? { ...f, from: null } : f, null),
+    currentStaff(),
+    view === "ims" ? Promise.all((f.book ? [f.book] : ["WB1", "WB2"]).map((b) => summaryFormat(b as "WB1" | "WB2"))) : Promise.resolve([]),
+  ]);
   const u = f.unit;
   const asOf = f.to ?? todayIST();
   const base = new URLSearchParams(filterParams(f, "fy"));
-  const viewHref = (v: string) => { const p = new URLSearchParams(base); if (v === "period") p.set("view", "period"); return `/summary?${p}`; };
+  const viewHref = (v: string) => { const p = new URLSearchParams(base); if (v === "period" || v === "ims") p.set("view", v); return `/summary?${p}`; };
   const exportHref = (() => { const p = new URLSearchParams(base); p.set("view", view); return `/api/export/summary?${p}`; })();
+  const imsExport = `/api/export/summary-ims-xlsx${f.book ? `?book=${f.book}` : ""}`;
 
   const byGrade = new Map<string, SummaryRow[]>();
   rows.forEach((r) => byGrade.set(r.grade, [...(byGrade.get(r.grade) ?? []), r]));
@@ -45,15 +53,21 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const val = (r: { opening: number; received: number; sold: number; closing: number }, k: string) => (r as Record<string, number>)[k];
 
   return (
-    <FilterShell grades={grades}>
+    <FilterShell grades={grades} hide={view === "ims" ? ["grade", "thickness", "unit"] : []}>
       <Card
         aside={
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex overflow-hidden rounded-md border border-line text-[0.85rem] font-medium">
               <Link href={viewHref("sheet")} className={"px-3 py-1.5 " + (view === "sheet" ? "bg-ink text-surface" : "bg-field text-muted hover:text-ink")}>Sheet view</Link>
               <Link href={viewHref("period")} className={"px-3 py-1.5 " + (view === "period" ? "bg-ink text-surface" : "bg-field text-muted hover:text-ink")}>Period view</Link>
+              <Link href={viewHref("ims")} className={"px-3 py-1.5 " + (view === "ims" ? "bg-ink text-surface" : "bg-field text-muted hover:text-ink")} title="The Summary tab of your stock sheets, same rows and columns">Stock sheet format</Link>
             </div>
-            {canExport(me?.role) && (
+            {canExport(me?.role) && view === "ims" && (
+              <a href={imsExport} className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink" title="An Excel file with the same rows and columns as your stock sheets' Summary tab">
+                <Download className="h-4 w-4" /> Excel
+              </a>
+            )}
+            {canExport(me?.role) && view !== "ims" && (
               <>
                 <a href={exportHref.replace("/api/export/summary", "/api/export/summary-xlsx")} className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink" title="An Excel file laid out like this page">
                   <Download className="h-4 w-4" /> Excel
@@ -65,9 +79,14 @@ async function Body({ searchParams }: { searchParams: SP }) {
             )}
           </div>
         }
-        title={view === "period" ? `Stock statement, ${rangeLabel(f)}` : `Position on ${date(asOf)}`}
+        title={view === "period" ? `Stock statement, ${rangeLabel(f)}` : view === "ims" ? `Summary like your stock sheets, on ${date(todayIST())}` : `Position on ${date(asOf)}`}
       >
-        {rows.length === 0 ? <p className="px-5 py-14 text-center text-muted">Nothing matches these filters.</p> : (
+        {view === "ims" ? (
+          <div className="space-y-6 p-4">
+            {ims.every((x) => x == null) && <p className="px-1 py-10 text-center text-muted">The stock sheets&apos; Summary tab has not been synced yet.</p>}
+            {ims.map((d) => d && <SheetFormat key={d.book} d={d} asOf={todayIST()} />)}
+          </div>
+        ) : rows.length === 0 ? <p className="px-5 py-14 text-center text-muted">Nothing matches these filters.</p> : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-line bg-surface/60">
