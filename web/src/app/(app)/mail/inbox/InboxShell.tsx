@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { AlertCircle, CheckCheck, Clock, EyeOff, Factory, Inbox, Menu, Plus } from "lucide-react";
+import { AlertCircle, CheckCheck, Clock, EyeOff, Factory, FileText, Inbox, Mail, Menu, Plus, Send, ShieldAlert, Star, Trash2 } from "lucide-react";
 
 // The Inbox's frame: a menu button (three lines) folds the labels on the left to a column of icons, as Gmail does; pressed again, the names come back.
 // The folded column takes its own room (the list never sits over it) and every icon says its name when the pointer rests on it.
@@ -14,7 +14,7 @@ const subscribe = (cb: () => void) => { listeners.add(cb); window.addEventListen
 const read = () => { try { return localStorage.getItem(KEY) === "closed"; } catch { return false; } };
 const write = (closed: boolean) => { try { localStorage.setItem(KEY, closed ? "closed" : "open"); } catch { /* the choice is just not remembered */ } listeners.forEach((f) => f()); };
 
-const ICONS = { inbox: Inbox, urgent: AlertCircle, followup: Clock, replied: CheckCheck, ignored: EyeOff, dispatch: Factory } as const;
+const ICONS = { inbox: Inbox, urgent: AlertCircle, followup: Clock, replied: CheckCheck, ignored: EyeOff, dispatch: Factory, starred: Star, sent: Send, drafts: FileText, all: Mail, spam: ShieldAlert, trash: Trash2 } as const;
 export type RailItem = { key: keyof typeof ICONS; name: string; info: string; href: string; count: number; on: boolean };
 
 export function InboxShell({ toolbar, items, admin, list, reader, reading }: { toolbar: ReactNode; items: RailItem[]; admin: boolean; list: ReactNode; reader: ReactNode; reading: boolean }) {

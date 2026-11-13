@@ -5,7 +5,7 @@ import { Info } from "@/components/Info";
 import { SectionTabs } from "@/components/SectionTabs";
 import { Card, Skeleton } from "@/components/ui";
 
-const TABS: [string, string][] = [["/mail", "Overview"], ["/mail/quotations", "Quotations"], ["/mail/inbox", "Inbox"], ["/mail/clients", "Clients"], ["/mail/leads", "IndiaMART leads"], ["/mail/dispatch", "Mill dispatch"], ["/mail/mailboxes", "Mailboxes"]];
+const TABS: [string, string][] = [["/mail", "Overview"], ["/mail/quotations", "Quotations"], ["/mail/inbox", "Inbox"], ["/mail/mailbox", "Mailbox"], ["/mail/clients", "Clients"], ["/mail/leads", "IndiaMART leads"], ["/mail/dispatch", "Mill dispatch"], ["/mail/mailboxes", "Mailboxes"]];
 
 // One slim row: the title, then the tabs. The long explanation sits behind the "i" so the page below gets the room.
 const HELP = (

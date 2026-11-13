@@ -35,8 +35,10 @@ async function tokenCall(body: Record<string, string>): Promise<{ access_token: 
 export const exchangeCode = (code: string, origin: string) => tokenCall({ grant_type: "authorization_code", code, redirect_uri: redirectUri(origin) });
 export const accessToken = async (refresh: string) => (await tokenCall({ grant_type: "refresh_token", refresh_token: refresh })).access_token;
 
-export async function gmail<T>(token: string, path: string, params: Record<string, string> = {}): Promise<T> {
-  const r = await fetch(`${API}${path}?${new URLSearchParams(params)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+export async function gmail<T>(token: string, path: string, params: Record<string, string | string[]> = {}): Promise<T> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) for (const x of Array.isArray(v) ? v : [v]) qs.append(k, x); // a list is sent as the same name repeated, as Gmail wants
+  const r = await fetch(`${API}${path}?${qs}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
   if (!r.ok) throw new Error(`Gmail said ${r.status} for ${path.split("/").slice(0, 2).join("/")}`);
   return (await r.json()) as T;
 }
