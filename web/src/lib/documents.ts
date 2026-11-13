@@ -52,7 +52,7 @@ export type Detail = {
   doc: { id: string; original_filename: string; mime_type: string; storage_path: string; doc_type: string; extraction_status: string; review_status: string;
          duplicate_of: string | null; created_at: string; uploaded_by: string | null; error: string | null; reviewed_by: string | null; reviewed_at: string | null };
   read: Read | FamilyRead | null; checks: Check[]; runs: RunRow[];
-  review: { decision: string; note: string | null; reviewer: string; reviewed_at: string; changes: { field: string; from: string; to: string }[] } | null;
+  review: { decision: string; note: string | null; reviewer: string; reviewed_at: string; changes: { field: string; from: string; to: string }[]; final: unknown } | null;
 };
 
 export async function documentDetail(id: string): Promise<Detail | null> {
@@ -65,7 +65,7 @@ export async function documentDetail(id: string): Promise<Detail | null> {
   const runs = await q<RunRow & { checks: Check[] }>(
     `select stage, model, usd::float8 as usd, seconds::float8 as seconds, input_tokens, output_tokens, created_at, checks from public.extraction_runs where document_id = $1::uuid order by created_at`, [id]);
   const rev = await q<NonNullable<Detail["review"]>>(
-    `select r.decision, r.note, s.full_name as reviewer, r.reviewed_at, r.changes from public.document_reviews r join public.staff s on s.id = r.reviewer_id where r.document_id = $1::uuid order by r.reviewed_at desc limit 1`, [id]);
+    `select r.decision, r.note, s.full_name as reviewer, r.reviewed_at, r.changes, r.final from public.document_reviews r join public.staff s on s.id = r.reviewer_id where r.document_id = $1::uuid order by r.reviewed_at desc limit 1`, [id]);
   const { extracted, ...doc } = d[0];
   return { doc, read: extracted && !extracted.error ? extracted : null, checks: runs.at(-1)?.checks ?? [], runs, review: rev[0] ?? null };
 }

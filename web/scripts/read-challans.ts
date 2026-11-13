@@ -12,8 +12,8 @@ const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2, tim
 const MODELS = { first: { id: "claude-haiku-5-5", in: 0.1, out: 0.5 }, second: { id: "claude-sonnet-5-5", in: 2, out: 10 } } as const;
 const arg = (k: string) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : undefined; };
 const folder = process.argv[2];
-if (!folder || folder.startsWith("--")) { console.error('usage: npx tsx scripts/read-challans.ts "<folder>" [--limit N] [--out file.json]'); process.exit(1); }
-const limit = Number(arg("--limit") ?? 99);
+if (!folder || folder.startsWith("--")) { console.error('usage: npx tsx scripts/read-challans.ts "<folder>" [--limit N] [--skip N] [--out file.json]'); process.exit(1); }
+const limit = Number(arg("--limit") ?? 99), skip = Number(arg("--skip") ?? 0);
 
 async function image(buf: Buffer, turn: number): Promise<Anthropic.ImageBlockParam> {
   const upright = await sharp(buf).rotate().toBuffer(); // the camera's own orientation tag first
@@ -23,7 +23,7 @@ async function image(buf: Buffer, turn: number): Promise<Anthropic.ImageBlockPar
 const usd = (m: { in: number; out: number }, u: { input_tokens: number; output_tokens: number }) => (u.input_tokens * m.in + u.output_tokens * m.out) / 1e6;
 
 async function main() {
-  const files = readdirSync(folder).filter((f) => /\.(jpe?g|png|webp)$/i.test(f)).sort().slice(0, limit);
+  const files = readdirSync(folder).filter((f) => /\.(jpe?g|png|webp)$/i.test(f)).sort().slice(skip, skip + limit);
   let total = 0;
   const results: unknown[] = [];
   for (const f of files) {

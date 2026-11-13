@@ -4,15 +4,17 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
 import { Badge, Card, Skeleton } from "@/components/ui";
-import { canUploadDocs, currentStaff } from "@/lib/auth";
+import { canDecide, canUploadDocs, currentStaff } from "@/lib/auth";
+import { postedOf } from "@/lib/challanPost";
 import { documentDetail, expireStuckDocuments } from "@/lib/documents";
 import { draftOfDocument } from "@/lib/drafts";
 import { matchRead } from "@/lib/docmatch";
-import { matchChallan, matchInvoice, matchMtc } from "@/lib/docmatch_family";
-import { isFamilyRead } from "@/lib/docreader/families";
+import { matchChallan, matchInvoice, matchMtc, type ChallanHit } from "@/lib/docmatch_family";
+import { isFamilyRead, type ChallanRead } from "@/lib/docreader/families";
 import { inputsFromRead, stockFit } from "@/lib/stockfit";
 import { StockFitView } from "@/components/StockFitView";
 import { supabaseServer } from "@/lib/supabase";
+import { ChallanPostPanel, UndoPosting, type PostLine } from "../ChallanPost";
 import { FamilyMatchPanel } from "../FamilyMatchPanel";
 import { FamilyReviewForm } from "../FamilyReviewForm";
 import { MatchPanel } from "../MatchPanel";
@@ -45,17 +47,32 @@ async function Body({ params }: { params: P }) {
   // a vendor invoice or a mill certificate has its own form and its own matches; everything else is an order or enquiry
   const family = d.read && isFamilyRead(d.read) ? d.read : null;
   const order = d.read && !isFamilyRead(d.read) ? d.read : null;
+  // a confirmed challan is matched, shown and posted from the reading the person confirmed (with their corrections), not from the AI's first reading
+  const finalRead = d.review?.final as { family?: string } | null | undefined;
+  const confirmedChallan = family?.family === "challan" && d.doc.review_status === "confirmed" && finalRead?.family === "challan" ? (finalRead as unknown as ChallanRead) : null;
+  const shown = confirmedChallan ?? family;
   // an order or enquiry from a customer: do we have the plates? (read-only; it reserves nothing)
   const wanted = order && order.direction === "customer_orders_from_us" ? inputsFromRead(order) : [];
   // everything the page needs is asked at the same time (one after another it was a dozen round trips to the database)
-  const [me, signed, matches, familyMatch, draft, fits] = await Promise.all([
+  const [me, signed, matches, familyMatch, draft, fits, posted] = await Promise.all([
     currentStaff(),
     supabase.storage.from("documents").createSignedUrl(d.doc.storage_path, 900),
     order ? matchRead(order) : Promise.resolve(null),
-    family ? (family.family === "invoice" ? matchInvoice(family, d.doc.id) : family.family === "challan" ? matchChallan(family, d.doc.id) : matchMtc(family, d.doc.id)) : Promise.resolve(null),
+    shown ? (shown.family === "invoice" ? matchInvoice(shown, d.doc.id) : shown.family === "challan" ? matchChallan(shown, d.doc.id) : matchMtc(shown, d.doc.id)) : Promise.resolve(null),
     draftOfDocument(d.doc.id),
     Promise.all(wanted.map(async (w) => ({ line: w.line, fit: await stockFit(w.input) }))),
+    confirmedChallan ? postedOf(d.doc.id) : Promise.resolve(null),
   ]);
+  const decider = Boolean(me && canDecide(me.role));
+  // the lines of the posting form: the plate each line most likely comes out of (the person may change it), and a weight worked out from the plate's own weight
+  const hitText = (h: ChallanHit, similar = false) => `${similar ? "Similar: " : ""}Plate ${h.lot_no} · ${h.grade ?? ""} ${h.thickness_mm}×${h.width_mm}×${h.length_mm} · ${h.heat_no ?? h.plate_no ?? ""} · ${h.balance_pieces ?? "?"} pcs / ${Math.round(h.balance_kg ?? 0)} kg left`;
+  const postLines: PostLine[] = confirmedChallan && familyMatch?.family === "challan"
+    ? familyMatch.lines.map((m, i) => ({
+        n: i, label: m.key, pieces: confirmedChallan.lines[i]?.pieces ?? "", balance: confirmedChallan.lines[i]?.balance ?? "", verdict: m.verdict,
+        options: [...m.hits.map((h) => ({ id: h.id, text: hitText(h) })), ...m.similar.filter((s) => !m.hits.some((h) => h.id === s.id)).map((h) => ({ id: h.id, text: hitText(h, true) }))],
+        lot: (m.verdict === "ok" || m.verdict === "several" || m.verdict === "short") && m.best ? m.best.id : "", kg: m.est_kg, warn: m.notes,
+      }))
+    : [];
   const url = signed.data?.signedUrl;
   const canEdit = Boolean(me && canUploadDocs(me.role)) && d.doc.review_status === "pending";
   const usd = d.runs.reduce((a, r) => a + r.usd, 0);
@@ -94,6 +111,18 @@ async function Body({ params }: { params: P }) {
         )}
         {order && matches && <MatchPanel read={order} m={matches} />}
         {familyMatch && <FamilyMatchPanel m={familyMatch} />}
+        {confirmedChallan && posted && (
+          <div className="mb-5 space-y-2 rounded-lg border border-line bg-card p-4 text-[0.9rem]">
+            <div><Badge tone="ok">Posted to stock</Badge> <span className="ml-1 text-muted">on {when(posted.posted_at)}, challan dated {posted.dispatched_on ?? "?"}</span></div>
+            <ul className="space-y-0.5 text-[0.86rem]">
+              {posted.lines.map((l, i) => (
+                <li key={i}>{l.lot_no != null ? <Link href={`/plates/${l.lot_no}`} className="font-medium text-brand hover:underline">Plate {l.lot_no}</Link> : <span className="font-medium">Not from our stock</span>}{l.heat_no ? ` · ${l.heat_no}` : ""} · {l.pieces ?? "?"} pcs · {l.weight_kg != null ? `${Math.round(l.weight_kg)} kg` : ""}{l.lot_no == null && l.note ? <span className="text-muted"> ({l.note.replace("Not from our stock: ", "")})</span> : null}</li>
+              ))}
+            </ul>
+            <UndoPosting id={d.doc.id} canDecide={decider} />
+          </div>
+        )}
+        {confirmedChallan && !posted && postLines.length > 0 && <ChallanPostPanel id={d.doc.id} lines={postLines} canDecide={decider} />}
         {fits.length > 0 && (
           <div className="mb-5 space-y-2 rounded-lg border border-line bg-card p-4 text-[0.9rem]">
             <h3 className="font-display text-[0.95rem] font-bold">Do we have it in stock?</h3>
@@ -101,8 +130,8 @@ async function Body({ params }: { params: P }) {
             <p className="text-[0.78rem] text-muted">Plates of the same grade and thickness (within 0.05 mm) that are big enough, either way round. Nothing is reserved.</p>
           </div>
         )}
-        {family ? (
-          <FamilyReviewForm key={d.doc.id + d.runs.length} id={d.doc.id} original={family} firstChecks={d.checks} canEdit={canEdit} />
+        {family && shown ? (
+          <FamilyReviewForm key={d.doc.id + d.runs.length} id={d.doc.id} original={shown} firstChecks={d.checks} canEdit={canEdit} />
         ) : order ? (
           <ReviewForm key={d.doc.id + d.runs.length} id={d.doc.id} original={order} firstChecks={d.checks} canEdit={canEdit} />
         ) : (

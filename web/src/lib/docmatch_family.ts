@@ -22,7 +22,7 @@ export type MtcMatch = {
 };
 
 export type ChallanHit = {
-  lot_no: number; grade: string | null; thickness_mm: number | null; width_mm: number | null; length_mm: number | null; heat_no: string | null; plate_no: string | null;
+  id: string; lot_no: number; grade: string | null; thickness_mm: number | null; width_mm: number | null; length_mm: number | null; heat_no: string | null; plate_no: string | null;
   status: string; balance_kg: number | null; balance_pieces: number | null; kg_per_piece: number | null; entity: string | null;
 };
 export type ChallanLineMatch = {
@@ -50,7 +50,7 @@ async function lotsFor(heat: string, plate: string): Promise<LotHit[]> {
   return [];
 }
 
-const CHALLAN_LOTS = `select l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thickness_mm, l.width_mm::float8 width_mm, l.length_mm::float8 length_mm, l.heat_no, l.plate_no,
+const CHALLAN_LOTS = `select l.id, l.lot_no::int lot_no, g.code grade, l.thickness_mm::float8 thickness_mm, l.width_mm::float8 width_mm, l.length_mm::float8 length_mm, l.heat_no, l.plate_no,
                 l.current_status status, l.balance_kg::float8 balance_kg, l.balance_pieces balance_pieces,
                 (coalesce(l.invoice_weight_kg, l.theoretical_weight_kg) / nullif(l.pieces_received, 0))::float8 kg_per_piece, e.code entity
            from public.v_lots_current l left join public.grades g on g.id = l.grade_id left join public.entities e on e.id = l.entity_id`;
@@ -114,8 +114,13 @@ export async function matchChallan(r: ChallanRead, docId: string): Promise<Chall
     let est: number | null = null;
     if (p != null && t != null && w != null && len != null) {
       const theo = t * w * len * KG_PER_MM3;
-      const full = best && best.kg_per_piece != null && best.width_mm != null && best.length_mm != null && Math.abs(best.width_mm * best.length_mm - w * len) <= best.width_mm * best.length_mm * 0.03;
-      est = p * (full ? (best!.kg_per_piece as number) : theo);
+      // mill plates weigh a little more than the formula says: the plate's own weight per piece, against the formula for its own size, gives the factor for the piece cut from it
+      let factor = 1;
+      if (best && best.kg_per_piece != null && best.thickness_mm && best.width_mm && best.length_mm) {
+        const lotTheo = best.thickness_mm * best.width_mm * best.length_mm * KG_PER_MM3;
+        if (lotTheo > 0) factor = Math.min(1.15, Math.max(0.9, best.kg_per_piece / lotTheo));
+      }
+      est = p * theo * factor;
       estTotal += num(l.weight_kg) ?? est;
     }
     const similar = verdict === "not_found" || verdict === "thickness" ? await similarLots(l.heat_no, t) : [];

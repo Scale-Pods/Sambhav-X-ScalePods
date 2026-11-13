@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { call, q, userMessage } from "@/lib/db";
+import { canDecide } from "@/lib/auth";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
 import { checkKey, runChecks, type Read } from "@/lib/docreader/checks";
 import { FAMILY_UI, isFamilyRead, runChallanChecks, runInvoiceChecks, runMtcChecks, type FamilyRead } from "@/lib/docreader/families";
@@ -91,6 +92,7 @@ export async function reviewFamilyDocument(id: string, decision: "confirmed" | "
       final = { ...(edited ?? before), family: before.family } as FamilyRead; // the kind of document is fixed by what was read
       const list = final.family === "invoice" || final.family === "challan" ? final.lines : final.items;
       if (!Array.isArray(list)) return { ok: false, error: "The form is incomplete" };
+      if (final.family === "challan" && final.entity !== "SPF" && final.entity !== "SAI") return { ok: false, error: "Choose SPF or Sai under From before confirming: the stock it leaves from is told by the company." };
       changes = diffFamily(before, final);
       decision = changes.length > 0 ? "corrected" : "confirmed";
       const flagged = (final.family === "invoice" ? runInvoiceChecks(final) : final.family === "challan" ? runChallanChecks(final) : runMtcChecks(final)).filter((c) => c.level === "amber");
@@ -107,4 +109,47 @@ export async function reviewFamilyDocument(id: string, decision: "confirmed" | "
   revalidatePath(`/documents/${id}`);
   revalidatePath("/drafts");
   return { ok: true, draftId };
+}
+
+// ---------------------------------------------------------------- posting a confirmed challan to stock
+
+export type PostLineIn = { n: number; lot_id: string | null; pieces: number; weight_kg: number };
+export type PostResult = { ok: true; message: string } | { ok: false; error: string };
+const UUID = /^[0-9a-f-]{36}$/i;
+
+/** The checker's step: the plates a person chose for each line go out of stock, in one go (the database function checks the role, the confirmed reading and every balance). */
+export async function postChallan(id: string, lines: PostLineIn[]): Promise<PostResult> {
+  if (!UUID.test(id)) return { ok: false, error: "Bad id" };
+  const me = await currentStaff().catch(() => null);
+  if (!me || !canDecide(me.role)) return { ok: false, error: "Only an approver, an administrator or the owner may post a challan to stock." };
+  if (!Array.isArray(lines) || lines.length === 0 || lines.length > 60) return { ok: false, error: "The lines are not complete." };
+  for (const l of lines) if (!Number.isInteger(l.n) || (l.lot_id !== null && !UUID.test(l.lot_id)) || !Number.isFinite(l.pieces) || !Number.isFinite(l.weight_kg)) return { ok: false, error: "The lines are not complete." };
+  try {
+    const r = await call<{ r: { posted: number; not_from_stock: number } }>(`select public.post_challan($1::uuid, $2::jsonb) r`, [id, JSON.stringify(lines.map((l) => ({ n: l.n, lot_id: l.lot_id, pieces: Math.round(l.pieces), weight_kg: Math.round(l.weight_kg * 100) / 100 })))]);
+    revalidatePath(`/documents/${id}`);
+    revalidatePath("/plates");
+    revalidatePath("/summary");
+    revalidatePath("/");
+    const x = r[0].r;
+    return { ok: true, message: `Posted: ${x.posted} line${x.posted === 1 ? "" : "s"} taken out of stock${x.not_from_stock ? `, ${x.not_from_stock} marked not from our stock` : ""}.` };
+  } catch (e) {
+    return { ok: false, error: userMessage(e) };
+  }
+}
+
+/** Take a posting back: each sale is reversed (nothing is deleted) and the challan can be posted again. */
+export async function unpostChallan(id: string, note: string): Promise<PostResult> {
+  if (!UUID.test(id)) return { ok: false, error: "Bad id" };
+  const me = await currentStaff().catch(() => null);
+  if (!me || !canDecide(me.role)) return { ok: false, error: "Only an approver, an administrator or the owner may take a posting back." };
+  try {
+    const r = await call<{ r: { reversed: number } }>(`select public.unpost_challan($1::uuid, $2) r`, [id, note.trim().slice(0, 300)]);
+    revalidatePath(`/documents/${id}`);
+    revalidatePath("/plates");
+    revalidatePath("/summary");
+    revalidatePath("/");
+    return { ok: true, message: `Taken back: ${r[0].r.reversed} sale${r[0].r.reversed === 1 ? "" : "s"} reversed.` };
+  } catch (e) {
+    return { ok: false, error: userMessage(e) };
+  }
 }
