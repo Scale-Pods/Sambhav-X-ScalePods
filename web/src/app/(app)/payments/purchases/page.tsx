@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Card, Skeleton } from "@/components/ui";
@@ -32,6 +33,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Bought by", cell: (r) => r.purchased_by },
     { label: "Checked by", cell: (r) => r.checked_by },
     { label: "Bill", info: "A link to the bill file (scan or PDF).", cell: (r) => <FileLink url={r.file_url} /> },
+    { label: "Pay", info: "Prepares the RTGS / NEFT form for this invoice as an Excel file: the supplier's bank details are read from its bill.", cell: (r) => (Number(r.amount) > 0 && r.invoice_no && r.vendor ? <Link prefetch={false} href={`/payments/purchases/rtgs?${new URLSearchParams({ inv: r.invoice_no, party: r.vendor, entity: r.entity })}`} className="rounded-md border border-line bg-field px-2 py-1 text-[0.78rem] font-medium text-brand hover:border-brand">RTGS form</Link> : null) },
   ];
   return (
     <FilterShell grades={[]} hide={["book", "grade", "thickness", "unit"]} extra={<PayExtras entity={p.entity ?? "all"} q={p.q} placeholder="Invoice, supplier, broker" />}>
