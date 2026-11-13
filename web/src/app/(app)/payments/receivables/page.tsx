@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Badge, Card, Skeleton } from "@/components/ui";
@@ -20,7 +21,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
   const d = await receivablesList(p);
   const link = linker("/payments/receivables", sp);
   const cols: Col<ReceivableRow>[] = [
-    { label: "Customer", cell: (r) => <span className="font-semibold">{r.party}</span>, nowrap: false },
+    { label: "Customer", cell: (r) => <><span className="font-semibold">{r.party}</span>{r.party && Number(r.overdue_days) > 0 && Number(r.pending) > 0 && <Link href={`/payments/reminders/prepare?${new URLSearchParams({ party: r.party, entity: r.entity })}`} className="ml-2 text-[0.78rem] font-medium text-brand hover:underline">Remind</Link>}</>, nowrap: false },
     { label: "Company", info: "The business the entry belongs to: SPF is Sambhav Pipes & Fittings, Sai is Sai Steel & Engineering.", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
     { label: "Invoice", info: "The invoice number as typed in the payment sheet.", cell: (r) => r.invoice_no },
     { label: "Date", cell: (r) => day(r.invoice_date) },

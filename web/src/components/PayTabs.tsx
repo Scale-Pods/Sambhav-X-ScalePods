@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 const TABS: [string, string][] = [
   ["/payments", "Overview"], ["/payments/sales", "Sales invoices"], ["/payments/purchases", "Purchase invoices"], ["/payments/expenses", "Expenses"],
-  ["/payments/receivables", "Debtors"], ["/payments/payables", "Creditors"], ["/payments/other", "Other payments"],
+  ["/payments/receivables", "Debtors"], ["/payments/reminders", "Reminders"], ["/payments/payables", "Creditors"], ["/payments/other", "Other payments"],
 ];
 const KEEP = ["entity", "p", "from", "to"];
 
