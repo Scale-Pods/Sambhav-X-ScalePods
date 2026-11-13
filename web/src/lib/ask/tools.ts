@@ -4,6 +4,7 @@ import { canExport, canSeeBusiness, canUploadDocs } from "../auth";
 import { stockFit } from "../stockfit";
 import { trailDetail, trailList } from "../tallytrail";
 import { appRef, findSheetRows, sheetRef, type ToolCtx } from "./refs";
+import { plateSheetLink } from "../highlightLinks";
 
 // The only things the Ask box may do: fixed, read-only lookups. The AI picks one and fills in its few parameters; it never writes SQL.
 // Every lookup runs as the signed-in person (the database's row rules still apply) and returns a small, trimmed set of rows.
@@ -61,7 +62,7 @@ async function lotRefs(ctx: ToolCtx, lots: LotLike[]) {
   const rows = await findSheetRows(ctx, tokens, STOCK_SHEETS);
   const out = new Map<number, string[]>();
   for (const l of lots) {
-    const ids = [appRef(ctx, `Plate ${l.lot_no} in the app`, `/plates/${l.lot_no}`)];
+    const ids = [appRef(ctx, `Plate ${l.lot_no} in the app`, `/plates/${l.lot_no}`), appRef(ctx, `Plate ${l.lot_no} in the stock sheet (highlighted)`, plateSheetLink(l.lot_no))];
     const hit = rows.get(l.plate_no || l.heat_no || "") ?? [];
     for (const h of hit.slice(0, 2)) { const id = await sheetRef(ctx, h.source_key, h.tab, h.row_no); if (id) ids.push(id); }
     out.set(l.lot_no, ids);
@@ -176,12 +177,12 @@ export const TOOLS: Tool[] = [
       const split = g === "month" ? "to_char(m.movement_date, 'YYYY-MM')" : g === "thickness" ? "l.thickness_mm::float8" : "g.code";
       const totals = await q(`select m.movement_type::text kind, count(*)::int movements, count(distinct m.lot_id)::int plates, abs(sum(m.pieces))::int pieces, round(abs(sum(m.weight_kg)))::int kg ${base} group by 1 order by 1`, args);
       const breakdown = await q(`select m.movement_type::text kind, ${split} as ${g === "month" ? "month" : g === "thickness" ? "thickness_mm" : "grade"}, abs(sum(m.pieces))::int pieces, round(abs(sum(m.weight_kg)))::int kg ${base} group by 1, 2 order by 1, 4 desc limit 30`, args);
-      const latest = await q<{ lot_no: number } & Record<string, unknown>>(
-        `select m.movement_date::text date, m.movement_type::text kind, g.code grade, l.thickness_mm::float8 thk, l.width_mm::float8 width, l.length_mm::float8 length, l.heat_no, l.plate_no, l.lot_no::int lot_no, m.pieces, round(m.weight_kg)::int kg, left(m.note, 80) note
+      const latest = await q<{ lot_no: number; seq: number } & Record<string, unknown>>(
+        `select m.movement_date::text date, m.movement_type::text kind, g.code grade, l.thickness_mm::float8 thk, l.width_mm::float8 width, l.length_mm::float8 length, l.heat_no, l.plate_no, l.lot_no::int lot_no, m.seq::int seq, m.pieces, round(m.weight_kg)::int kg, left(m.note, 80) note
            ${base} order by m.movement_date desc, m.seq desc limit 10`, args);
       return {
         period: { from: args[0], to: args[1] }, totals_by_kind: totals, breakdown,
-        latest: latest.map(({ lot_no, ...r }) => ({ ...r, plate: lot_no, refs: [appRef(ctx, `Plate ${lot_no} in the app`, `/plates/${lot_no}`)] })),
+        latest: latest.map(({ lot_no, seq, ...r }) => ({ ...r, plate: lot_no, refs: [appRef(ctx, `Plate ${lot_no} in the app`, `/plates/${lot_no}`), appRef(ctx, `This movement in the stock sheet (highlighted)`, `/sheets/stock/show?hl=s${seq}`)] })),
         note: "kg and pieces in the totals are absolute (sales leave stock, receipts enter it); in 'latest' a minus sign means it left stock. Movements come from the stock sheets as loaded into the stock book, so very recent sheet changes may not be in yet.",
         refs: [appRef(ctx, "Plates in the app", "/plates"), appRef(ctx, "Stock overview", "/")], data_as_of: await stockAsOf(ctx),
       };

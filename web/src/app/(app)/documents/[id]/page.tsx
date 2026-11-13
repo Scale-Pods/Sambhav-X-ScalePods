@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Badge, Card, Skeleton } from "@/components/ui";
 import { canDecide, canUploadDocs, currentStaff } from "@/lib/auth";
 import { postedOf } from "@/lib/challanPost";
+import { postedLink } from "@/lib/highlightLinks";
 import { documentDetail, expireStuckDocuments } from "@/lib/documents";
 import { draftOfDocument } from "@/lib/drafts";
 import { matchRead } from "@/lib/docmatch";
@@ -63,6 +64,7 @@ async function Body({ params }: { params: P }) {
     Promise.all(wanted.map(async (w) => ({ line: w.line, fit: await stockFit(w.input) }))),
     confirmedChallan ? postedOf(d.doc.id) : Promise.resolve(null),
   ]);
+  const postedShow = posted ? await postedLink(posted.id).catch(() => null) : null;
   const decider = Boolean(me && canDecide(me.role));
   // the lines of the posting form: the plate each line most likely comes out of (the person may change it), and a weight worked out from the plate's own weight
   const hitText = (h: ChallanHit, similar = false) => `${similar ? "Similar: " : ""}Plate ${h.lot_no} · ${h.grade ?? ""} ${h.thickness_mm}×${h.width_mm}×${h.length_mm} · ${h.heat_no ?? h.plate_no ?? ""} · ${h.balance_pieces ?? "?"} pcs / ${Math.round(h.balance_kg ?? 0)} kg left`;
@@ -113,7 +115,7 @@ async function Body({ params }: { params: P }) {
         {familyMatch && <FamilyMatchPanel m={familyMatch} />}
         {confirmedChallan && posted && (
           <div className="mb-5 space-y-2 rounded-lg border border-line bg-card p-4 text-[0.9rem]">
-            <div><Badge tone="ok">Posted to stock</Badge> <span className="ml-1 text-muted">on {when(posted.posted_at)}, challan dated {posted.dispatched_on ?? "?"}</span></div>
+            <div><Badge tone="ok">Posted to stock</Badge> <span className="ml-1 text-muted">on {when(posted.posted_at)}, challan dated {posted.dispatched_on ?? "?"}</span>{postedShow && <Link href={postedShow} className="ml-3 text-[0.85rem] font-medium text-brand hover:underline">Show in the stock sheet</Link>}</div>
             <ul className="space-y-0.5 text-[0.86rem]">
               {posted.lines.map((l, i) => (
                 <li key={i}>{l.lot_no != null ? <Link href={`/plates/${l.lot_no}`} className="font-medium text-brand hover:underline">Plate {l.lot_no}</Link> : <span className="font-medium">Not from our stock</span>}{l.heat_no ? ` · ${l.heat_no}` : ""} · {l.pieces ?? "?"} pcs · {l.weight_kg != null ? `${Math.round(l.weight_kg)} kg` : ""}{l.lot_no == null && l.note ? <span className="text-muted"> ({l.note.replace("Not from our stock: ", "")})</span> : null}</li>

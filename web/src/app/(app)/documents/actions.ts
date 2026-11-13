@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { postedLink, unpostedLink } from "@/lib/highlightLinks";
 import { call, q, userMessage } from "@/lib/db";
 import { canDecide } from "@/lib/auth";
 import { canUploadDocs, currentStaff } from "@/lib/auth";
@@ -114,7 +115,7 @@ export async function reviewFamilyDocument(id: string, decision: "confirmed" | "
 // ---------------------------------------------------------------- posting a confirmed challan to stock
 
 export type PostLineIn = { n: number; lot_id: string | null; pieces: number; weight_kg: number; recorded?: boolean };
-export type PostResult = { ok: true; message: string } | { ok: false; error: string };
+export type PostResult = { ok: true; message: string; show?: string } | { ok: false; error: string };
 const UUID = /^[0-9a-f-]{36}$/i;
 
 /** The checker's step: the plates a person chose for each line go out of stock, in one go (the database function checks the role, the confirmed reading and every balance). */
@@ -125,13 +126,14 @@ export async function postChallan(id: string, lines: PostLineIn[]): Promise<Post
   if (!Array.isArray(lines) || lines.length === 0 || lines.length > 60) return { ok: false, error: "The lines are not complete." };
   for (const l of lines) if (!Number.isInteger(l.n) || (l.lot_id !== null && !UUID.test(l.lot_id)) || !Number.isFinite(l.pieces) || !Number.isFinite(l.weight_kg)) return { ok: false, error: "The lines are not complete." };
   try {
-    const r = await call<{ r: { posted: number; recorded?: number; not_from_stock: number } }>(`select public.post_challan($1::uuid, $2::jsonb) r`, [id, JSON.stringify(lines.map((l) => ({ n: l.n, lot_id: l.lot_id, recorded: l.recorded === true, pieces: Math.round(l.pieces), weight_kg: Math.round(l.weight_kg * 100) / 100 })))]);
+    const r = await call<{ r: { dispatch: string; posted: number; recorded?: number; not_from_stock: number } }>(`select public.post_challan($1::uuid, $2::jsonb) r`, [id, JSON.stringify(lines.map((l) => ({ n: l.n, lot_id: l.lot_id, recorded: l.recorded === true, pieces: Math.round(l.pieces), weight_kg: Math.round(l.weight_kg * 100) / 100 })))]);
     revalidatePath(`/documents/${id}`);
     revalidatePath("/plates");
     revalidatePath("/summary");
     revalidatePath("/");
     const x = r[0].r;
-    return { ok: true, message: `Posted: ${x.posted} line${x.posted === 1 ? "" : "s"} taken out of stock${x.recorded ? `, ${x.recorded} already in the stock book (nothing moved)` : ""}${x.not_from_stock ? `, ${x.not_from_stock} marked not from our stock` : ""}.` };
+    const show = await postedLink(x.dispatch).catch(() => null);
+    return { ok: true, show: show ?? undefined, message: `Posted: ${x.posted} line${x.posted === 1 ? "" : "s"} taken out of stock${x.recorded ? `, ${x.recorded} already in the stock book (nothing moved)` : ""}${x.not_from_stock ? `, ${x.not_from_stock} marked not from our stock` : ""}.` };
   } catch (e) {
     return { ok: false, error: userMessage(e) };
   }
@@ -143,12 +145,13 @@ export async function unpostChallan(id: string, note: string): Promise<PostResul
   const me = await currentStaff().catch(() => null);
   if (!me || !canDecide(me.role)) return { ok: false, error: "Only an approver, an administrator or the owner may take a posting back." };
   try {
-    const r = await call<{ r: { reversed: number } }>(`select public.unpost_challan($1::uuid, $2) r`, [id, note.trim().slice(0, 300)]);
+    const r = await call<{ r: { dispatch: string; reversed: number } }>(`select public.unpost_challan($1::uuid, $2) r`, [id, note.trim().slice(0, 300)]);
     revalidatePath(`/documents/${id}`);
     revalidatePath("/plates");
     revalidatePath("/summary");
     revalidatePath("/");
-    return { ok: true, message: `Taken back: ${r[0].r.reversed} sale${r[0].r.reversed === 1 ? "" : "s"} reversed.` };
+    const show = await unpostedLink(r[0].r.dispatch).catch(() => null);
+    return { ok: true, show: show ?? undefined, message: `Taken back: ${r[0].r.reversed} sale${r[0].r.reversed === 1 ? "" : "s"} reversed.` };
   } catch (e) {
     return { ok: false, error: userMessage(e) };
   }

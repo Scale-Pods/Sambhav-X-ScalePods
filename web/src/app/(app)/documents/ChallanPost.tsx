@@ -37,7 +37,7 @@ export function ChallanPostPanel({ id, lines, canDecide }: { id: string; lines: 
     start(async () => {
       const r = await postChallan(id, payload);
       setMsg({ ok: r.ok, text: r.ok ? r.message : r.error });
-      if (r.ok) router.refresh();
+      if (r.ok) { if (r.show) router.push(r.show); else router.refresh(); }
     });
   }
 
@@ -89,7 +89,7 @@ export function UndoPosting({ id, canDecide }: { id: string; canDecide: boolean 
     <div className="space-y-2">
       <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Why is it being taken back? (required)" disabled={pending} className={inp + " w-full max-w-md"} />
       <div className="flex items-center gap-2">
-        <button type="button" disabled={pending || note.trim().length < 3} onClick={() => start(async () => { const r = await unpostChallan(id, note); if (r.ok) router.refresh(); else setMsg(r.error); })} className="rounded-lg bg-bad px-3.5 py-1.5 text-sm font-medium text-white disabled:opacity-50">{pending ? "Working…" : "Take it back"}</button>
+        <button type="button" disabled={pending || note.trim().length < 3} onClick={() => start(async () => { const r = await unpostChallan(id, note); if (r.ok) { if (r.show) router.push(r.show); else router.refresh(); } else setMsg(r.error); })} className="rounded-lg bg-bad px-3.5 py-1.5 text-sm font-medium text-white disabled:opacity-50">{pending ? "Working…" : "Take it back"}</button>
         <button type="button" disabled={pending} onClick={() => { setOpen(false); setMsg(null); }} className="text-sm text-muted hover:underline">Cancel</button>
       </div>
       {msg && <p className="text-[0.85rem] text-bad">{msg}</p>}

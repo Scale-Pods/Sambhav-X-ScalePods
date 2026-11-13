@@ -37,6 +37,7 @@ async function Body({ params }: { params: Promise<{ lot: string }> }) {
               <p className="text-[0.8rem] font-medium uppercase tracking-wide text-muted">{lot.grade}</p>
               <h1 className="mt-1 text-[1.9rem] font-semibold tracking-tight">{lot.plate_no ?? lot.heat_no}</h1>
               {lot.plate_no && lot.heat_no && <p className="text-muted">Heat number {lot.heat_no}</p>}
+              <Link href={`/sheets/stock/show?hl=l${lot.lot_no}`} className="mt-1 inline-block text-[0.85rem] font-medium text-brand hover:underline">Show in the stock sheet</Link>
             </div>
             <div className="text-right">
               <p className="text-[0.8rem] font-medium uppercase tracking-wide text-muted">Left in stock</p>

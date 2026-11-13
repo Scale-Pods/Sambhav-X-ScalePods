@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { canDecide, canExport, currentStaff } from "@/lib/auth";
 import { call, serviceQuery, userMessage } from "@/lib/db";
 import { syncAll } from "@/lib/mill/sync";
+import { receivedLink } from "@/lib/highlightLinks";
 
-export type Result = { ok: true; message: string } | { ok: false; error: string };
+export type Result = { ok: true; message: string; show?: string } | { ok: false; error: string };
 const UUID = /^[0-9a-f-]{36}$/i;
 
 /** Look in the connected mailboxes now, without waiting for the 15-minute round. Administrators only. */
@@ -45,7 +46,8 @@ export async function approveReceipt(id: string): Promise<Result> {
     revalidatePath("/mail/dispatch"); revalidatePath("/mail/inbox"); revalidatePath("/mail/mailboxes");
     revalidatePath("/plates");
     revalidatePath("/summary");
-    return { ok: true, message: `${r.r.added} plate${r.r.added === 1 ? "" : "s"} added to stock${r.r.already_received ? `, ${r.r.already_received} already received before` : ""}.` };
+    const show = r.r.added > 0 ? await receivedLink(id).catch(() => null) : null;
+    return { ok: true, show: show ?? undefined, message: `${r.r.added} plate${r.r.added === 1 ? "" : "s"} added to stock${r.r.already_received ? `, ${r.r.already_received} already received before` : ""}.` };
   } catch (e) {
     return { ok: false, error: userMessage(e) };
   }

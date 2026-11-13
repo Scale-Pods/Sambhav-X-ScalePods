@@ -6,6 +6,8 @@ import { stockBookTabs, stockSheetTab } from "@/lib/stockSheet";
 import { Card, Skeleton } from "@/components/ui";
 import { Info } from "@/components/Info";
 import { SectionView } from "./SectionView";
+import { HighlightBar } from "./HighlightBar";
+import { parseHl, hasHl, type Tone } from "@/lib/highlight";
 
 type SP = Promise<Record<string, string | undefined>>;
 type P = Promise<{ book: string }>;
@@ -31,11 +33,17 @@ async function Body({ params, searchParams }: { params: P; searchParams: SP }) {
   const tab = tabs.find((t) => t.tab === sp.tab)?.tab ?? tabs[0].tab;
   const search = (sp.q ?? "").trim().slice(0, 60);
   const data = await stockSheetTab(book, tab, search);
+  const hl = parseHl(sp.hl);
   const href = (changes: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     Object.entries({ tab, q: search || undefined, ...changes }).forEach(([k, v]) => v && p.set(k, v));
     return `/sheets/stock/${book}?${p}`;
   };
+  // how many rows are marked in this tab, by colour (the bar says it in words)
+  const count: Record<Tone, number> = { add: 0, del: 0, see: 0 };
+  for (const s of data.sections) {
+    for (const r of [...s.purchases, ...s.sales]) { const t = hl.moves.get(r.seq) ?? (hl.lots.has(r.lot_no) ? "see" : undefined); if (t) count[t]++; }
+  }
 
   return (
     <div className="space-y-3">
@@ -63,6 +71,8 @@ async function Body({ params, searchParams }: { params: P; searchParams: SP }) {
         ))}
       </nav>
 
+      {hasHl(hl) && <HighlightBar add={count.add} del={count.del} see={count.see} clearHref={href({ q: search || undefined })} />}
+
       <div className="grid grid-cols-3 gap-2.5">
         {[["Total purchase", data.totals.pur, "text-ink"], ["Total sold", data.totals.sale, "text-accent"], ["Balance in stock", data.totals.bal, "text-brand"]].map(([l, v, c]) => (
           <div key={l as string} className="rounded-lg border border-line bg-card px-3.5 py-2">
@@ -82,7 +92,7 @@ async function Body({ params, searchParams }: { params: P; searchParams: SP }) {
       <div className="overflow-hidden rounded-lg border border-line bg-card shadow-[0_1px_2px_rgba(24,34,45,0.04)]">
         <div className="max-h-[max(20rem,calc(100dvh-21rem))] overflow-auto">
           {data.sections.length === 0 && <p className="px-5 py-10 text-[0.92rem] text-muted">{search ? `Nothing in ${tab} matches “${search}”.` : "Nothing in this tab."}</p>}
-          {data.sections.map((s) => <SectionView key={s.thk} s={s} />)}
+          {data.sections.map((s) => <SectionView key={s.thk} s={s} hl={hl} />)}
         </div>
       </div>
     </div>
