@@ -5,7 +5,7 @@ import { FilterShell } from "@/components/FilterBar";
 import { PayExtras } from "@/components/PayBar";
 import { FileLink, ListFooter, PayTable, day, linker, type Col } from "@/components/PayList";
 import { PAGE_SIZE, purchasesList, readPayParams, type PurchaseRow } from "@/lib/payments";
-import { amount, rupeesShort } from "@/lib/money";
+import { rupees2, rupeesShort } from "@/lib/money";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -25,9 +25,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Company", info: "The business the entry belongs to: SPF is Sambhav Pipes & Fittings, Sai is Sai Steel & Engineering.", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
     { label: "Supplier", cell: (r) => r.vendor, nowrap: false },
     { label: "Purchased for", cell: (r) => r.purchased_for },
-    { label: "Amount (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.amount)}</span> },
-    { label: "Weight", right: true, cell: (r) => (r.weight ? `${amount(r.weight)} ${r.unit ?? ""}` : "") },
-    { label: "Rate", right: true, cell: (r) => (r.rate ? amount(r.rate) : "") },
+    { label: "Amount", right: true, cell: (r) => <span className="font-medium">{rupees2(r.amount)}</span> },
     { label: "Days", info: "Credit days: how many days after the invoice the payment is allowed.", right: true, cell: (r) => r.credit_days },
     { label: "Due", info: "The payment date: the invoice date plus the credit days.", cell: (r) => day(r.due_date) },
     { label: "Broker", cell: (r) => r.broker },

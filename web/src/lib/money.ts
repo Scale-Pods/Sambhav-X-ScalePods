@@ -6,6 +6,8 @@ const inr2 = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2, minimumF
 export const rupees = (v: number | string | null | undefined) => (v == null || v === "" ? "-" : "₹" + inr0.format(Math.round(Number(v))));
 /** 12,34,567.50 (no symbol): for table cells */
 export const amount = (v: number | string | null | undefined) => (v == null || v === "" ? "-" : inr0.format(Math.round(Number(v))));
+/** ₹12,34,567.00 : a rupee amount with its paise, as the payment sheets show it */
+export const rupees2 = (v: number | string | null | undefined) => (v == null || v === "" ? "-" : "₹" + inr2.format(Number(v)));
 export const amount2 = (v: number | string | null | undefined) => (v == null || v === "" ? "-" : inr2.format(Number(v)));
 
 /** ₹1.62 cr · ₹45.3 L · ₹8,500 */
