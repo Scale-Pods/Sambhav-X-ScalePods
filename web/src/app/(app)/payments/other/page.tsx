@@ -6,7 +6,7 @@ import { FilterShell } from "@/components/FilterBar";
 import { PayExtras } from "@/components/PayBar";
 import { FileLink, ListFooter, PayTable, day, linker, type Col } from "@/components/PayList";
 import { PAGE_SIZE, brokerageList, gpayList, pettyList, readPayParams, type BrokerageRow, type GpayRow, type PettyRow } from "@/lib/payments";
-import { amount, rupeesShort } from "@/lib/money";
+import { amount, rupeesShort, rupees2 } from "@/lib/money";
 
 type SP = Promise<Record<string, string | undefined>>;
 const VIEWS = [["gpay", "GPay payments"], ["cash", "Small cash expenses"], ["brokerage", "Brokerage"]] as const;
@@ -27,7 +27,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     const d = await gpayList(p);
     const cols: Col<GpayRow>[] = [
       { label: "Date", cell: (r) => day(r.entered_at) }, { label: "What for", cell: (r) => <span className="font-semibold">{r.description}</span>, nowrap: false },
-      { label: "For whom", cell: (r) => r.for_whom }, { label: "Amount (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.amount)}</span> },
+      { label: "For whom", cell: (r) => r.for_whom }, { label: "Amount", right: true, cell: (r) => <span className="font-medium">{rupees2(r.amount)}</span> },
       { label: "Paid by", cell: (r) => r.paid_by }, { label: "Screenshot", cell: (r) => <FileLink url={r.file_url} /> },
     ];
     table = <><PayTable cols={cols} rows={d.rows} /><ListFooter total={d.total} sum={d.sum} sumLabel="Paid" page={d.page} pages={d.pages} size={PAGE_SIZE} hrefFor={(n) => link({ page: n })} exportHref={link({ page: undefined }, "/api/export/pay-gpay")} format={rupeesShort} /></>;
@@ -35,7 +35,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     const d = await pettyList(p);
     const cols: Col<PettyRow>[] = [
       { label: "Date", cell: (r) => day(r.entered_at) }, { label: "Spent by", cell: (r) => r.who }, { label: "On what", cell: (r) => <span className="font-semibold">{r.what}</span>, nowrap: false },
-      { label: "Amount (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.amount)}</span> }, { label: "Bill", cell: (r) => <FileLink url={r.file_url} /> },
+      { label: "Amount", right: true, cell: (r) => <span className="font-medium">{rupees2(r.amount)}</span> }, { label: "Bill", cell: (r) => <FileLink url={r.file_url} /> },
     ];
     table = <><PayTable cols={cols} rows={d.rows} /><ListFooter total={d.total} sum={d.sum} sumLabel="Spent" page={d.page} pages={d.pages} size={PAGE_SIZE} hrefFor={(n) => link({ page: n })} exportHref={link({ page: undefined }, "/api/export/pay-cash")} format={rupeesShort} /></>;
   } else {
@@ -44,7 +44,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
       { label: "Date", cell: (r) => day(r.entry_date) }, { label: "Company", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
       { label: "Party", cell: (r) => <span className="font-semibold">{r.party}</span>, nowrap: false }, { label: "Broker", cell: (r) => r.broker },
       { label: "Weight", right: true, cell: (r) => (r.weight ? amount(r.weight) : "") }, { label: "Rate", right: true, cell: (r) => (r.rate ? amount(r.rate) : "") },
-      { label: "Basic (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.basic_amount)}</span> },
+      { label: "Basic", right: true, cell: (r) => <span className="font-medium">{rupees2(r.basic_amount)}</span> },
     ];
     table = <><PayTable cols={cols} rows={d.rows} /><ListFooter total={d.total} sum={d.sum} sumLabel="Total" page={d.page} pages={d.pages} size={PAGE_SIZE} hrefFor={(n) => link({ page: n })} exportHref={link({ page: undefined }, "/api/export/pay-brokerage")} format={rupeesShort} /></>;
   }

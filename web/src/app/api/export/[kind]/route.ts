@@ -89,8 +89,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ kind: strin
         rows.map((r) => [d(r.invoice_date), r.invoice_no, co(r.entity), r.client, r.salesperson, r.po_no, r.amount, r.credit_days, d(r.due_date), r.transporter, r.made_by, r.checked_by]));
     } else if (kind === "pay-purchases") {
       const { rows } = await purchasesList(pp);
-      body = csv(["Invoice date", "Invoice no", "Company", "Supplier", "Purchased for", "Amount", "Weight", "Unit", "Rate", "Credit days", "Due date", "Broker", "Bought by", "Checked by", "Bill"],
-        rows.map((r) => [d(r.invoice_date), r.invoice_no, co(r.entity), r.vendor, r.purchased_for, r.amount, r.weight, r.unit, r.rate, r.credit_days, d(r.due_date), r.broker, r.purchased_by, r.checked_by, r.file_url]));
+      body = csv(["Invoice date", "Invoice no", "Company", "Supplier", "Purchased for", "Amount", "Credit days", "Due date", "Broker", "Bought by", "Checked by", "Bill"],
+        rows.map((r) => [d(r.invoice_date), r.invoice_no, co(r.entity), r.vendor, r.purchased_for, r.amount, r.credit_days, d(r.due_date), r.broker, r.purchased_by, r.checked_by, r.file_url]));
     } else if (kind === "pay-expenses") {
       const { rows } = await expensesList(pp);
       body = csv(["Date", "Type", "Company", "Paid to", "Invoice no", "Amount", "TDS", "Checked by", "Bill"],

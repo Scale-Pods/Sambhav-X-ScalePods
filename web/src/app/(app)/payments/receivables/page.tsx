@@ -5,7 +5,7 @@ import { ParamSelect } from "@/components/FilterBar";
 import { PayBar } from "@/components/PayBar";
 import { ListFooter, PayTable, day, linker, type Col } from "@/components/PayList";
 import { PAGE_SIZE, readPayParams, receivablesList, type ReceivableRow } from "@/lib/payments";
-import { amount, rupeesShort } from "@/lib/money";
+import { rupeesShort, rupees2 } from "@/lib/money";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -27,9 +27,9 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Due", info: "The payment date: the invoice date plus the credit days. Past it and unpaid means overdue.", cell: (r) => day(r.due_date) },
     { label: "PO no.", cell: (r) => r.po_no },
     { label: "Salesperson", cell: (r) => r.salesperson },
-    { label: "Invoice (₹)", right: true, cell: (r) => amount(r.amount) },
-    { label: "Received (₹)", right: true, cell: (r) => (Number(r.received) ? amount(r.received) : "") },
-    { label: "Owed (₹)", right: true, cell: (r) => <span className="font-semibold">{amount(r.pending)}</span> },
+    { label: "Invoice amount", right: true, cell: (r) => rupees2(r.amount) },
+    { label: "Received", right: true, cell: (r) => (Number(r.received) ? rupees2(r.received) : "") },
+    { label: "Owed", right: true, cell: (r) => <span className="font-semibold">{rupees2(r.pending)}</span> },
     { label: "Late", right: true, cell: (r) => (Number(r.overdue_days) > 0 && Number(r.pending) > 0 ? <span className={Number(r.overdue_days) > 90 ? "font-semibold text-bad" : Number(r.overdue_days) > 30 ? "text-warn" : ""}>{r.overdue_days} d</span> : "") },
     { label: "Note", info: "Blocked means the money is stuck and needs follow-up. Any other label is the sheet's own note, shown as written.", cell: (r) => (r.kind ? <Badge tone={r.kind === "Blocked" ? "error" : r.kind === "Market" ? "info" : "warning"}>{r.kind}</Badge> : null) },
   ];

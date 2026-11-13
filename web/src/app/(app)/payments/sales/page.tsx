@@ -5,7 +5,7 @@ import { FilterShell } from "@/components/FilterBar";
 import { PayExtras } from "@/components/PayBar";
 import { ListFooter, PayTable, day, linker, type Col } from "@/components/PayList";
 import { PAGE_SIZE, readPayParams, salesList, type SalesRow } from "@/lib/payments";
-import { amount, rupeesShort } from "@/lib/money";
+import { rupeesShort, rupees2 } from "@/lib/money";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -26,7 +26,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Customer", cell: (r) => r.client, nowrap: false },
     { label: "Salesperson", cell: (r) => r.salesperson },
     { label: "PO no.", cell: (r) => r.po_no },
-    { label: "Amount (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.amount)}</span> },
+    { label: "Amount", right: true, cell: (r) => <span className="font-medium">{rupees2(r.amount)}</span> },
     { label: "Days", info: "Credit days: how many days after the invoice the payment is allowed.", right: true, cell: (r) => r.credit_days },
     { label: "Due", info: "The payment date: the invoice date plus the credit days.", cell: (r) => day(r.due_date) },
     { label: "Transporter", cell: (r) => r.transporter },

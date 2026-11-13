@@ -5,7 +5,7 @@ import { FilterShell } from "@/components/FilterBar";
 import { PayExtras } from "@/components/PayBar";
 import { FileLink, ListFooter, PayTable, day, linker, type Col } from "@/components/PayList";
 import { PAGE_SIZE, expensesList, readPayParams, type ExpenseRow } from "@/lib/payments";
-import { amount, rupeesShort } from "@/lib/money";
+import { rupeesShort, rupees2 } from "@/lib/money";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -25,8 +25,8 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Company", info: "The business the entry belongs to: SPF is Sambhav Pipes & Fittings, Sai is Sai Steel & Engineering.", cell: (r) => (r.entity === "SAI" ? "Sai" : "SPF") },
     { label: "Paid to", cell: (r) => r.vendor, nowrap: false },
     { label: "Invoice", info: "The invoice number as typed in the payment sheet.", cell: (r) => r.invoice_no },
-    { label: "Amount (₹)", right: true, cell: (r) => <span className="font-medium">{amount(r.amount)}</span> },
-    { label: "TDS", right: true, cell: (r) => (r.tds && Number(r.tds) ? amount(r.tds) : "") },
+    { label: "Amount", right: true, cell: (r) => <span className="font-medium">{rupees2(r.amount)}</span> },
+    { label: "TDS", right: true, cell: (r) => (r.tds && Number(r.tds) ? rupees2(r.tds) : "") },
     { label: "Checked by", cell: (r) => r.checked_by },
     { label: "Bill", info: "A link to the bill file (scan or PDF).", cell: (r) => <FileLink url={r.file_url} /> },
   ];

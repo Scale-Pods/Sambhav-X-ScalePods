@@ -5,7 +5,7 @@ import { ParamSelect } from "@/components/FilterBar";
 import { PayBar } from "@/components/PayBar";
 import { FileLink, ListFooter, PayTable, day, linker, type Col } from "@/components/PayList";
 import { PAGE_SIZE, payablesList, readPayParams, type PayableRow } from "@/lib/payments";
-import { amount, rupeesShort } from "@/lib/money";
+import { rupeesShort, rupees2 } from "@/lib/money";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -27,10 +27,10 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Due", info: "The payment date: the invoice date plus the credit days.", cell: (r) => day(r.due_date) },
     { label: "Bought for", cell: (r) => r.purchased_for },
     { label: "Broker", cell: (r) => r.broker },
-    { label: "Invoice (₹)", right: true, cell: (r) => amount(r.amount) },
-    { label: "Advance (₹)", right: true, cell: (r) => (Number(r.advance) ? amount(r.advance) : "") },
-    { label: "TDS (₹)", right: true, cell: (r) => (Number(r.tds) ? amount(r.tds) : "") },
-    { label: "To pay (₹)", right: true, cell: (r) => <span className="font-semibold">{amount(r.pending)}</span> },
+    { label: "Invoice amount", right: true, cell: (r) => rupees2(r.amount) },
+    { label: "Advance", right: true, cell: (r) => (Number(r.advance) ? rupees2(r.advance) : "") },
+    { label: "TDS", right: true, cell: (r) => (Number(r.tds) ? rupees2(r.tds) : "") },
+    { label: "To pay", right: true, cell: (r) => <span className="font-semibold">{rupees2(r.pending)}</span> },
     { label: "Late", right: true, cell: (r) => (Number(r.overdue_days) > 0 && Number(r.pending) > 0 ? <span className={Number(r.overdue_days) > 30 ? "font-semibold text-bad" : "text-warn"}>{r.overdue_days} d</span> : "") },
     { label: "Checked", cell: (r) => (r.checked ? <Badge tone="ok">Checked</Badge> : null) },
     { label: "Bill", info: "A link to the bill file (scan or PDF).", cell: (r) => <FileLink url={r.file_url} /> },
