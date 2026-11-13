@@ -122,11 +122,17 @@ def main() -> None:
                                   coalesce(l.invoice_weight_kg, l.theoretical_weight_kg)::float8
                              from public.lots l where l.stock_book_id = %s""", (bid,))
             db = [dict(id=r[0], lot_no=r[1], grade_raw=r[2], thk=r[3], wid=r[4], len=r[5], heat_no=r[6], plate_no=r[7], receipt_date=r[8], w=r[9]) for r in cur.fetchall()]
-            cur.execute("""select m.lot_id, m.pieces, m.weight_kg::float8, m.movement_date::text from public.stock_movements m join public.lots l on l.id = m.lot_id
-                            where l.stock_book_id = %s and m.movement_type = 'sale'""", (bid,))
+            # a sale posted from a challan in the app carries its challan number (dispatches.challan_no): the same challan in the sheet is that sale, not a new one.
+            # A sale that was taken back by a reversal no longer counts.
+            cur.execute("""select m.lot_id, m.pieces, m.weight_kg::float8, m.movement_date::text, x.challan_no
+                             from public.stock_movements m join public.lots l on l.id = m.lot_id
+                             left join public.dispatch_lines dl on dl.id = m.dispatch_line_id
+                             left join public.dispatches x on x.id = dl.dispatch_id and x.status <> 'cancelled'
+                            where l.stock_book_id = %s and m.movement_type = 'sale'
+                              and not exists (select 1 from public.stock_movements r where r.reverses_movement_id = m.id)""", (bid,))
             db_sales = defaultdict(list)
-            for lid, p, w, d in cur.fetchall():
-                db_sales[lid].append([p, w, d, False])
+            for lid, p, w, d, vno in cur.fetchall():
+                db_sales[lid].append([p, w, d, False, vno])
 
             mp = match(live, db, code)
             new_lots = [i for i in range(len(live)) if i not in mp]
@@ -154,7 +160,9 @@ def main() -> None:
                 have = db_sales.get(d["id"], [])
                 for s in live_sales.get(i, []):
                     w = abs(s["weight_kg"])
-                    hit = next((h for h in have if not h[3] and abs(abs(h[1]) - w) < 0.6 and h[2] == (s["date"].isoformat() if hasattr(s["date"], "isoformat") else s["date"])), None) \
+                    svno = re.sub(r"[^A-Z0-9]", "", str(s.get("vno") or "").upper())
+                    hit = (next((h for h in have if not h[3] and h[4] and re.sub(r"[^A-Z0-9]", "", str(h[4]).upper()) == svno), None) if svno else None) \
+                        or next((h for h in have if not h[3] and abs(abs(h[1]) - w) < 0.6 and h[2] == (s["date"].isoformat() if hasattr(s["date"], "isoformat") else s["date"])), None) \
                         or next((h for h in have if not h[3] and abs(abs(h[1]) - w) < 0.6), None)
                     if hit:
                         hit[3] = True

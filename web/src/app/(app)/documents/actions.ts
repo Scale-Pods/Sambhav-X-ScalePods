@@ -113,7 +113,7 @@ export async function reviewFamilyDocument(id: string, decision: "confirmed" | "
 
 // ---------------------------------------------------------------- posting a confirmed challan to stock
 
-export type PostLineIn = { n: number; lot_id: string | null; pieces: number; weight_kg: number };
+export type PostLineIn = { n: number; lot_id: string | null; pieces: number; weight_kg: number; recorded?: boolean };
 export type PostResult = { ok: true; message: string } | { ok: false; error: string };
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -125,13 +125,13 @@ export async function postChallan(id: string, lines: PostLineIn[]): Promise<Post
   if (!Array.isArray(lines) || lines.length === 0 || lines.length > 60) return { ok: false, error: "The lines are not complete." };
   for (const l of lines) if (!Number.isInteger(l.n) || (l.lot_id !== null && !UUID.test(l.lot_id)) || !Number.isFinite(l.pieces) || !Number.isFinite(l.weight_kg)) return { ok: false, error: "The lines are not complete." };
   try {
-    const r = await call<{ r: { posted: number; not_from_stock: number } }>(`select public.post_challan($1::uuid, $2::jsonb) r`, [id, JSON.stringify(lines.map((l) => ({ n: l.n, lot_id: l.lot_id, pieces: Math.round(l.pieces), weight_kg: Math.round(l.weight_kg * 100) / 100 })))]);
+    const r = await call<{ r: { posted: number; recorded?: number; not_from_stock: number } }>(`select public.post_challan($1::uuid, $2::jsonb) r`, [id, JSON.stringify(lines.map((l) => ({ n: l.n, lot_id: l.lot_id, recorded: l.recorded === true, pieces: Math.round(l.pieces), weight_kg: Math.round(l.weight_kg * 100) / 100 })))]);
     revalidatePath(`/documents/${id}`);
     revalidatePath("/plates");
     revalidatePath("/summary");
     revalidatePath("/");
     const x = r[0].r;
-    return { ok: true, message: `Posted: ${x.posted} line${x.posted === 1 ? "" : "s"} taken out of stock${x.not_from_stock ? `, ${x.not_from_stock} marked not from our stock` : ""}.` };
+    return { ok: true, message: `Posted: ${x.posted} line${x.posted === 1 ? "" : "s"} taken out of stock${x.recorded ? `, ${x.recorded} already in the stock book (nothing moved)` : ""}${x.not_from_stock ? `, ${x.not_from_stock} marked not from our stock` : ""}.` };
   } catch (e) {
     return { ok: false, error: userMessage(e) };
   }

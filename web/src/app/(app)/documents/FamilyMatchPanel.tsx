@@ -21,7 +21,7 @@ function Hits({ hits }: { hits: LotHit[] }) {
 
 const VERDICT: Record<string, { tone: "ok" | "warning" | "error" | "info"; text: string }> = {
   ok: { tone: "ok", text: "In stock" }, short: { tone: "warning", text: "Not enough pieces" }, thickness: { tone: "error", text: "Thickness differs" },
-  not_found: { tone: "info", text: "Not in our books" }, several: { tone: "warning", text: "Several plates" },
+  not_found: { tone: "info", text: "Not in our books" }, several: { tone: "warning", text: "Several plates" }, recorded: { tone: "info", text: "Already in the stock book" },
 };
 
 /** An outward challan against our plates, line by line. Read-only: nothing is posted from here. */
@@ -52,7 +52,7 @@ function ChallanPanel({ m }: { m: ChallanMatch }) {
         })}
       </ul>
       <p className="text-[0.82rem] text-muted">
-        {m.lines.filter((l) => l.verdict === "ok" || l.verdict === "several").length} of {m.lines.length} lines match plates we hold. By the plates&apos; own weights the challan comes to about {kg(m.est_kg)}
+        {m.lines.filter((l) => l.verdict === "ok" || l.verdict === "several" || l.verdict === "recorded").length} of {m.lines.length} lines match plates we hold{m.lines.some((l) => l.verdict === "recorded") ? `, ${m.lines.filter((l) => l.verdict === "recorded").length} already with their sale in the stock book` : ""}. By the plates&apos; own weights the challan comes to about {kg(m.est_kg)}
         {m.written_kg != null ? `; ${kg(m.written_kg)} is written${diff != null ? ` (${diff > 0 ? "+" : ""}${diff.toFixed(1)}%)` : ""}` : ""}. Nothing is deducted from stock yet.
       </p>
     </div>

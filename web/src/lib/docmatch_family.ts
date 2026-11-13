@@ -26,7 +26,8 @@ export type ChallanHit = {
   status: string; balance_kg: number | null; balance_pieces: number | null; kg_per_piece: number | null; entity: string | null;
 };
 export type ChallanLineMatch = {
-  n: number; key: string; verdict: "ok" | "short" | "thickness" | "not_found" | "several"; hits: ChallanHit[]; best: ChallanHit | null; est_kg: number | null; notes: string[];
+  n: number; key: string; verdict: "ok" | "short" | "thickness" | "not_found" | "several" | "recorded"; hits: ChallanHit[]; best: ChallanHit | null; est_kg: number | null; notes: string[];
+  recorded: { lot_id: string; lot_no: number; pieces: number; note: string }[]; // sales for this challan number that the stock book already holds (loaded from the stock sheets)
   similar: ChallanHit[]; // when the heat is not found: the closest heat numbers of the same thickness (a handwritten number often loses or changes a character)
 };
 export type ChallanMatch = { family: "challan"; same: { id: string; file: string; decided: string }[]; lines: ChallanLineMatch[]; est_kg: number; written_kg: number | null };
@@ -124,7 +125,21 @@ export async function matchChallan(r: ChallanRead, docId: string): Promise<Chall
       estTotal += num(l.weight_kg) ?? est;
     }
     const similar = verdict === "not_found" || verdict === "thickness" ? await similarLots(l.heat_no, t) : [];
-    lines.push({ n: i + 1, key, verdict, hits: sized.length ? sized : found, best, est_kg: est, notes, similar });
+    // the stock sheets wrote each sale with its challan number ("invoice 216, V.NO T808"): a sale already there must not be taken out a second time
+    const cand = (sized.length ? sized : found).map((h) => h.id);
+    const recorded = no && cand.length
+      ? await q<ChallanLineMatch["recorded"][number]>(
+          `select m.lot_id::text lot_id, l.lot_no::int lot_no, (-m.pieces)::int pieces, left(m.note, 110) note from public.stock_movements m join public.lots l on l.id = m.lot_id
+            where m.lot_id = any($1::uuid[]) and m.movement_type = 'sale' and m.note ~* $2 and not exists (select 1 from public.stock_movements x where x.reverses_movement_id = m.id) order by m.seq`,
+          [cand, String.raw`V\.?\s*NO\.?\s*` + no.replace(/[^A-Za-z0-9]/g, "\\$&") + "(?![A-Za-z0-9])"])
+      : [];
+    if (recorded.length) {
+      verdict = "recorded";
+      best = (sized.length ? sized : found).find((h) => h.id === recorded[0].lot_id) ?? best;
+      notes.length = 0;
+      notes.push(`This sale is already in the stock book: ${recorded[0].note}. Posting it again would take the plate out twice, so record it only.`);
+    }
+    lines.push({ n: i + 1, key, verdict, hits: sized.length ? sized : found, best, est_kg: est, notes, similar, recorded });
   }
   return { family: "challan", same, lines, est_kg: estTotal, written_kg: num(r.total_weight_kg) };
 }

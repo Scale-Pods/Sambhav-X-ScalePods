@@ -8,6 +8,7 @@ export type PostOption = { id: string; text: string };
 export type PostLine = { n: number; label: string; pieces: string; balance: string; verdict: string; options: PostOption[]; lot: string; kg: number | null; warn: string[] };
 
 const SUPPLY = "supply";
+const REC = "rec:"; // a line whose sale the stock book already holds: the choice is "rec:<plate id>"; the line is recorded and nothing moves
 const inp = "rounded-md border border-line bg-field px-2 py-1.5 text-[0.88rem] focus:border-brand disabled:opacity-60";
 const fmt = (n: number) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
 
@@ -20,14 +21,18 @@ export function ChallanPostPanel({ id, lines, canDecide }: { id: string; lines: 
   const [kg, setKg] = useState<string[]>(() => lines.map((l) => (l.kg != null ? String(Math.round(l.kg)) : "")));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const moves = (x: string) => x !== "" && x !== SUPPLY && !x.startsWith(REC);
   const undecided = lot.filter((x) => x === "").length;
-  const bad = lines.some((_, i) => lot[i] !== "" && lot[i] !== SUPPLY && (!(Number(pcs[i]) >= 1) || !(Number(kg[i]) > 0)));
-  const totalKg = useMemo(() => lines.reduce((a, _, i) => a + (lot[i] !== "" && lot[i] !== SUPPLY ? Number(kg[i]) || 0 : 0), 0), [lines, lot, kg]);
-  const plates = lot.filter((x) => x !== "" && x !== SUPPLY).length;
+  const bad = lines.some((_, i) => moves(lot[i]) && (!(Number(pcs[i]) >= 1) || !(Number(kg[i]) > 0)));
+  const totalKg = useMemo(() => lines.reduce((a, _, i) => a + (moves(lot[i]) ? Number(kg[i]) || 0 : 0), 0), [lines, lot, kg]);
+  const plates = lot.filter(moves).length;
+  const recorded = lot.filter((x) => x.startsWith(REC)).length;
 
   function post() {
-    const payload: PostLineIn[] = lines.map((l, i) => ({ n: l.n, lot_id: lot[i] === SUPPLY ? null : lot[i], pieces: Number(pcs[i]) || 0, weight_kg: Number(kg[i]) || 0 }));
-    if (!window.confirm(`Post this challan to stock?\n\n${plates} plate line${plates === 1 ? "" : "s"}, about ${fmt(totalKg)} kg go out of stock. You can take it back afterwards.`)) return;
+    const payload: PostLineIn[] = lines.map((l, i) => lot[i] === SUPPLY ? { n: l.n, lot_id: null, pieces: Number(pcs[i]) || 0, weight_kg: Number(kg[i]) || 0 }
+      : lot[i].startsWith(REC) ? { n: l.n, lot_id: lot[i].slice(REC.length), recorded: true, pieces: Number(pcs[i]) || 0, weight_kg: Number(kg[i]) || 0 }
+      : { n: l.n, lot_id: lot[i], pieces: Number(pcs[i]) || 0, weight_kg: Number(kg[i]) || 0 });
+    if (!window.confirm(`Post this challan?\n\n${plates} plate line${plates === 1 ? "" : "s"}, about ${fmt(totalKg)} kg go out of stock${recorded ? `.\n${recorded} line${recorded === 1 ? " is" : "s are"} already in the stock book: only recorded, nothing moves` : ""}.\nYou can take it back afterwards.`)) return;
     setMsg(null);
     start(async () => {
       const r = await postChallan(id, payload);
@@ -54,16 +59,16 @@ export function ChallanPostPanel({ id, lines, canDecide }: { id: string; lines: 
                     <option value={SUPPLY}>Not from our stock (supply material)</option>
                   </select>
                 </td>
-                <td className="px-2 py-2"><input type="number" min={1} step={1} value={pcs[i]} disabled={!canDecide || pending || lot[i] === SUPPLY} onChange={(e) => setPcs((a) => a.map((x, j) => (j === i ? e.target.value : x)))} className={inp + " w-16"} /></td>
-                <td className="px-2 py-2"><input type="number" min={1} step={1} value={kg[i]} disabled={!canDecide || pending || lot[i] === SUPPLY} onChange={(e) => setKg((a) => a.map((x, j) => (j === i ? e.target.value : x)))} className={inp + " w-24"} /></td>
+                <td className="px-2 py-2"><input type="number" min={1} step={1} value={pcs[i]} disabled={!canDecide || pending || !moves(lot[i])} onChange={(e) => setPcs((a) => a.map((x, j) => (j === i ? e.target.value : x)))} className={inp + " w-16"} /></td>
+                <td className="px-2 py-2"><input type="number" min={1} step={1} value={kg[i]} disabled={!canDecide || pending || !moves(lot[i])} onChange={(e) => setKg((a) => a.map((x, j) => (j === i ? e.target.value : x)))} className={inp + " w-24"} /></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" disabled={!canDecide || pending || undecided > 0 || bad} onClick={post} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50">{pending ? "Posting…" : "Post to stock"}</button>
-        <span className="text-[0.82rem] text-muted">{undecided > 0 ? `${undecided} line${undecided === 1 ? "" : "s"} still to decide` : bad ? "Pieces and weight are needed for each plate" : `${plates} plate line${plates === 1 ? "" : "s"}, about ${fmt(totalKg)} kg`}</span>
+        <button type="button" disabled={!canDecide || pending || undecided > 0 || bad} onClick={post} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50">{pending ? "Posting…" : plates === 0 && recorded > 0 ? "Record the challan" : "Post to stock"}</button>
+        <span className="text-[0.82rem] text-muted">{undecided > 0 ? `${undecided} line${undecided === 1 ? "" : "s"} still to decide` : bad ? "Pieces and weight are needed for each plate" : plates === 0 && recorded > 0 ? `${recorded} line${recorded === 1 ? "" : "s"} recorded, no stock moves` : `${plates} plate line${plates === 1 ? "" : "s"}, about ${fmt(totalKg)} kg${recorded ? `, ${recorded} only recorded` : ""}`}</span>
       </div>
       {!canDecide && <p className="text-[0.82rem] text-muted">Only an approver, an administrator or the owner can post a challan to stock.</p>}
       {msg && <p className={"text-[0.88rem] " + (msg.ok ? "text-ok" : "text-bad")}>{msg.text}</p>}

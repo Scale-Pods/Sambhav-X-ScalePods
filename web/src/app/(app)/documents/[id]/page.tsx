@@ -69,8 +69,8 @@ async function Body({ params }: { params: P }) {
   const postLines: PostLine[] = confirmedChallan && familyMatch?.family === "challan"
     ? familyMatch.lines.map((m, i) => ({
         n: i, label: m.key, pieces: confirmedChallan.lines[i]?.pieces ?? "", balance: confirmedChallan.lines[i]?.balance ?? "", verdict: m.verdict,
-        options: [...m.hits.map((h) => ({ id: h.id, text: hitText(h) })), ...m.similar.filter((s) => !m.hits.some((h) => h.id === s.id)).map((h) => ({ id: h.id, text: hitText(h, true) }))],
-        lot: (m.verdict === "ok" || m.verdict === "several" || m.verdict === "short") && m.best ? m.best.id : "", kg: m.est_kg, warn: m.notes,
+        options: [...m.recorded.map((r) => ({ id: `rec:${r.lot_id}`, text: `Already in the stock book · Plate ${r.lot_no} · ${r.pieces} pcs (${r.note.slice(0, 60)}): record only, nothing moves` })), ...m.hits.map((h) => ({ id: h.id, text: hitText(h) })), ...m.similar.filter((s) => !m.hits.some((h) => h.id === s.id)).map((h) => ({ id: h.id, text: hitText(h, true) }))],
+        lot: m.verdict === "recorded" && m.recorded[0] ? `rec:${m.recorded[0].lot_id}` : (m.verdict === "ok" || m.verdict === "several" || m.verdict === "short") && m.best ? m.best.id : "", kg: m.est_kg, warn: m.notes,
       }))
     : [];
   const url = signed.data?.signedUrl;
