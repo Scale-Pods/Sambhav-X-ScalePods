@@ -36,12 +36,12 @@ export default function Terms() {
       </UL>
 
       <H2>4. Connecting a Google (Gmail) mailbox</H2>
-      <P>Only an administrator may connect a mailbox, and only one they are entitled to connect. By connecting it, the administrator confirms that the mailbox may be read, and shown inside the app to the staff the company allows, for the purposes in the <Link className={A} href="/privacy">privacy policy</Link>. The permissions given (reading, and later drafting and sending) are the ones shown on Google&apos;s consent screen. You can disconnect the mailbox at any time from the app or from your Google account&apos;s permissions page. Your use of Google&apos;s services remains subject to Google&apos;s own terms.</P>
+      <P>Only an administrator may connect a mailbox, and only one they are entitled to connect. By connecting it, the administrator confirms that the mailbox may be read, and shown inside the app to the staff the company allows, for the purposes in the <Link className={A} href="/privacy">privacy policy</Link>. The permission given (reading, drafting, sending and organising mail) is the one shown on Google&apos;s consent screen. You can disconnect the mailbox at any time from the app or from your Google account&apos;s permissions page. Your use of Google&apos;s services remains subject to Google&apos;s own terms.</P>
 
       <H2>5. Writing and sending mail from the app</H2>
       <UL>
         <li>When the app lets you write, draft or send mail, it does so from the mailbox you connected, in your name or the company&apos;s. You are responsible for every mail you send.</li>
-        <li>The app sends a mail only when a person presses Send. It does not send mail by itself.</li>
+        <li>The app sends a mail only when a person presses Send. It does not send mail by itself. Only an approver, an administrator or the owner can send; other staff can write drafts for them to check and send.</li>
         <li>Do not use it to send spam, bulk or marketing mail, anything misleading, unlawful or abusive, or anything that breaks Google&apos;s rules for Gmail.</li>
       </UL>
 

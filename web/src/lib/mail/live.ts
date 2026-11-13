@@ -1,10 +1,10 @@
 import "server-only";
 import { serviceQuery } from "../db";
 import { unseal } from "./crypto";
-import { accessToken, collect, gmail, header, type Message, type Part } from "./google";
+import { accessToken, collect, gmail, gmailWrite, header, type Message, type Part } from "./google";
 
 // The mailbox view: a connected Gmail mailbox read live, the way Gmail shows it (labels, conversations, search, attachments).
-// Nothing is copied into the database: each page asks Gmail. Read-only for now (the permission the app holds is gmail.readonly).
+// Nothing is copied into the database: each page asks Gmail. Changes (drafts, sending, star, archive...) go through the functions at the end of this file.
 
 export type Box = { id: string; address: string };
 
@@ -107,7 +107,7 @@ export async function listThreads(mailboxId: string, label: LabelKey, q: string,
 
 // ---------------------------------------------------------------- one conversation, in full
 export type Attachment = { name: string; mime: string; size: number; attachmentId: string };
-export type MailMessage = { id: string; from: Addr; to: Addr[]; cc: Addr[]; at: string; subject: string; html: string | null; text: string | null; attachments: Attachment[]; labels: string[]; messageId: string | null };
+export type MailMessage = { id: string; from: Addr; to: Addr[]; cc: Addr[]; replyTo: Addr[]; at: string; subject: string; html: string | null; text: string | null; attachments: Attachment[]; labels: string[]; messageId: string | null; references: string | null; isDraft: boolean };
 export type MailThread = { id: string; subject: string; messages: MailMessage[]; address: string; hidden: number };
 const MAX_SHOWN = 25; // a very long conversation shows its latest messages; the rest is one click away in Gmail
 
@@ -147,10 +147,10 @@ export async function getThread(mailboxId: string, threadId: string, address: st
       html = html.replace(/cid:([^"'\s)>]+)/gi, (all, c: string) => data.get(decodeURIComponent(c).toLowerCase()) ?? all);
     }
     messages.push({
-      id: m.id, from: parseAddr(header(m, "From")), to: parseList(header(m, "To")), cc: parseList(header(m, "Cc")),
+      id: m.id, from: parseAddr(header(m, "From")), to: parseList(header(m, "To")), cc: parseList(header(m, "Cc")), replyTo: parseList(header(m, "Reply-To")),
       at: new Date(Number(m.internalDate ?? 0)).toISOString(), subject: header(m, "Subject") ?? "", html,
       text: f.text.length ? f.text.join("\n\n") : html ? null : (m as { snippet?: string }).snippet ? escHtml((m as { snippet?: string }).snippet!) : null,
-      attachments: w.attachments, labels: m.labelIds ?? [], messageId: header(m, "Message-ID") ?? header(m, "Message-Id"),
+      attachments: w.attachments, labels: m.labelIds ?? [], messageId: header(m, "Message-ID") ?? header(m, "Message-Id"), references: header(m, "References"), isDraft: (m.labelIds ?? []).includes("DRAFT"),
     });
   }
   const subject = (all[0] ? header(all[0], "Subject") : null)?.trim() || messages[0]?.subject.trim() || "(no subject)";
@@ -162,4 +162,61 @@ export async function attachmentBytes(mailboxId: string, messageId: string, atta
   const j = await call<{ data?: string }>(mailboxId, `/messages/${messageId}/attachments/${attachmentId}`);
   if (!j.data) throw new Error("The attachment is empty.");
   return Buffer.from(b64std(j.data), "base64");
+}
+
+// ---------------------------------------------------------------- changes (need the gmail.modify permission)
+async function write<T>(mailboxId: string, method: "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T | null> {
+  try {
+    return await gmailWrite<T>(await tokenOf(mailboxId), method, path, body);
+  } catch (e) {
+    if (e instanceof Error && /Gmail said 401/.test(e.message)) { forget(mailboxId); return gmailWrite<T>(await tokenOf(mailboxId), method, path, body); }
+    throw e;
+  }
+}
+
+const scopeCache = new Map<string, { token: string; ok: boolean }>();
+/** Does this mailbox's login hold the permission to change things? (A mailbox connected before the upgrade holds read-only access until it is connected again.) */
+export async function canWrite(mailboxId: string): Promise<boolean> {
+  const token = await tokenOf(mailboxId);
+  const hit = scopeCache.get(mailboxId);
+  if (hit && hit.token === token) return hit.ok;
+  let ok = false;
+  try {
+    const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`, { cache: "no-store" });
+    const j = (await r.json()) as { scope?: string };
+    ok = /gmail\.modify|mail\.google\.com/.test(j.scope ?? "");
+  } catch { ok = false; }
+  scopeCache.set(mailboxId, { token, ok });
+  return ok;
+}
+
+export const modifyThread = (mailboxId: string, threadId: string, add: string[], remove: string[]) => write(mailboxId, "POST", `/threads/${threadId}/modify`, { addLabelIds: add, removeLabelIds: remove });
+export const trashThread = (mailboxId: string, threadId: string) => write(mailboxId, "POST", `/threads/${threadId}/trash`);
+export const untrashThread = (mailboxId: string, threadId: string) => write(mailboxId, "POST", `/threads/${threadId}/untrash`);
+
+export type Sent = { id: string; threadId: string };
+export const sendRaw = async (mailboxId: string, raw: string, threadId?: string) => (await write<Sent>(mailboxId, "POST", "/messages/send", { raw, ...(threadId ? { threadId } : {}) }))!;
+export const saveDraft = async (mailboxId: string, raw: string, threadId?: string, draftId?: string) =>
+  (await write<{ id: string; message: Sent }>(mailboxId, draftId ? "PUT" : "POST", draftId ? `/drafts/${draftId}` : "/drafts", { message: { raw, ...(threadId ? { threadId } : {}) } }))!;
+export const sendDraft = async (mailboxId: string, draftId: string) => (await write<Sent>(mailboxId, "POST", "/drafts/send", { id: draftId }))!;
+export const deleteDraft = (mailboxId: string, draftId: string) => write(mailboxId, "DELETE", `/drafts/${draftId}`);
+
+/** The draft that sits in a conversation (to open it for editing). */
+export async function draftOfThread(mailboxId: string, threadId: string): Promise<string | null> {
+  const l = await call<{ drafts?: { id: string; message?: { threadId?: string } }[] }>(mailboxId, "/drafts", { maxResults: "100" });
+  return l.drafts?.find((d) => d.message?.threadId === threadId)?.id ?? null;
+}
+
+/** The attachments of a mail, to send along when it is forwarded (up to maxBytes together). */
+export async function forwardAttachments(mailboxId: string, messageId: string, maxBytes: number): Promise<{ name: string; mime: string; bytes: Buffer }[]> {
+  const m = await call<Message>(mailboxId, `/messages/${messageId}`, { format: "full" });
+  const out: { name: string; mime: string; bytes: Buffer }[] = [];
+  let total = 0;
+  for (const a of walk(m.payload).attachments) {
+    if (total + a.size > maxBytes) continue;
+    const bytes = await attachmentBytes(mailboxId, messageId, a.attachmentId);
+    total += bytes.length;
+    out.push({ name: a.name, mime: a.mime, bytes });
+  }
+  return out;
 }

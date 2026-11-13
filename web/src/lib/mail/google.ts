@@ -1,12 +1,21 @@
 import "server-only";
 
-// Google sign-in and the Gmail API, by plain web calls (no extra package). Read-only: the only permission asked for is "read your mail" (gmail.readonly),
-// so this app can never send, change or delete anything in a mailbox.
+// Google sign-in and the Gmail API, by plain web calls (no extra package). The one permission asked for is gmail.modify: read mail, write drafts, send, and organise
+// (star, archive, mark read, trash). It does not allow deleting mail for good. A mailbox connected earlier with read-only access keeps working for reading; sending and
+// changes need it to be connected again (live.ts checks which permission a login holds).
 
 const AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN = "https://oauth2.googleapis.com/token";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
-export const SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+export const SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+
+/** A Gmail call that changes something (POST, PUT, DELETE). Returns the JSON answer, or null when Gmail answers with nothing. */
+export async function gmailWrite<T>(token: string, method: "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T | null> {
+  const r = await fetch(`${API}${path}`, { method, headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined, cache: "no-store" });
+  if (!r.ok) throw new Error(`Gmail said ${r.status} for ${method} ${path.split("/").slice(0, 2).join("/")}`);
+  const t = await r.text();
+  return t ? (JSON.parse(t) as T) : null;
+}
 
 const need = (name: string) => {
   const v = process.env[name];

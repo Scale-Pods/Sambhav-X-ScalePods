@@ -50,7 +50,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
           })}
         </ul>
       </Card>
-      <p className="text-[0.85rem] text-muted">A connected mailbox is read-only: the app can never send, change or delete a mail, and only dispatch mails are picked up. Everything shown here is open to every staff login.</p>
+      <p className="text-[0.85rem] text-muted">The 15-minute check picks up only the mill&apos;s dispatch mails. The Mailbox tab shows the whole mailbox live and lets staff reply, write drafts and organise mail; only an approver, administrator or owner can send. The app never deletes mail for good. A mailbox connected before this upgrade can only be read until an administrator connects it again (Add mailbox, with the same address). Everything shown here is open to every staff login.</p>
     </div>
   );
 }

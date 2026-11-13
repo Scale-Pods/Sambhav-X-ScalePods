@@ -2,9 +2,13 @@ import Link from "next/link";
 import { ArrowLeft, ChevronRight, ExternalLink, FileText, Paperclip, Search, Star } from "lucide-react";
 import { Card } from "@/components/ui";
 import { GmailLogo } from "@/components/GmailLogo";
-import { LABELS, getThread, isLabelKey, listThreads, liveMailboxes, unreadCounts, PER_PAGE, type Addr, type LabelKey, type MailThread, type ThreadRow } from "@/lib/mail/live";
+import { canDecide, canUploadDocs } from "@/lib/auth";
+import type { CtxMsg } from "@/lib/mail/compose";
+import { LABELS, canWrite, draftOfThread, getThread, isLabelKey, listThreads, liveMailboxes, unreadCounts, PER_PAGE, type Addr, type LabelKey, type MailMessage, type MailThread, type ThreadRow } from "@/lib/mail/live";
 import { InboxShell, type RailItem } from "../inbox/InboxShell";
+import { ComposeButton, ComposeHost } from "./Composer";
 import { LiveMailboxSelect } from "./LiveMailboxSelect";
+import { MailActions } from "./MailActions";
 import { MessageBody } from "./MessageBody";
 
 const IST = "Asia/Kolkata";
@@ -29,7 +33,9 @@ const people = (l: Addr[]) => l.map((a) => (a.name && a.name !== a.addr ? `${a.n
 type SP = Record<string, string | undefined>;
 
 /** The Mailbox page: a connected Gmail mailbox read live, laid out like Gmail (labels, conversations, the reading pane). */
-export async function MailboxView({ sp, admin, path = "/mail/mailbox" }: { sp: SP; admin: boolean; path?: string }) {
+const ctx = (m: MailMessage): CtxMsg => ({ id: m.id, from: m.from, replyTo: m.replyTo, to: m.to, cc: m.cc, at: m.at, subject: m.subject, html: m.html, text: m.text, messageId: m.messageId, references: m.references, attachments: m.attachments.length });
+
+export async function MailboxView({ sp, admin, role, path = "/mail/mailbox" }: { sp: SP; admin: boolean; role?: string; path?: string }) {
   const boxes = await liveMailboxes();
   if (boxes.length === 0) {
     return (
@@ -55,17 +61,28 @@ export async function MailboxView({ sp, admin, path = "/mail/mailbox" }: { sp: S
   let rows: ThreadRow[] = [], next: string | null = null;
   let counts = { inbox: 0, drafts: 0 };
   let thread: MailThread | null = null;
+  let tokenWrites = false;
   try {
-    const [list, c, t] = await Promise.all([listThreads(box.id, label, q, pt), unreadCounts(box.id), sel ? getThread(box.id, sel, box.address).catch(() => null) : Promise.resolve(null)]);
-    rows = list.rows; next = list.next; counts = c; thread = t;
+    const [list, c, t, w] = await Promise.all([listThreads(box.id, label, q, pt), unreadCounts(box.id), sel ? getThread(box.id, sel, box.address).catch(() => null) : Promise.resolve(null), canWrite(box.id).catch(() => false)]);
+    rows = list.rows; next = list.next; counts = c; thread = t; tokenWrites = w;
   } catch (e) {
     error = e instanceof Error ? e.message : "Gmail could not be reached.";
   }
+
+  // writing and organising: the mailbox's login must hold the permission, and so must the person's role (sending needs an approver)
+  const writable = tokenWrites && canUploadDocs(role);
+  const canSend = canDecide(role);
+  const msgs = thread?.messages ?? [];
+  const lastMsg = [...msgs].reverse().find((m) => !m.isDraft) ?? null;
+  const draftMsg = [...msgs].reverse().find((m) => m.isDraft) ?? null;
+  const draftId = writable && thread && draftMsg ? await draftOfThread(box.id, thread.id).catch(() => null) : null;
+  const flag = (l: string) => msgs.some((m) => m.labels.includes(l));
 
   const gmailLink = (id: string) => `https://mail.google.com/mail/u/${encodeURIComponent(box.address)}/#all/${id}`;
 
   const toolbar = (
     <>
+      <ComposeButton mb={box.id} address={box.address} disabled={!writable} why={tokenWrites ? "Your login may read mail but not write it" : "This mailbox is connected read-only: an administrator must connect it again"} />
       <LiveMailboxSelect value={box.id} options={boxes.map((b) => ({ value: b.id, label: b.address }))} canAdd={admin} />
       <form action={path} className="relative min-w-60 flex-1">
         <input type="hidden" name="mb" value={box.id} />
@@ -109,7 +126,7 @@ export async function MailboxView({ sp, admin, path = "/mail/mailbox" }: { sp: S
           );
         })}
       </ul>
-      <p className="border-t border-line px-4 py-2 text-[0.76rem] text-muted">{rows.length ? `Showing ${rows.length} of about ${PER_PAGE}+ per page. ` : ""}Read live from {box.address}. Read only for now.</p>
+      <p className="border-t border-line px-4 py-2 text-[0.76rem] text-muted">{rows.length ? `Showing up to ${PER_PAGE} per page. ` : ""}Read live from {box.address}.</p>
     </div>
   );
 
@@ -121,6 +138,8 @@ export async function MailboxView({ sp, admin, path = "/mail/mailbox" }: { sp: S
           <h2 className="font-display text-xl font-semibold leading-snug">{thread.subject}</h2>
           <a href={gmailLink(thread.id)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[0.85rem] font-medium hover:bg-surface"><ExternalLink className="h-4 w-4" />Open in Gmail</a>
         </div>
+        <MailActions mb={box.id} address={box.address} threadId={thread.id} last={lastMsg ? ctx(lastMsg) : null} draft={draftMsg ? ctx(draftMsg) : null} draftId={draftId}
+          starred={flag("STARRED")} unread={flag("UNREAD")} inInbox={flag("INBOX")} trashed={flag("TRASH")} spam={flag("SPAM")} writable={writable} />
         <p className="flex items-center gap-1.5 text-[0.8rem] text-muted"><GmailLogo className="h-3 w-auto" />{box.address} · {thread.messages.length + thread.hidden} {thread.messages.length + thread.hidden === 1 ? "message" : "messages"}</p>
         {thread.hidden > 0 && <p className="text-[0.82rem] text-muted">The latest {thread.messages.length} are shown. The {thread.hidden} earlier ones are in Gmail: use “Open in Gmail”.</p>}
       </header>
@@ -129,7 +148,7 @@ export async function MailboxView({ sp, admin, path = "/mail/mailbox" }: { sp: S
           <div className="flex items-start gap-3">
             <Avatar name={m.from.name || m.from.addr} big />
             <div className="min-w-0 flex-1 text-[0.88rem]">
-              <p className="truncate"><span className="font-bold">{who(m.from)}</span>{m.from.name && m.from.name !== m.from.addr ? <span className="text-muted"> &lt;{m.from.addr}&gt;</span> : null}</p>
+              <p className="truncate">{m.isDraft && <span className="mr-1.5 rounded bg-warn-soft px-1.5 py-0.5 text-[0.7rem] font-semibold uppercase text-warn">Draft</span>}<span className="font-bold">{who(m.from)}</span>{m.from.name && m.from.name !== m.from.addr ? <span className="text-muted"> &lt;{m.from.addr}&gt;</span> : null}</p>
               <p className="truncate text-muted" title={people(m.to)}>to {m.to.length ? m.to.map(who).join(", ") : "—"}</p>
               {m.cc.length > 0 && <p className="truncate text-muted" title={people(m.cc)}>cc {m.cc.map(who).join(", ")}</p>}
             </div>
@@ -156,7 +175,10 @@ export async function MailboxView({ sp, admin, path = "/mail/mailbox" }: { sp: S
   ) : sel && !error ? <p className="text-[0.92rem] text-muted">That conversation could not be opened.</p> : null;
 
   return (
-    <InboxShell toolbar={toolbar} items={items} admin={admin} list={list} reading={Boolean(reader)}
-      reader={reader ?? <p className="flex min-h-48 items-center justify-center text-center text-[0.92rem] text-muted">Select a conversation to read it.</p>} />
+    <>
+      <InboxShell toolbar={toolbar} items={items} admin={admin} list={list} reading={Boolean(reader)}
+        reader={reader ?? <p className="flex min-h-48 items-center justify-center text-center text-[0.92rem] text-muted">Select a conversation to read it.</p>} />
+      <ComposeHost canSend={canSend} />
+    </>
   );
 }

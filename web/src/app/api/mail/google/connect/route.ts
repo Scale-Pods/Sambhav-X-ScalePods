@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { canExport, currentStaff } from "@/lib/auth";
 import { authUrl } from "@/lib/mail/google";
 
-/** Starts "Connect Gmail": sends an administrator to Google to allow read-only access to a mailbox. */
+/** Starts "Connect Gmail": sends an administrator to Google to allow the app to read, draft, send and organise mail of a mailbox (gmail.modify). */
 export async function GET(req: NextRequest) {
   const me = await currentStaff().catch(() => null);
   if (!me || !canExport(me.role)) return NextResponse.json({ error: "Only the owner or an administrator may connect a mailbox." }, { status: 403 });

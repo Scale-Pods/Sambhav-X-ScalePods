@@ -15,5 +15,5 @@ async function Body({ searchParams }: { searchParams: SP }) {
   await connection();
   const sp = await searchParams;
   const me = await currentStaff().catch(() => null);
-  return <MailboxView sp={sp} admin={canExport(me?.role)} />;
+  return <MailboxView sp={sp} admin={canExport(me?.role)} role={me?.role} />;
 }
