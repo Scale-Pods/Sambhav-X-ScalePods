@@ -8,6 +8,8 @@ import { isoDay } from "@/lib/money";
 import { summaryXlsx } from "@/lib/summaryXlsx";
 import { summaryFormat } from "@/lib/summaryFormat";
 import { summaryFormatXlsx } from "@/lib/summaryFormatXlsx";
+import { stockBookTabs, stockSheetTab } from "@/lib/stockSheet";
+import { stockSheetXlsx } from "@/lib/stockSheetXlsx";
 import { compare, partiesList, readTallyParams } from "@/lib/tally";
 import { brokerageList, expensesList, gpayList, payablesList, pettyList, purchasesList, readPayParams, receivablesList, salesList } from "@/lib/payments";
 
@@ -32,6 +34,23 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ kind: strin
   if (!canExport(me.role)) return NextResponse.json({ error: "Only the owner or an administrator can download data" }, { status: 403 });
 
   const sp = Object.fromEntries(req.nextUrl.searchParams.entries());
+  if (kind === "stock-sheet-xlsx") {
+    const book = (sp.book ?? "").toUpperCase();
+    if (book !== "WB1" && book !== "WB2") return NextResponse.json({ error: "Which book?" }, { status: 400 });
+    const all = await stockBookTabs(book);
+    const want = sp.tab ? all.filter((t) => t.tab === sp.tab) : all; // one grade tab, or the whole book
+    if (want.length === 0) return NextResponse.json({ error: "No such tab" }, { status: 404 });
+    const tabs = [];
+    for (const t of want) tabs.push({ tab: t.tab, sections: (await stockSheetTab(book, t.tab, "")).sections });
+    const file = await stockSheetXlsx(book, tabs);
+    return new NextResponse(new Uint8Array(file), {
+      headers: {
+        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-disposition": `attachment; filename="sambhav-stock-sheet-${book}${sp.tab ? "-" + sp.tab.replace(/[^\w]+/g, "-") : ""}-${todayIST()}.xlsx"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
   if (kind === "summary-ims-xlsx") {
     const books: ("WB1" | "WB2")[] = sp.book === "WB1" || sp.book === "WB2" ? [sp.book] : ["WB1", "WB2"];
     const data = (await Promise.all(books.map((b) => summaryFormat(b)))).filter((x): x is NonNullable<typeof x> => x != null);

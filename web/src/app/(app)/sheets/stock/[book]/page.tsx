@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArrowLeft, Search } from "lucide-react";
+import { Download } from "lucide-react";
+import { canExport, currentStaff } from "@/lib/auth";
 import { stockBookTabs, stockSheetTab } from "@/lib/stockSheet";
 import { Card, Skeleton } from "@/components/ui";
 import { Info } from "@/components/Info";
@@ -34,6 +36,8 @@ async function Body({ params, searchParams }: { params: P; searchParams: SP }) {
   const search = (sp.q ?? "").trim().slice(0, 60);
   const data = await stockSheetTab(book, tab, search);
   const hl = parseHl(sp.hl);
+  const me = await currentStaff().catch(() => null);
+  const xl = (all: boolean) => `/api/export/stock-sheet-xlsx?${new URLSearchParams(all ? { book } : { book, tab })}`;
   const href = (changes: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     Object.entries({ tab, q: search || undefined, ...changes }).forEach(([k, v]) => v && p.set(k, v));
@@ -55,6 +59,12 @@ async function Body({ params, searchParams }: { params: P; searchParams: SP }) {
             <Info>Laid out like your sheet. This is built from the checked stock ledger, so the balance is calculated from the rows and cannot drift. Read-only; changes are made through the app.</Info>
           </span>
         </div>
+        {canExport(me?.role) && (
+          <div className="flex items-center gap-2">
+            <a href={xl(false)} className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink" title="This grade tab as an Excel file, laid out like the sheet"><Download className="h-4 w-4" /> Excel · this tab</a>
+            <a href={xl(true)} className="flex items-center gap-1.5 rounded-md border border-line bg-field px-3 py-1.5 text-[0.85rem] font-medium text-muted hover:text-ink" title="Every grade tab of this book, one worksheet each"><Download className="h-4 w-4" /> Excel · whole book</a>
+          </div>
+        )}
         <form action={`/sheets/stock/${book}`} className="relative">
           <input type="hidden" name="tab" value={tab} />
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
