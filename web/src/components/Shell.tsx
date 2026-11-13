@@ -50,6 +50,11 @@ export function Shell({ children }: { children: ReactNode }) {
           <p className="font-semibold text-white">Practice data</p>
           <p className="mt-0.5 text-steel-muted">Loaded from your WB1 and WB2 sheets. Nothing here changes your sheets.</p>
         </div>
+        <p className="mt-3 flex gap-x-3 px-1 text-[0.72rem] text-steel-muted group-data-[rail=true]/side:hidden">
+          <Link href="/privacy" className="hover:text-white hover:underline">Privacy</Link>
+          <Link href="/terms" className="hover:text-white hover:underline">Terms</Link>
+          <Link href="/welcome" className="hover:text-white hover:underline">About</Link>
+        </p>
       </SidebarShell>
 
       <div className="flex min-w-0 flex-1 flex-col">

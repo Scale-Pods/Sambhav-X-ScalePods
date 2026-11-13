@@ -22,6 +22,8 @@ export async function proxy(request: NextRequest) {
   const signedIn = Boolean(data?.claims?.sub);
   const onLogin = request.nextUrl.pathname === "/login";
 
+  // the address of the site itself shows the public home page to anyone who is not signed in (it says what the app is, and links to the privacy policy and terms)
+  if (!signedIn && request.nextUrl.pathname === "/") return NextResponse.rewrite(new URL("/welcome", request.url));
   if (!signedIn && !onLogin) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -37,5 +39,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|brand/|icon.png|favicon.ico|api/health|api/mail/cron).*)"],
+  matcher: ["/((?!_next/static|_next/image|brand/|icon.png|favicon.ico|api/health|api/mail/cron|welcome|privacy|terms).*)"],
 };

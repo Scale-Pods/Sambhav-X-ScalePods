@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoginForm } from "./LoginForm";
@@ -26,6 +27,11 @@ export default function LoginPage() {
           <p className="mt-1.5 text-[0.97rem] text-muted">Use the email and password given to you by your office.</p>
           <LoginForm />
           <p className="mt-8 text-[0.85rem] text-muted">Having trouble? Ask the person who set up your access.</p>
+          <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.82rem] text-muted">
+            <Link href="/welcome" className="hover:text-ink hover:underline">About the app</Link>
+            <Link href="/privacy" className="hover:text-ink hover:underline">Privacy policy</Link>
+            <Link href="/terms" className="hover:text-ink hover:underline">Terms of service</Link>
+          </p>
         </div>
       </section>
     </main>
