@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bold, Italic, Link2, List, ListOrdered, Loader2, Minus, Paperclip, PenSquare, Send, Trash2, Underline, X } from "lucide-react";
+import { Bold, Italic, Link2, List, ListOrdered, Loader2, Minus, Paperclip, PenSquare, Send, Sparkles, Trash2, Underline, Undo2, X } from "lucide-react";
 import { COMPOSE_EVENT, openCompose, type ComposeInit } from "@/lib/mail/compose";
 
 const MAX_BYTES = 3_500_000;
@@ -46,12 +46,20 @@ export function ComposeHost({ canSend }: { canSend: boolean }) {
   const [dirty, setDirty] = useState(false);
   const editor = useRef<HTMLDivElement>(null);
   const pending = useRef<string>("");
+  // AI help: the person describes the mail, or asks for a change; the AI's text goes into the editor to be read, changed and approved
+  const [ai, setAi] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+  const [undo, setUndo] = useState<string | null>(null);
+  const [hasText, setHasText] = useState(false);
+  const autoDone = useRef<ComposeInit | null>(null);
 
   useEffect(() => {
     const on = (e: Event) => {
       const d = (e as CustomEvent<ComposeInit>).detail;
       if (init && dirty && !window.confirm("Replace the mail you are writing?")) return;
       pending.current = d.html;
+      setAi(""); setAiMsg(null); setUndo(null); setHasText(false);
       setInit(d); setTo(d.to); setCc(d.cc); setBcc(d.bcc); setSubject(d.subject); setShowCc(Boolean(d.cc || d.bcc)); setFiles([]); setDraftId(d.draftId); setMsg(null); setSmall(false); setDirty(false);
     };
     window.addEventListener(COMPOSE_EVENT, on);
@@ -60,6 +68,56 @@ export function ComposeHost({ canSend }: { canSend: boolean }) {
 
   // the opening text goes into the editor once it is on the screen
   useEffect(() => { if (init && editor.current) { editor.current.innerHTML = pending.current ? safeHtml(pending.current) : "<p><br></p>"; if (init.mode === "new" || init.mode === "reply" || init.mode === "replyall" || init.mode === "forward") editor.current.focus(); } }, [init]);
+
+  // what the person wrote is everything before the quoted mail (the part marked mail-quote)
+  const mine = useCallback((): ChildNode[] => {
+    const out: ChildNode[] = [];
+    for (const n of Array.from(editor.current?.childNodes ?? [])) { if (n instanceof HTMLElement && n.classList.contains("mail-quote")) break; out.push(n); }
+    return out;
+  }, []);
+  const myText = useCallback(() => mine().map((n) => (n instanceof HTMLElement ? n.innerText : n.textContent ?? "")).join("\n").trim(), [mine]);
+  const syncText = useCallback(() => setHasText(myText().length > 0), [myText]);
+
+  const runAi = useCallback(async (instruction: string) => {
+    if (!init || aiBusy || !editor.current) return;
+    const existing = myText();
+    setAiBusy(true); setAiMsg(null);
+    try {
+      const r = await fetch("/api/mail/assist", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(existing ? { mode: "refine", instruction, text: existing } : { mode: "write", instruction, original: init.original, subject: init.subject }) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; html?: string; error?: string };
+      if (!r.ok || !j.ok || !j.html) { setAiMsg(j.error ?? "The AI could not answer."); return; }
+      const ed = editor.current;
+      const before = mine();
+      setUndo(before.map((n) => (n instanceof HTMLElement ? n.outerHTML : n.textContent ?? "")).join(""));
+      const holder = document.createElement("div");
+      holder.innerHTML = safeHtml(j.html);
+      const quote = before.length ? before[before.length - 1].nextSibling : ed.querySelector(".mail-quote");
+      before.forEach((n) => n.remove());
+      const first = ed.querySelector(".mail-quote");
+      const at = first ?? quote ?? null;
+      for (const n of Array.from(holder.childNodes)) ed.insertBefore(n, at);
+      setDirty(true); syncText(); setAi("");
+      setAiMsg("Written by the AI: read it and change what you like before you send.");
+    } catch { setAiMsg("The connection failed. Please try again."); } finally { setAiBusy(false); }
+  }, [init, aiBusy, myText, mine, syncText]);
+
+  const undoAi = () => {
+    if (undo === null || !editor.current) return;
+    mine().forEach((n) => n.remove());
+    const holder = document.createElement("div");
+    holder.innerHTML = safeHtml(undo || "<p><br></p>");
+    const at = editor.current.querySelector(".mail-quote");
+    for (const n of Array.from(holder.childNodes)) editor.current.insertBefore(n, at);
+    setUndo(null); setAiMsg(null); syncText();
+  };
+
+  // "Draft a reply with AI" opens the window and has the text written at once
+  useEffect(() => {
+    if (!init || init.assist === undefined || autoDone.current === init || !editor.current) return;
+    autoDone.current = init;
+    void runAi(init.assist);
+  }, [init, runAi]);
 
   const cmd = (c: string, v?: string) => { editor.current?.focus(); document.execCommand(c, false, v); setDirty(true); };
   const addLink = () => { const u = window.prompt("Link address (https://...)"); if (u && /^(https?:\/\/|mailto:)/i.test(u.trim())) cmd("createLink", u.trim()); };
@@ -121,8 +179,28 @@ export function ComposeHost({ canSend }: { canSend: boolean }) {
           </div>
           {showCc && <><input value={cc} onChange={(e) => { setCc(e.target.value); setDirty(true); }} placeholder="Cc" aria-label="Cc" className={box} autoComplete="off" /><input value={bcc} onChange={(e) => { setBcc(e.target.value); setDirty(true); }} placeholder="Bcc" aria-label="Bcc" className={box} autoComplete="off" /></>}
           <input value={subject} onChange={(e) => { setSubject(e.target.value); setDirty(true); }} placeholder="Subject" aria-label="Subject" className={box} autoComplete="off" />
-          <div ref={editor} contentEditable suppressContentEditableWarning onInput={() => setDirty(true)} role="textbox" aria-multiline="true" aria-label="Message"
-            className="max-h-[48vh] min-h-[16rem] overflow-y-auto bg-white px-3 py-2 text-[0.92rem] leading-relaxed text-[#1a2530] outline-none [&_a]:text-[#0a76ad] [&_blockquote]:border-l [&_blockquote]:pl-2 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:ml-5 [&_ul]:list-disc" />
+          <div ref={editor} contentEditable suppressContentEditableWarning onInput={() => { setDirty(true); syncText(); }} role="textbox" aria-multiline="true" aria-label="Message"
+            className="max-h-[48vh] min-h-[16rem] overflow-y-auto bg-white px-3 py-2 text-[0.92rem] leading-relaxed text-[#1a2530] outline-none [&_a]:text-[#0a76ad] [&_blockquote]:border-l [&_blockquote]:pl-2 [&_p]:mb-2 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:ml-5 [&_ul]:list-disc" />
+          <div className="space-y-1.5 border-t border-line px-3 py-2">
+            <div className="flex items-center gap-2 rounded-full bg-surface px-3 py-1.5">
+              {aiBusy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand" /> : <Sparkles className="h-4 w-4 shrink-0 text-brand" />}
+              <input value={ai} onChange={(e) => setAi(e.target.value)} disabled={aiBusy} aria-label="Ask the AI"
+                onKeyDown={(e) => { if (e.key === "Enter" && ai.trim()) { e.preventDefault(); void runAi(ai.trim()); } }}
+                placeholder={hasText ? "Tell the AI how to change it, e.g. make it shorter" : init.original ? "Describe your reply and press Enter (or leave empty and press Enter to suggest one)" : "Describe your message and press Enter"}
+                className="min-w-0 flex-1 bg-transparent text-[0.88rem] outline-none" />
+              {!hasText && init.original && !ai.trim() && <button type="button" disabled={aiBusy} onClick={() => void runAi("")} className="shrink-0 text-[0.8rem] font-medium text-brand hover:underline">Suggest a reply</button>}
+            </div>
+            {hasText && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[["Fix grammar", "Fix spelling and grammar and change nothing else"], ["Shorter", "Make it shorter and to the point"], ["More formal", "Make the tone more formal and professional"], ["Friendlier", "Make the tone warmer and friendlier"]].map(([l, ins]) => (
+                  <button key={l} type="button" disabled={aiBusy} onClick={() => void runAi(ins)} className="rounded-full border border-line px-2.5 py-0.5 text-[0.78rem] font-medium hover:border-brand hover:text-brand disabled:opacity-50">{l}</button>
+                ))}
+              </div>
+            )}
+            {(aiMsg || undo !== null) && (
+              <p className="flex items-center gap-2 text-[0.78rem] text-muted">{aiMsg}{undo !== null && <button type="button" onClick={undoAi} className="inline-flex items-center gap-1 font-medium text-brand hover:underline"><Undo2 className="h-3 w-3" />Undo</button>}</p>
+            )}
+          </div>
           {(files.length > 0 || (init.fwdCount ?? 0) > 0) && (
             <ul className="flex flex-wrap gap-1.5 border-t border-line px-3 py-2">
               {(init.fwdCount ?? 0) > 0 && <li className="rounded-md bg-surface px-2 py-1 text-[0.78rem] text-muted">{init.fwdCount} attachment{init.fwdCount === 1 ? "" : "s"} of the original mail will go along</li>}
