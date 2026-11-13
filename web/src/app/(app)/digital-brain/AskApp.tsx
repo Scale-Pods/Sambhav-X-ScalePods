@@ -12,7 +12,7 @@ type ModelKey = string; // a model's API id (lib/ask/models.ts)
 type Chat = { id: string; title: string; pinned: boolean; model: ModelKey; scope: string; origin?: string; project_id?: string | null; updated_at: string };
 type Project = { id: string; name: string; instructions: string; chats: number; updated_at: string };
 type Meta = { files?: string[]; sources?: string[]; refs?: RefLink[]; follow_ups?: string[]; confidence?: string; used?: { name: string; rows: number | null }[]; usd?: number; model?: string; auto?: { tier: number; picked: number; upgraded: boolean; reasons: string[] } };
-type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; pending?: boolean; status?: string; error?: string };
+type Msg = { id: string; role: "user" | "assistant"; content: string; feedback: number | null; meta: Meta | null; created_at?: string; pending?: boolean; status?: string; error?: string };
 
 type Saved = { id: string; title: string; question: string; model: ModelKey; scope: string };
 type Attached = { name: string; mime: string; data: string; size: number; image: boolean };
@@ -27,6 +27,27 @@ const MAX_FILES = 5, MAX_BYTES = 3_000_000; // the server's limits too (lib/ask/
 const BIG_IMAGE = 900_000, LONGEST_SIDE = 2000;
 // the question used when a file is sent with no words (the server uses the same)
 const DEFAULT_FILE_QUESTION = "Read the attached file and tell me what it contains. Then check the important details against our records.";
+
+// when something was asked: "5 hours ago" while it is recent, the date and time after that; the full date and time is always in the tooltip
+const fullTime = (iso?: string | null) => (iso && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "");
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"} ago`;
+function agoText(iso: string | undefined | null, nowMs: number): string {
+  if (!iso || Number.isNaN(Date.parse(iso))) return "";
+  const s = Math.max(0, (nowMs - Date.parse(iso)) / 1000);
+  if (s < 45) return "just now";
+  if (s < 3600) return plural(Math.max(1, Math.round(s / 60)), "minute");
+  if (s < 86400) return plural(Math.floor(s / 3600), "hour");
+  return fullTime(iso);
+}
+function agoShort(iso: string | undefined | null, nowMs: number): string {
+  if (!iso || Number.isNaN(Date.parse(iso))) return "";
+  const s = Math.max(0, (nowMs - Date.parse(iso)) / 1000);
+  if (s < 45) return "now";
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
 const extOf = (name: string) => (name.split(".").pop() ?? "").toLowerCase();
 
@@ -139,6 +160,8 @@ export function AskApp({ mode = "brain", canAttach, initialChat, initialQuestion
   const [copied, setCopied] = useState<string | null>(null);
   const [today, setToday] = useState(spend?.spent ?? 0);
   const [now] = useState(() => new Date());
+  const [nowMs, setNowMs] = useState(() => Date.now()); // the "5 hours ago" labels move on by themselves
+  useEffect(() => { const id = window.setInterval(() => setNowMs(Date.now()), 60_000); return () => window.clearInterval(id); }, []);
   // the chats column folds to a strip of icons and opens when pointed at, like the main menu; the choice is remembered
   const [railOpen, setRailOpen] = useState(true);
   const [railHover, setRailHover] = useState(false);
@@ -230,8 +253,8 @@ export function AskApp({ mode = "brain", canAttach, initialChat, initialQuestion
     const qn = typed.length >= 2 ? typed : sendFiles.length ? DEFAULT_FILE_QUESTION : typed;
     const aId = "pending-" + Math.random().toString(36).slice(2);
     setMessages((ms) => {
-      const base = regenerate ? (ms.at(-1)?.role === "assistant" ? ms.slice(0, -1) : ms) : [...ms, { id: "u-" + aId, role: "user" as const, content: qn, feedback: null, meta: sendFiles.length ? { files: sendFiles.map((f) => f.name) } : null }];
-      return [...base, { id: aId, role: "assistant", content: "", feedback: null, meta: null, pending: true, status: "Thinking" }];
+      const base = regenerate ? (ms.at(-1)?.role === "assistant" ? ms.slice(0, -1) : ms) : [...ms, { id: "u-" + aId, role: "user" as const, content: qn, feedback: null, created_at: new Date().toISOString(), meta: sendFiles.length ? { files: sendFiles.map((f) => f.name) } : null }];
+      return [...base, { id: aId, role: "assistant", content: "", feedback: null, created_at: new Date().toISOString(), meta: null, pending: true, status: "Thinking" }];
     });
     setText(""); setFileNote(null); setBusy(true);
     const ctl = new AbortController(); abort.current = ctl;
@@ -428,10 +451,11 @@ export function AskApp({ mode = "brain", canAttach, initialChat, initialQuestion
           onKeyDown={(e) => { if (e.key === "Enter") { void patchChat(c.id, { title: draftTitle }); setEditing(null); } if (e.key === "Escape") setEditing(null); }}
           onBlur={() => { if (draftTitle.trim() && draftTitle !== c.title) void patchChat(c.id, { title: draftTitle }); setEditing(null); }} />
       ) : (
-        <button type="button" onClick={() => void openChat(c.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.88rem]" title={c.title}>
+        <button type="button" onClick={() => void openChat(c.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.88rem]" title={`${c.title}\n${fullTime(c.updated_at)} (${agoText(c.updated_at, nowMs) || ""})`}>
           {c.pinned && <Pin className="h-3 w-3 shrink-0 text-brand" aria-label="Pinned" />}
           {c.origin === "ai_mode" && <span className="shrink-0 rounded bg-brand-soft px-1 text-[0.62rem] font-semibold uppercase text-brand">AI</span>}
           <span className="truncate">{c.title}</span>
+          <span className="ml-auto shrink-0 pl-1 text-[0.68rem] text-muted">{agoShort(c.updated_at, nowMs)}</span>
           {c.pinned && projectName(c.project_id) && <span className="ml-auto max-w-[5rem] shrink-0 truncate rounded bg-surface px-1 text-[0.62rem] text-muted" title={"In the project " + projectName(c.project_id)}>{projectName(c.project_id)}</span>}
         </button>
       )}
@@ -590,6 +614,7 @@ export function AskApp({ mode = "brain", canAttach, initialChat, initialQuestion
                 <div className="max-w-[85%]">
                   {m.meta?.files && m.meta.files.length > 0 && <div className="mb-1 flex flex-wrap justify-end gap-1.5">{m.meta.files.map((f, i) => <span key={i} className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-0.5 text-[0.76rem] text-muted"><FileText className="h-3 w-3" />{f}</span>)}</div>}
                   <p className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand-soft px-4 py-2 text-[0.9rem] 2xl:py-2.5 2xl:text-[0.95rem]">{m.content}</p>
+                  {m.created_at && <p className="mt-0.5 text-right text-[0.72rem] text-muted" title={fullTime(m.created_at)}>{agoText(m.created_at, nowMs)}</p>}
                 </div>
               </div>
             ) : (
