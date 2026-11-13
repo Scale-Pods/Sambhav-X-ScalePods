@@ -220,3 +220,17 @@ export async function forwardAttachments(mailboxId: string, messageId: string, m
   }
   return out;
 }
+
+/** The conversation to reply into: the newest one whose subject has these words, with the headers a reply needs to stay in it. */
+export async function findThreadTarget(mailboxId: string, subject: string): Promise<{ threadId: string; inReplyTo: string | null; references: string | null } | null> {
+  const core = subject.replace(/^\s*((re|fwd?):\s*)+/i, "").replace(/["\\]/g, " ").trim().slice(0, 150);
+  if (!core) return null;
+  const l = await call<{ threads?: { id: string }[] }>(mailboxId, "/threads", { q: `subject:"${core}" -in:trash -in:spam`, maxResults: "1" });
+  const id = l.threads?.[0]?.id;
+  if (!id) return null;
+  const t = await call<{ messages?: Message[] }>(mailboxId, `/threads/${id}`, { format: "metadata", metadataHeaders: ["Message-ID", "References"] });
+  const last = t.messages?.[t.messages.length - 1];
+  if (!last) return null;
+  const mid = header(last, "Message-ID") ?? header(last, "Message-Id");
+  return { threadId: id, inReplyTo: mid, references: [header(last, "References"), mid].filter(Boolean).join(" ").trim() || null };
+}

@@ -1,5 +1,5 @@
 import "server-only";
-import { q } from "./db";
+import { q, serviceQuery } from "./db";
 import { todayIST } from "./filters";
 import { SOON_DAYS, type RemRow } from "./reminderMail";
 
@@ -50,4 +50,49 @@ export async function contactHints(party: string): Promise<{ name: string; email
     `select distinct on (lower(cells->>1)) cells->>0 name, cells->>1 email from public.sheet_rows
      where source_key = 'email_tracker' and tab = 'Client Master' and deleted_at is null and row_no > 1 and cells->>1 like '%@%' and split_part(lower(cells->>1), '@', 2) like $1
      order by lower(cells->>1) limit 10`, [like]);
+}
+
+// ---------------------------------------------------------------- the memory of reminders: who a customer's reminder goes to, and what was already sent
+// (tables customer_contacts and payment_reminders; until they exist every function below answers "nothing yet" and the pages keep working)
+
+export type Contact = { to: string; cc: string; replySubject: string };
+export type Sent = { at: string; total: number; count: number; tone: "statement" | "firm"; by: string | null };
+export type ReminderMeta = { party: string; entity: "SPF" | "SAI"; invoices: string[]; total: number; count: number; oldest: number; tone: "statement" | "firm" };
+
+export async function contactOf(party: string): Promise<Contact> {
+  try {
+    const [r] = await q<{ to_emails: string; cc_emails: string; reply_subject: string }>(`select to_emails, cc_emails, reply_subject from public.customer_contacts where lower(btrim(party)) = lower(btrim($1))`, [party]);
+    return r ? { to: r.to_emails, cc: r.cc_emails, replySubject: r.reply_subject } : { to: "", cc: "", replySubject: "" };
+  } catch { return { to: "", cc: "", replySubject: "" }; }
+}
+
+export async function historyOf(party: string): Promise<Sent[]> {
+  try {
+    return (await q<{ at: string; total: string; n: number; tone: "statement" | "firm"; by: string | null }>(
+      `select r.sent_at::text at, r.total_pending total, r.overdue_count n, r.tone, s.full_name by from public.payment_reminders r left join public.staff s on s.id = r.sent_by
+       where lower(btrim(r.party)) = lower(btrim($1)) order by r.sent_at desc limit 12`, [party])).map((r) => ({ at: r.at, total: Number(r.total), count: r.n, tone: r.tone, by: r.by }));
+  } catch { return []; }
+}
+
+/** How many reminders were sent to each customer and when the last one went (the key is the customer's name in lower case). */
+export async function historySummary(): Promise<Map<string, { n: number; last: string }>> {
+  try {
+    const rows = await q<{ k: string; n: string; last: string }>(`select lower(btrim(party)) k, count(*) n, max(sent_at)::text last from public.payment_reminders group by 1`);
+    return new Map(rows.map((r) => [r.k, { n: Number(r.n), last: r.last }]));
+  } catch { return new Map(); }
+}
+
+/** After a reminder has been sent: remember it, and remember who it went to and which conversation it was sent into. Never makes the sending fail. */
+export async function recordReminder(m: ReminderMeta, o: { mailboxId: string; to: string; cc: string; subject: string; messageId: string | null; threadId: string | null; staffId: string }): Promise<void> {
+  try {
+    await serviceQuery(
+      `insert into public.payment_reminders (party, entity, mailbox_id, to_emails, cc_emails, subject, invoice_nos, overdue_count, total_pending, oldest_days, tone, gmail_message_id, gmail_thread_id, sent_by)
+       values ($1,$2,$3,$4,$5,$6,$7::text[],$8,$9,$10,$11,$12,$13,$14)`,
+      [m.party, m.entity, o.mailboxId, o.to, o.cc, o.subject, m.invoices, m.count, m.total, m.oldest, m.tone, o.messageId, o.threadId, o.staffId]);
+    const re = /\bRe:\s.*$/i.exec(o.subject)?.[0] ?? "";
+    await serviceQuery(
+      `insert into public.customer_contacts (party, to_emails, cc_emails, reply_subject, updated_by) values ($1,$2,$3,$4,$5)
+       on conflict ((lower(btrim(party)))) do update set to_emails = excluded.to_emails, cc_emails = excluded.cc_emails, reply_subject = case when excluded.reply_subject <> '' then excluded.reply_subject else public.customer_contacts.reply_subject end, updated_by = excluded.updated_by, updated_at = now()`,
+      [m.party, o.to, o.cc, re, o.staffId]);
+  } catch { /* the mail has gone; the memory can be missing until the tables exist */ }
 }

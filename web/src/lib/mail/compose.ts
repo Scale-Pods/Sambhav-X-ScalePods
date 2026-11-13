@@ -11,6 +11,7 @@ export type ComposeInit = {
   threadId?: string; inReplyTo?: string; references?: string; draftId?: string; fwdMessageId?: string; fwdCount?: number;
   assist?: string; // when set, the AI writes the first text as soon as the window opens (an empty text means "suggest a reply")
   original?: string; // the plain text of the mail being answered, for the AI
+  reminder?: { party: string; entity: "SPF" | "SAI"; invoices: string[]; total: number; count: number; oldest: number; tone: "statement" | "firm" }; // set when this mail is a payment reminder: sending it is recorded
 };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

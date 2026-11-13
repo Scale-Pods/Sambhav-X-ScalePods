@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { Card, Skeleton } from "@/components/ui";
 import { PayTable, type Col } from "@/components/PayList";
-import { overdueDebtors, type Debtor } from "@/lib/reminders";
+import { historySummary, overdueDebtors, type Debtor } from "@/lib/reminders";
 import { rupees } from "@/lib/money";
 
 type SP = Promise<Record<string, string | undefined>>;
@@ -16,7 +16,9 @@ async function Body({ searchParams }: { searchParams: SP }) {
   await connection(); // "overdue" depends on today's date
   const sp = await searchParams;
   const entity = sp.entity === "SPF" || sp.entity === "SAI" ? sp.entity : null;
-  const rows = await overdueDebtors(entity);
+  const [rows, hist] = await Promise.all([overdueDebtors(entity), historySummary()]);
+  const last = (r: Debtor) => hist.get(r.party.trim().toLowerCase());
+  const dayOf = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(new Date(iso));
   const total = rows.reduce((a, r) => a + r.pending, 0);
   const cols: Col<Debtor>[] = [
     { label: "Customer", cell: (r) => <span className="font-semibold">{r.party}</span>, nowrap: false },
@@ -24,6 +26,7 @@ async function Body({ searchParams }: { searchParams: SP }) {
     { label: "Overdue invoices", right: true, cell: (r) => r.invoices },
     { label: "Overdue amount (₹)", right: true, cell: (r) => <span className="font-semibold">{rupees(r.pending)}</span> },
     { label: "Oldest overdue", info: "Days since the oldest unpaid invoice passed its due date.", right: true, cell: (r) => <span className={r.oldest_days > 90 ? "font-semibold text-bad" : r.oldest_days > 30 ? "text-warn" : ""}>{r.oldest_days} d</span> },
+    { label: "Reminded", info: "Reminders sent from the app to this customer, and when the last one went.", right: true, cell: (r) => { const h = last(r); return h ? <span>{h.n}× <span className="text-muted">· {dayOf(h.last)}</span></span> : <span className="text-muted">never</span>; } },
     { label: "", cell: (r) => <Link href={`/payments/reminders/prepare?${new URLSearchParams({ party: r.party, entity: r.entity })}`} className="rounded-md border border-line bg-field px-2.5 py-1 text-[0.82rem] font-medium text-brand hover:border-brand">Prepare reminder</Link> },
   ];
   return (

@@ -135,6 +135,7 @@ export function ComposeHost({ canSend }: { canSend: boolean }) {
     f.set("html", editor.current?.innerHTML ?? ""); f.set("text", editor.current?.innerText ?? "");
     if (init.threadId) f.set("threadId", init.threadId); if (init.inReplyTo) f.set("inReplyTo", init.inReplyTo); if (init.references) f.set("references", init.references);
     if (draftId) f.set("draftId", draftId); if (init.fwdMessageId) f.set("fwd", init.fwdMessageId);
+    if (init.reminder) f.set("reminder", JSON.stringify(init.reminder));
     files.forEach((x) => f.append("files", x));
     return f;
   }, [init, to, cc, bcc, subject, draftId, files]);

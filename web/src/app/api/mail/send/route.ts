@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { canDecide, canUploadDocs, currentStaff } from "@/lib/auth";
 import { canWrite, deleteDraft, forwardAttachments, liveMailboxes, parseList, saveDraft, sendDraft, sendRaw } from "@/lib/mail/live";
 import { buildRaw, htmlToText, type OutAttachment } from "@/lib/mail/mime";
+import { recordReminder, type ReminderMeta } from "@/lib/reminders";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const ID = /^[0-9a-zA-Z_-]{6,200}$/;
@@ -9,6 +10,16 @@ const ADDR = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
 const MAX_FILES_BYTES = 3_800_000; // the host accepts about 4.5 MB per request
 const MAX_RECIPIENTS = 50;
 const sent = new Map<string, number[]>(); // a person may send 30 mails an hour from here
+
+/** The reminder details the mail window sends along (checked here, never trusted as they come). */
+function parseReminder(s: string): ReminderMeta | null {
+  try {
+    const m = JSON.parse(s) as Partial<ReminderMeta>;
+    if (typeof m.party !== "string" || !m.party.trim() || (m.entity !== "SPF" && m.entity !== "SAI") || (m.tone !== "statement" && m.tone !== "firm")) return null;
+    if (!Array.isArray(m.invoices) || !Number.isFinite(m.total) || !Number.isFinite(m.count) || !Number.isFinite(m.oldest)) return null;
+    return { party: m.party.trim().slice(0, 200), entity: m.entity, tone: m.tone, invoices: m.invoices.map((x) => String(x).slice(0, 60)).slice(0, 200), total: Math.max(0, Number(m.total)), count: Math.max(0, Math.round(Number(m.count))), oldest: Math.max(0, Math.round(Number(m.oldest))) };
+  } catch { return null; }
+}
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 const field = (f: FormData, k: string) => { const v = f.get(k); return typeof v === "string" ? v : ""; };
@@ -73,9 +84,15 @@ export async function POST(req: NextRequest) {
       const d = await saveDraft(mb, raw, tid, draftId || undefined);
       return NextResponse.json({ ok: true, draftId: d.id, threadId: d.message.threadId });
     }
+    // a payment reminder that goes out is remembered: who it went to, how much it asked for, which invoices
+    const remember = async (s: { id: string; threadId: string }) => {
+      const m = parseReminder(field(f, "reminder"));
+      if (m) await recordReminder(m, { mailboxId: mb, to: to.map((a) => a.addr).join(", "), cc: cc.map((a) => a.addr).join(", "), subject, messageId: s.id, threadId: s.threadId, staffId: me.id });
+    };
     // a draft that is being sent is updated first, so what goes out is what is on the screen
-    if (draftId) { await saveDraft(mb, raw, tid, draftId); const s = await sendDraft(mb, draftId); return NextResponse.json({ ok: true, threadId: s.threadId }); }
+    if (draftId) { await saveDraft(mb, raw, tid, draftId); const s = await sendDraft(mb, draftId); await remember(s); return NextResponse.json({ ok: true, threadId: s.threadId }); }
     const s = await sendRaw(mb, raw, tid);
+    await remember(s);
     return NextResponse.json({ ok: true, threadId: s.threadId });
   } catch (e) {
     const m = e instanceof Error ? e.message : "";
