@@ -4,7 +4,7 @@
 --   1. a line may be marked "recorded": the dispatch line is kept (the challan, the plate, the pieces) and NO stock moves, because the book already has the sale;
 --   2. a line that would post a sale on a plate which already has a sale for the same challan number is refused, naming the existing sale, so it cannot be done by accident.
 -- Taking a posting back (unpost_challan) is unchanged: a recorded line has no sale of its own, so nothing is reversed for it.
--- DRAFT: not applied until the owner says so.
+-- Applied.
 
 create or replace function public.post_challan(p_doc uuid, p_lines jsonb)
 returns jsonb language plpgsql security definer set search_path = public, app as $$
