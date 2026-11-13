@@ -101,6 +101,7 @@ function chatText(title: string, ms: { role: string; content: string; meta: Meta
 }
 
 export type AskAppProps = {
+  mode?: "brain" | "stock"; // "stock" = the Stock check page: looks only in the stock, lists only its own chats
   canAttach: boolean;
   initialChat?: string | null;
   initialQuestion?: string | null; // typed into the box (not sent) when the page is opened from a suggestion elsewhere
@@ -120,7 +121,7 @@ const LOOKED: Record<string, string> = {
 
 const cents = (usd: number) => (usd < 0.01 ? "under 1 cent" : `${Math.round(usd * 100)} cents`);
 
-export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, scopes, models, defaultModel, roles, spend }: AskAppProps) {
+export function AskApp({ mode = "brain", canAttach, initialChat, initialQuestion, suggestions, scopes, models, defaultModel, roles, spend }: AskAppProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -128,7 +129,8 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
   const [loadingChat, setLoadingChat] = useState(false);
   const [text, setText] = useState(initialQuestion ?? "");
   const [model, setModel] = useState<ModelKey>(defaultModel);
-  const [scope, setScope] = useState("all");
+  const stockMode = mode === "stock";
+  const [scope, setScope] = useState(stockMode ? "stock" : "all");
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [filter, setFilter] = useState("");
@@ -174,7 +176,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
   const box = useRef<HTMLTextAreaElement>(null);
 
   const loadChats = useCallback(async () => {
-    try { const r = await fetch("/api/ask/chats", { cache: "no-store" }); if (r.ok) setChats((await r.json()) as Chat[]); } catch { /* the list stays as it was */ }
+    try { const r = await fetch("/api/ask/chats", { cache: "no-store" }); if (r.ok) setChats(((await r.json()) as Chat[]).filter((c) => !stockMode || c.scope === "stock")); } catch { /* the list stays as it was */ }
   }, []);
   const loadProjects = useCallback(async () => {
     try { const r = await fetch("/api/ask/projects", { cache: "no-store" }); if (r.ok) setProjects((await r.json()) as Project[]); } catch { /* the list stays as it was */ }
@@ -214,7 +216,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
       const j = (await r.json()) as { chat: Chat; messages: Msg[]; usd: number };
       if (mine !== opening.current) return;
       setMessages(j.messages.map((m) => ({ ...m, meta: m.meta ?? null })));
-      setModel(models.some((x) => x.value === j.chat.model) ? j.chat.model : defaultModel); setScope(j.chat.scope); setChatCost(j.usd);
+      setModel(models.some((x) => x.value === j.chat.model) ? j.chat.model : defaultModel); setScope(stockMode ? "stock" : j.chat.scope); setChatCost(j.usd);
     } catch { if (mine === opening.current) setMessages([]); }
     if (mine === opening.current) setLoadingChat(false);
   }
@@ -367,7 +369,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
     await fetch(`/api/ask/saved/${id}`, { method: "DELETE" }).catch(() => {});
     await loadSaved();
   }
-  function runSaved(s: Saved) { if (busy) return; setModel(s.model); setScope(s.scope); setDrawer(false); void send(s.question); }
+  function runSaved(s: Saved) { if (busy) return; setModel(s.model); setScope(stockMode ? "stock" : s.scope); setDrawer(false); void send(s.question); }
 
   const questionFor = (m: Msg) => { const i = messages.findIndex((x) => x.id === m.id); return messages.slice(0, i).findLast((x) => x.role === "user")?.content ?? ""; };
   function exportCsv(m: Msg) { const csv = tablesCsv(m.content, m.meta?.refs); if (csv) download(`${fileStem(questionFor(m))}.csv`, csv, "text/csv"); }
@@ -571,8 +573,10 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
           {loadingChat && <p className="flex items-center gap-2 text-muted"><Loader2 className="h-4 w-4 animate-spin" />Opening the chat…</p>}
           {empty && (
             <div className="mx-auto mt-6 max-w-2xl text-center sm:mt-14">
-              <h2 className="font-display text-[1.6rem] font-extrabold tracking-[-0.02em]">Digital Brain</h2>
-              <p className="mt-1.5 text-[0.95rem] text-muted">Ask anything about stock, orders, money, mail or Tally. I look the answer up in your records and show where it came from. I only read: I cannot change anything.</p>
+              <h2 className="font-display text-[1.6rem] font-extrabold tracking-[-0.02em]">{stockMode ? "Stock check" : "Digital Brain"}</h2>
+              <p className="mt-1.5 text-[0.95rem] text-muted">{stockMode
+                ? "Do we have this plate? Type the grade, thickness and size, or drop a photo or file of the enquiry. I check the stock and show the plates behind the answer. Nothing is reserved."
+                : "Ask anything about stock, orders, money, mail or Tally. I look the answer up in your records and show where it came from. I only read: I cannot change anything."}</p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
                 {saved.slice(0, 4).map((q) => <button key={q.id} type="button" onClick={() => runSaved(q)} className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand-soft px-3.5 py-1.5 text-[0.86rem] hover:border-brand hover:text-brand" title={q.question}><Bookmark className="h-3 w-3" />{q.title}</button>)}
                 {suggestions.map((s) => <button key={s} type="button" onClick={() => void send(s)} className="rounded-full border border-line bg-card px-3.5 py-1.5 text-[0.86rem] hover:border-brand hover:text-brand">{s}</button>)}
@@ -663,7 +667,7 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
             <textarea ref={box} value={text} onChange={(e) => setText(e.target.value)} rows={1} maxLength={600} disabled={busy}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(text); } }}
               onPaste={(e) => { const pasted = Array.from(e.clipboardData.files); if (pasted.length && canAttach) { e.preventDefault(); void attach(pasted); } }}
-              placeholder={files.length ? "What should I do with the file? e.g. Do we have stock for this PO? Or just press Ask to have it read." : canAttach ? "Ask anything, or drop a file here. e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?" : "Ask anything, e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?"} aria-label="Your question"
+              placeholder={files.length ? "What should I do with the file? e.g. Do we have stock for this PO? Or just press Ask to have it read." : stockMode ? (canAttach ? "Is it in stock? e.g. 12 mm SA 516 Gr 70, 1500 × 6000, 5 plates. Or drop a photo of the enquiry here." : "Is it in stock? e.g. 12 mm SA 516 Gr 70, 1500 × 6000, 5 plates") : canAttach ? "Ask anything, or drop a file here. e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?" : "Ask anything, e.g. Do we have 12 mm SA 516 Gr 70, 1500 × 6000?"} aria-label="Your question"
               className="max-h-[200px] w-full resize-none bg-transparent px-2 py-1.5 text-[0.95rem] outline-none" />
             {files.length > 0 && <div className="flex flex-wrap items-center gap-1.5 px-1 pb-1">{files.map((f, i) => {
               const Icon = SHEETS.includes(extOf(f.name)) ? FileSpreadsheet : FileText;
@@ -688,9 +692,9 @@ export function AskApp({ canAttach, initialChat, initialQuestion, suggestions, s
                       {models.filter((m) => m.provider === pv && m.value !== "auto").map((m) => <option key={m.value} value={m.value} disabled={!m.ready}>{m.label}{m.ready ? "" : " - key not set"}</option>)}
                     </optgroup>
                   ))}</select><ModelPrices roles={roles} /></label>
-              <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Look in</span>
+              {!stockMode && <label className="flex items-center gap-1.5 text-[0.78rem] text-muted"><span className="sr-only sm:not-sr-only">Look in</span>
                 <select value={scope} onChange={(e) => setScope(e.target.value)} disabled={busy} className="rounded-md border border-line bg-card px-1.5 py-1 text-[0.82rem] text-ink" aria-label="Look in">
-                  {scopes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
+                  {scopes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>}
               <span className="hidden text-[0.74rem] text-muted 2xl:inline">{models.find((m) => m.value === model)?.hint}</span>
               {busy
                 ? <button type="button" onClick={() => abort.current?.abort()} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-surface"><Square className="h-3.5 w-3.5" />Stop</button>
